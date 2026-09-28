@@ -4,7 +4,7 @@ k3s_version: "v1.37.0+k3s1"
 
 # auto | true | false
 # auto: testa o registry do Docker Hub a partir do node e decide sozinho
-k3s_airgap: true
+k3s_airgap: auto
 
 k3s_arch: amd64
 k3s_install_dir: /usr/local/bin
