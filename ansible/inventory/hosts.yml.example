@@ -1,0 +1,11 @@
+all:
+  children:
+    proxmox:
+      hosts:
+        pve-01:
+          ansible_host: 192.168.10.10
+          ansible_user: root
+    k3s:
+      hosts:
+        k3s-01:
+          ansible_host: 192.168.10.20

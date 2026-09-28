@@ -1,0 +1,5 @@
+- name: Install K3s (single node)
+  hosts: k3s
+  become: true
+  roles:
+    - k3s

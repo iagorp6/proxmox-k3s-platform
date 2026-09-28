@@ -1,0 +1,125 @@
+- name: Resolve latest stable K3s release (only when k3s_version is empty)
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/k3s-io/k3s/releases/latest
+    return_content: true
+    timeout: 15
+  register: k3s_latest
+  when: k3s_version | length == 0
+
+- name: Set K3s version
+  ansible.builtin.set_fact:
+    k3s_resolved_version: "{{ k3s_version if k3s_version | length > 0 else k3s_latest.json.tag_name }}"
+
+- name: Check Docker Hub registry reachability from the node
+  ansible.builtin.uri:
+    url: https://registry-1.docker.io/v2/
+    status_code: [200, 401]
+    timeout: 10
+  register: k3s_registry_check
+  failed_when: false
+  when: k3s_airgap | string == "auto"
+
+- name: Decide install mode
+  ansible.builtin.set_fact:
+    k3s_use_airgap: "{{ ((k3s_registry_check.status | default(-1)) not in [200, 401]) if (k3s_airgap | string == 'auto') else (k3s_airgap | bool) }}"
+
+- name: Show install plan
+  ansible.builtin.debug:
+    msg:
+      - "K3s version: {{ k3s_resolved_version }}"
+      - "Install mode: {{ 'airgap (images from GitHub release)' if k3s_use_airgap | bool else 'online (container registries)' }}"
+
+- name: Set release URL
+  ansible.builtin.set_fact:
+    k3s_release_url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_resolved_version | urlencode }}"
+
+- name: Create K3s directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /etc/rancher/k3s
+    - /var/lib/rancher/k3s/agent/images
+
+- name: Download K3s binary (sha256 verified)
+  ansible.builtin.get_url:
+    url: "{{ k3s_release_url }}/k3s"
+    dest: "{{ k3s_install_dir }}/k3s"
+    checksum: "sha256:{{ k3s_release_url }}/sha256sum-{{ k3s_arch }}.txt"
+    mode: "0755"
+  notify: Restart k3s
+
+- name: Download airgap images (sha256 verified)
+  ansible.builtin.get_url:
+    url: "{{ k3s_release_url }}/k3s-airgap-images-{{ k3s_arch }}.tar.zst"
+    dest: "/var/lib/rancher/k3s/agent/images/k3s-airgap-images-{{ k3s_arch }}.tar.zst"
+    checksum: "sha256:{{ k3s_release_url }}/sha256sum-{{ k3s_arch }}.txt"
+    mode: "0644"
+  when: k3s_use_airgap | bool
+  notify: Restart k3s
+
+- name: Create kubectl/crictl/ctr symlinks
+  ansible.builtin.file:
+    src: "{{ k3s_install_dir }}/k3s"
+    dest: "{{ k3s_install_dir }}/{{ item }}"
+    state: link
+  loop:
+    - kubectl
+    - crictl
+    - ctr
+
+- name: Write K3s config
+  ansible.builtin.copy:
+    content: "{{ k3s_config | to_nice_yaml }}"
+    dest: /etc/rancher/k3s/config.yaml
+    mode: "0600"
+  notify: Restart k3s
+
+- name: Install K3s systemd unit
+  ansible.builtin.copy:
+    src: k3s.service
+    dest: /etc/systemd/system/k3s.service
+    mode: "0644"
+  notify: Restart k3s
+
+- name: Enable and start K3s
+  ansible.builtin.systemd:
+    name: k3s
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Apply pending restarts
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for node Ready
+  ansible.builtin.command: >-
+    {{ k3s_install_dir }}/kubectl get node {{ inventory_hostname }}
+    -o jsonpath={.status.conditions[?(@.type=="Ready")].status}
+  register: k3s_node_ready
+  until: k3s_node_ready.rc == 0 and k3s_node_ready.stdout == "True"
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Read kubeconfig
+  ansible.builtin.slurp:
+    src: /etc/rancher/k3s/k3s.yaml
+  register: k3s_kubeconfig_raw
+
+- name: Ensure local ~/.kube exists
+  ansible.builtin.file:
+    path: "{{ k3s_kubeconfig_local | dirname }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+
+- name: Write kubeconfig to control node (server points to the VM)
+  ansible.builtin.copy:
+    content: "{{ k3s_kubeconfig_raw.content | b64decode | replace('https://127.0.0.1:6443', 'https://' ~ ansible_host ~ ':6443') }}"
+    dest: "{{ k3s_kubeconfig_local }}"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
