@@ -1,10 +1,10 @@
 # Versão do K3s. Vazio = resolve a última estável no GitHub e mostra no output.
 # Depois da primeira instalação, fixe aqui a versão exibida (builds reproduzíveis).
-k3s_version: ""
+k3s_version: "v1.37.0+k3s1"
 
 # auto | true | false
 # auto: testa o registry do Docker Hub a partir do node e decide sozinho
-k3s_airgap: auto
+k3s_airgap: true
 
 k3s_arch: amd64
 k3s_install_dir: /usr/local/bin
@@ -19,3 +19,6 @@ k3s_config:
 
 # kubeconfig gravado no control node (fora do git: kubeconfig* está no .gitignore)
 k3s_kubeconfig_local: "{{ lookup('env', 'HOME') }}/.kube/{{ inventory_hostname }}.yaml"
+
+# Artefatos são baixados no control node (que tem saída) e copiados para o node
+k3s_cache_dir: "{{ lookup('env', 'HOME') }}/.cache/k3s"

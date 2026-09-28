@@ -5,6 +5,9 @@
     timeout: 15
   register: k3s_latest
   when: k3s_version | length == 0
+  delegate_to: localhost
+  become: false
+  run_once: true
 
 - name: Set K3s version
   ansible.builtin.set_fact:
@@ -23,16 +26,50 @@
   ansible.builtin.set_fact:
     k3s_use_airgap: "{{ ((k3s_registry_check.status | default(-1)) not in [200, 401]) if (k3s_airgap | string == 'auto') else (k3s_airgap | bool) }}"
 
+- name: Set release URL and local cache path
+  ansible.builtin.set_fact:
+    k3s_release_url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_resolved_version | urlencode }}"
+    k3s_local_cache: "{{ k3s_cache_dir }}/{{ k3s_resolved_version }}"
+
 - name: Show install plan
   ansible.builtin.debug:
     msg:
       - "K3s version: {{ k3s_resolved_version }}"
       - "Install mode: {{ 'airgap (images from GitHub release)' if k3s_use_airgap | bool else 'online (container registries)' }}"
+      - "Artifacts cached on control node at: {{ k3s_local_cache }}"
 
-- name: Set release URL
-  ansible.builtin.set_fact:
-    k3s_release_url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_resolved_version | urlencode }}"
+# ---------- Download no control node (tem saída para os CDNs do GitHub) ----------
+- name: Create local artifact cache
+  ansible.builtin.file:
+    path: "{{ k3s_local_cache }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+  run_once: true
 
+- name: Download K3s binary on control node (sha256 verified)
+  ansible.builtin.get_url:
+    url: "{{ k3s_release_url }}/k3s"
+    dest: "{{ k3s_local_cache }}/k3s"
+    checksum: "sha256:{{ k3s_release_url }}/sha256sum-{{ k3s_arch }}.txt"
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Download airgap images on control node (sha256 verified)
+  ansible.builtin.get_url:
+    url: "{{ k3s_release_url }}/k3s-airgap-images-{{ k3s_arch }}.tar.zst"
+    dest: "{{ k3s_local_cache }}/k3s-airgap-images-{{ k3s_arch }}.tar.zst"
+    checksum: "sha256:{{ k3s_release_url }}/sha256sum-{{ k3s_arch }}.txt"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  when: k3s_use_airgap | bool
+
+# ---------- Instalação no node ----------
 - name: Create K3s directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -42,19 +79,17 @@
     - /etc/rancher/k3s
     - /var/lib/rancher/k3s/agent/images
 
-- name: Download K3s binary (sha256 verified)
-  ansible.builtin.get_url:
-    url: "{{ k3s_release_url }}/k3s"
+- name: Copy K3s binary to node
+  ansible.builtin.copy:
+    src: "{{ k3s_local_cache }}/k3s"
     dest: "{{ k3s_install_dir }}/k3s"
-    checksum: "sha256:{{ k3s_release_url }}/sha256sum-{{ k3s_arch }}.txt"
     mode: "0755"
   notify: Restart k3s
 
-- name: Download airgap images (sha256 verified)
-  ansible.builtin.get_url:
-    url: "{{ k3s_release_url }}/k3s-airgap-images-{{ k3s_arch }}.tar.zst"
+- name: Copy airgap images to node
+  ansible.builtin.copy:
+    src: "{{ k3s_local_cache }}/k3s-airgap-images-{{ k3s_arch }}.tar.zst"
     dest: "/var/lib/rancher/k3s/agent/images/k3s-airgap-images-{{ k3s_arch }}.tar.zst"
-    checksum: "sha256:{{ k3s_release_url }}/sha256sum-{{ k3s_arch }}.txt"
     mode: "0644"
   when: k3s_use_airgap | bool
   notify: Restart k3s
@@ -95,12 +130,12 @@
 
 - name: Wait for node Ready
   ansible.builtin.command: >-
-    {{ k3s_install_dir }}/kubectl get node {{ inventory_hostname }}
-    -o jsonpath={.status.conditions[?(@.type=="Ready")].status}
+    {{ k3s_install_dir }}/kubectl wait --for=condition=Ready
+    node/{{ inventory_hostname }} --timeout=300s
   register: k3s_node_ready
-  until: k3s_node_ready.rc == 0 and k3s_node_ready.stdout == "True"
-  retries: 30
+  retries: 3
   delay: 10
+  until: k3s_node_ready.rc == 0
   changed_when: false
 
 - name: Read kubeconfig
