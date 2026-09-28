@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zomboid
+  namespace: zomboid
+spec:
+  serviceName: zomboid
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zomboid
+  template:
+    metadata:
+      labels:
+        app: zomboid
+    spec:
+      terminationGracePeriodSeconds: 90
+      initContainers:
+        - name: install
+          image: steamcmd/steamcmd:latest
+          command: ["/bin/bash", "/scripts/install.sh"]
+          envFrom:
+            - configMapRef:
+                name: zomboid-config
+          env:
+            - name: PZ_SERVER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zomboid-secrets
+                  key: server-password
+          volumeMounts:
+            - name: data
+              mountPath: /pz
+            - name: scripts
+              mountPath: /scripts
+      containers:
+        - name: server
+          image: steamcmd/steamcmd:latest
+          command: ["/bin/bash", "/scripts/start.sh"]
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+          envFrom:
+            - configMapRef:
+                name: zomboid-config
+          env:
+            - name: HOME
+              value: /pz/data
+            - name: PZ_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zomboid-secrets
+                  key: admin-password
+          ports:
+            - name: game
+              containerPort: 16261
+              protocol: UDP
+            - name: direct
+              containerPort: 16262
+              protocol: UDP
+          resources:
+            requests:
+              cpu: "3"
+              memory: 5Gi
+            limits:
+              cpu: "3"
+              memory: 5Gi
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "echo save > /tmp/console; sleep 15; echo quit > /tmp/console; sleep 45"]
+          volumeMounts:
+            - name: data
+              mountPath: /pz
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: zomboid-config
+            items:
+              - key: install.sh
+                path: install.sh
+              - key: start.sh
+                path: start.sh
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 30Gi
