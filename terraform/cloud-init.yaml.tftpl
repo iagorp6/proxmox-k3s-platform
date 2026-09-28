@@ -1,0 +1,29 @@
+#cloud-config
+hostname: ${hostname}
+manage_etc_hosts: true
+timezone: ${timezone}
+
+users:
+  - name: ${admin_username}
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+ssh_pwauth: false
+disable_root: true
+
+apt:
+  proxy: "http://198.51.100.14:3142"
+
+package_update: true
+package_upgrade: true
+packages:
+  - qemu-guest-agent
+  - curl
+  - jq
+
+runcmd:
+  - systemctl enable --now qemu-guest-agent

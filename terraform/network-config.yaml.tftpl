@@ -1,0 +1,8 @@
+version: 2
+ethernets:
+  primary:
+    match:
+      macaddress: "${mac_address}"
+    dhcp4: true
+    # Windows DHCP casa reservas pelo MAC; o default do networkd (DUID) não bate
+    dhcp-identifier: mac
