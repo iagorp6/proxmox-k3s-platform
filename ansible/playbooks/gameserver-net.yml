@@ -1,0 +1,5 @@
+- name: Game server network tuning (MTU + RakNet MTU clamp)
+  hosts: k3s
+  become: true
+  roles:
+    - gameserver_net

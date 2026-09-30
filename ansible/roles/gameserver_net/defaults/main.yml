@@ -1,0 +1,9 @@
+# Portas UDP do servidor de jogo
+gameserver_udp_ports: [16261, 16262]
+# Pacotes de entrada acima desse tamanho são descartados: força o RakNet
+# a negociar MTU menor e evita fragmentação UDP (fragmentos se perdem no caminho)
+gameserver_max_inbound_len: 1300
+# MTU da interface da VM
+gameserver_iface: ens18
+gameserver_netplan_id: primary
+gameserver_mtu: 1400

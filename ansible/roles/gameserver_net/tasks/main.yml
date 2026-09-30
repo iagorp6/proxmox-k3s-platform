@@ -1,0 +1,26 @@
+- name: Set interface MTU via netplan override
+  ansible.builtin.template:
+    src: 60-mtu.yaml.j2
+    dest: /etc/netplan/60-mtu.yaml
+    mode: "0600"
+  notify: Apply netplan
+
+- name: Install MTU clamp systemd unit
+  ansible.builtin.template:
+    src: gameserver-mtu-clamp.service.j2
+    dest: /etc/systemd/system/gameserver-mtu-clamp.service
+    mode: "0644"
+  notify: Restart mtu clamp
+
+- name: Enable and start MTU clamp
+  ansible.builtin.systemd:
+    name: gameserver-mtu-clamp
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Verify rule is active
+  ansible.builtin.command: iptables -t raw -S PREROUTING
+  register: gameserver_raw_rules
+  changed_when: false
+  failed_when: "'--length ' ~ (gameserver_max_inbound_len + 1) ~ ':65535' not in gameserver_raw_rules.stdout"
