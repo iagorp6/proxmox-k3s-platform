@@ -33,6 +33,10 @@ data:
     set_key DefaultPort 16261
     set_key UDPPort 16262
     set_key Password "${PZ_SERVER_PASSWORD}"
+    set_key SaveWorldEveryMinutes 10
+    set_key BackupsOnStart true
+    set_key BackupsOnVersionChange true
+    set_key BackupsCount 5
     chown -R 1000:1000 /pz
     echo "Config applied: ${ini}"
   start.sh: |

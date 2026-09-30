@@ -66,7 +66,7 @@ resource "proxmox_virtual_environment_vm" "k3s" {
 
   memory {
     dedicated = var.vm_memory_mb
-    floating  = 0
+    floating  = var.vm_memory_mb # balloon só para reportar uso real (min = max)
   }
 
   scsi_hardware = "virtio-scsi-single"

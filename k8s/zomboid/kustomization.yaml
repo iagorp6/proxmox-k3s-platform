@@ -5,3 +5,4 @@ resources:
   - configmap.yaml
   - statefulset.yaml
   - service.yaml
+  - daily-restart.yaml

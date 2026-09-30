@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: zomboid-ops
+  namespace: zomboid
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: zomboid-ops
+  namespace: zomboid
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: zomboid-ops
+  namespace: zomboid
+subjects:
+  - kind: ServiceAccount
+    name: zomboid-ops
+    namespace: zomboid
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: zomboid-ops
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: zomboid-daily-restart
+  namespace: zomboid
+spec:
+  schedule: "0 6 * * *"
+  timeZone: "America/Sao_Paulo"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1500
+      template:
+        spec:
+          serviceAccountName: zomboid-ops
+          restartPolicy: Never
+          containers:
+            - name: restart
+              image: curlimages/curl:latest
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  curl -fsSLo /tmp/kubectl https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl
+                  chmod +x /tmp/kubectl
+                  K=/tmp/kubectl
+                  say() { $K -n zomboid exec zomboid-0 -c server -- sh -c "echo 'servermsg \"$1\"' > /tmp/console" || true; }
+                  say "Reinicio diario do servidor em 10 minutos"
+                  sleep 300
+                  say "Reinicio diario do servidor em 5 minutos"
+                  sleep 240
+                  say "Reinicio em 1 minuto. Salvando o mundo..."
+                  $K -n zomboid exec zomboid-0 -c server -- sh -c 'echo save > /tmp/console' || true
+                  sleep 60
+                  $K -n zomboid rollout restart statefulset zomboid
+                  echo "Restart solicitado"
