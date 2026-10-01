@@ -1,0 +1,31 @@
+- name: Install node_exporter and smartctl_exporter
+  ansible.builtin.apt:
+    name:
+      - prometheus-node-exporter
+      - prometheus-smartctl-exporter
+      - smartmontools
+    state: present
+    update_cache: true
+
+- name: Enable and start exporters
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - prometheus-node-exporter
+    - prometheus-smartctl-exporter
+
+- name: Verify node_exporter metrics (ZFS + EDAC collectors)
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9100/metrics
+    return_content: true
+  register: host_node_metrics
+  failed_when: "'node_zfs_' not in host_node_metrics.content or 'node_edac_' not in host_node_metrics.content"
+
+- name: Verify smartctl_exporter metrics
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9633/metrics
+    return_content: true
+  register: host_smart_metrics
+  failed_when: "'smartctl_device' not in host_smart_metrics.content"

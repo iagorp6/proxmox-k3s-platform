@@ -1,0 +1,5 @@
+- name: Prometheus exporters on the Proxmox host (node, ZFS, EDAC, SMART)
+  hosts: proxmox
+  become: true
+  roles:
+    - host_exporters
