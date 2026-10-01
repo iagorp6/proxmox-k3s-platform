@@ -11,6 +11,7 @@ k3s_install_dir: /usr/local/bin
 
 k3s_config:
   write-kubeconfig-mode: "0640"
+  secrets-encryption: true
   node-name: "{{ inventory_hostname }}"
   tls-san:
     - "{{ ansible_host }}"

@@ -6,3 +6,4 @@ resources:
   - statefulset.yaml
   - service.yaml
   - daily-restart.yaml
+  - backup.yaml
