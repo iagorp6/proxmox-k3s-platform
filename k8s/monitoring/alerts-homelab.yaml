@@ -1,0 +1,111 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab-alerts
+  namespace: monitoring
+spec:
+  groups:
+    - name: zomboid
+      rules:
+        - alert: ZomboidDown
+          expr: zomboid_up == 0
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Servidor AsunBoid fora do ar"
+            description: "O servidor não responde ao RCON há mais de 3 minutos."
+        - alert: ZomboidExporterMissing
+          expr: absent(zomboid_up)
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Métricas do Zomboid ausentes"
+            description: "O exporter (sidecar) não está sendo coletado. O pod pode estar parado."
+        - alert: ZomboidMemoryHigh
+          expr: |
+            max by (pod) (container_memory_working_set_bytes{namespace="zomboid",container="server"})
+            / max by (pod) (kube_pod_container_resource_limits{namespace="zomboid",container="server",resource="memory"})
+            > 0.9
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Servidor do jogo perto do limite de memória"
+            description: "Uso de {{ $value | humanizePercentage }} do limit. Risco de OOMKilled."
+    - name: backup
+      rules:
+        - alert: ZomboidBackupFailed
+          expr: kube_job_status_failed{namespace="zomboid",job_name=~"zomboid-backup-.*"} > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "Backup do mundo falhou"
+            description: "O job {{ $labels.job_name }} falhou. Confira os logs do restic."
+        - alert: ZomboidBackupStale
+          expr: time() - max(kube_cronjob_status_last_successful_time{namespace="zomboid",cronjob="zomboid-backup"}) > 26 * 3600
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Nenhum backup bem-sucedido nas últimas 26h"
+            description: "O backup diário (5h30) não rodou ou não terminou com sucesso."
+    - name: host
+      rules:
+        - alert: HostDown
+          expr: up{job="proxmox-node"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Host Proxmox sem métricas"
+            description: "O node_exporter do pve-01 não responde há 5 minutos."
+        - alert: DiskSmartFailing
+          expr: smartctl_device_smart_status == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "SMART reprovado no disco {{ $labels.device }}"
+            description: "Disco com falha prevista. No RAID0, perder um disco é perder o pool inteiro. Rode um backup e troque o disco."
+        - alert: DiskReallocatedSectors
+          expr: smartctl_device_attribute{attribute_name="Reallocated_Sector_Ct",attribute_value_type="raw"} > 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Setores realocados no disco {{ $labels.device }}"
+            description: "{{ $value }} setores realocados. Sinal precoce de desgaste."
+        - alert: ZfsPoolNotOnline
+          expr: node_zfs_zpool_state{state!="online"} > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pool ZFS {{ $labels.zpool }} em estado {{ $labels.state }}"
+            description: "O pool não está ONLINE. Rode zpool status no host."
+        - alert: EccUncorrectableErrors
+          expr: increase(node_edac_uncorrectable_errors_total[1h]) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "Erro de memória NÃO corrigido (ECC)"
+            description: "Erro de memória não corrigível detectado. Risco de corrupção de dados."
+        - alert: EccCorrectableErrorsHigh
+          expr: increase(node_edac_correctable_errors_total[24h]) > 10
+          labels:
+            severity: warning
+          annotations:
+            summary: "Muitos erros de memória corrigidos (ECC)"
+            description: "{{ $value }} erros corrigidos em 24h. Um pente pode estar com defeito."
+        - alert: HostDiskSpaceLow
+          expr: |
+            (node_filesystem_avail_bytes{job="proxmox-node",fstype=~"zfs|ext4|vfat"}
+            / node_filesystem_size_bytes{job="proxmox-node",fstype=~"zfs|ext4|vfat"}) < 0.15
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pouco espaço em {{ $labels.mountpoint }} no host"
+            description: "Menos de 15% livre."
