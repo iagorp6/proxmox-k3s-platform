@@ -63,7 +63,7 @@ variable "vm_cores" {
 variable "vm_memory_mb" {
   description = "RAM dedicada, sem ballooning"
   type        = number
-  default     = 12288
+  default     = 18432
 }
 
 variable "vm_disk_gb" {
