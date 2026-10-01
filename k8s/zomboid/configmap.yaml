@@ -33,6 +33,8 @@ data:
     set_key DefaultPort 16261
     set_key UDPPort 16262
     set_key Password "${PZ_SERVER_PASSWORD}"
+    set_key RCONPort 27015
+    set_key RCONPassword "${PZ_RCON_PASSWORD}"
     set_key SaveWorldEveryMinutes 10
     set_key BackupsOnStart true
     set_key BackupsOnVersionChange true

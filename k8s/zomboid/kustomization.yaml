@@ -7,3 +7,5 @@ resources:
   - service.yaml
   - daily-restart.yaml
   - backup.yaml
+  - exporter-configmap.yaml
+  - metrics.yaml

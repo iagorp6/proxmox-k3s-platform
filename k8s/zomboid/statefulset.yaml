@@ -28,6 +28,11 @@ spec:
                 secretKeyRef:
                   name: zomboid-secrets
                   key: server-password
+            - name: PZ_RCON_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zomboid-secrets
+                  key: rcon-password
           volumeMounts:
             - name: data
               mountPath: /pz
@@ -75,6 +80,34 @@ spec:
               mountPath: /pz
             - name: scripts
               mountPath: /scripts
+        - name: exporter
+          image: python:3.13-slim
+          command: ["python", "/exporter/exporter.py"]
+          securityContext:
+            runAsUser: 65534
+            runAsGroup: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          env:
+            - name: RCON_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zomboid-secrets
+                  key: rcon-password
+          ports:
+            - name: metrics
+              containerPort: 9105
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: exporter
+              mountPath: /exporter
+              readOnly: true
       volumes:
         - name: scripts
           configMap:
@@ -84,6 +117,9 @@ spec:
                 path: install.sh
               - key: start.sh
                 path: start.sh
+        - name: exporter
+          configMap:
+            name: zomboid-exporter
   volumeClaimTemplates:
     - metadata:
         name: data
