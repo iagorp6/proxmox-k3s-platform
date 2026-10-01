@@ -109,3 +109,12 @@ spec:
           annotations:
             summary: "Pouco espaço em {{ $labels.mountpoint }} no host"
             description: "Menos de 15% livre."
+    - name: players
+      rules:
+        - alert: PlayerOnline
+          expr: max by (player) (zomboid_player_online) == 1
+          labels:
+            severity: info
+            notify: players
+          annotations:
+            summary: "{{ $labels.player }} está online"
