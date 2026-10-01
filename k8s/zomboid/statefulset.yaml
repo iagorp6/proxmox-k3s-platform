@@ -62,10 +62,10 @@ spec:
           resources:
             requests:
               cpu: "3"
-              memory: 6Gi
+              memory: 8Gi
             limits:
               cpu: "3"
-              memory: 6Gi
+              memory: 8Gi
           lifecycle:
             preStop:
               exec:

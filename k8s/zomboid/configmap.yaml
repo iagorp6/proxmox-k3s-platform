@@ -8,8 +8,8 @@ data:
   PZ_SERVER_NAME: "k3s"
   # Nome exibido no jogo
   PZ_PUBLIC_NAME: "Zomboid B42 - k3s"
-  PZ_MAX_PLAYERS: "4"
-  PZ_XMX: "4g"
+  PZ_MAX_PLAYERS: "6"
+  PZ_XMX: "6g"
   # "true" força o SteamCMD a atualizar o servidor no próximo start
   PZ_UPDATE: "false"
   install.sh: |
