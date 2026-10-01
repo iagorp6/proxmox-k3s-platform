@@ -1172,6 +1172,96 @@ data:
               }
             }
           ]
+        },
+        {
+          "type": "table",
+          "title": "Tempo online por jogador",
+          "gridPos": {
+            "x": 0,
+            "y": 70,
+            "w": 24,
+            "h": 9
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "targets": [
+            {
+              "expr": "sum by (player) (count_over_time(zomboid_player_online[24h])) * 30",
+              "format": "table",
+              "instant": true,
+              "refId": "A"
+            },
+            {
+              "expr": "sum by (player) (count_over_time(zomboid_player_online[7d])) * 30",
+              "format": "table",
+              "instant": true,
+              "refId": "B"
+            },
+            {
+              "expr": "sum by (player) (count_over_time(zomboid_player_online[30d])) * 30",
+              "format": "table",
+              "instant": true,
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "dtdurations",
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "color-text"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Jogador"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  }
+                ]
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "player": "Jogador",
+                  "Value #A": "Últimas 24h",
+                  "Value #B": "Últimos 7 dias",
+                  "Value #C": "Últimos 30 dias"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Últimos 30 dias",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     }
