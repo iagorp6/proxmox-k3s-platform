@@ -1,0 +1,70 @@
+controller:
+  type: deployment
+  replicas: 1
+
+alloy:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 96Mi
+    limits:
+      memory: 256Mi
+  configMap:
+    content: |-
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "app"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.process.zomboid.receiver]
+      }
+
+      loki.process "zomboid" {
+        stage.match {
+          selector = "{namespace=\"zomboid\", container=\"server\"}"
+
+          // Nunca gravar os argumentos do pzexe (contêm a senha de admin no primeiro boot)
+          stage.drop {
+            expression = "pzexe: arg:"
+          }
+
+          stage.regex {
+            expression = "^(?P<level>LOG|WARN|ERROR)\\s*:\\s*(?P<category>\\w+)"
+          }
+
+          stage.labels {
+            values = {
+              level    = "",
+              category = "",
+            }
+          }
+        }
+        forward_to = [loki.write.default.receiver]
+      }
+
+      loki.write "default" {
+        endpoint {
+          url = "http://loki.monitoring.svc:3100/loki/api/v1/push"
+        }
+      }
