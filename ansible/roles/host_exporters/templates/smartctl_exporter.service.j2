@@ -1,0 +1,16 @@
+[Unit]
+Description=Prometheus smartctl exporter
+Documentation=https://github.com/prometheus-community/smartctl_exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/smartctl_exporter --web.listen-address={{ smartctl_exporter_listen }} --smartctl.path=/usr/sbin/smartctl --smartctl.interval=60s
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

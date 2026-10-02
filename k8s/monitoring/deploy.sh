@@ -19,9 +19,11 @@ install() {
   local release="$1" chart="$2" file="$3" values="$4" version
   version="$(pin "$chart" "$file")"
   echo ">> ${release}: ${chart} ${version}"
+  local extra=()
+  [[ -f "${values%.yaml}.local.yaml" ]] && extra=(-f "${values%.yaml}.local.yaml")
   helm upgrade --install "$release" "$chart" \
     --namespace monitoring --create-namespace \
-    --version "$version" -f "$values" --wait --timeout 15m
+    --version "$version" -f "$values" "${extra[@]}" --wait --timeout 15m
 }
 
 [[ -s chart-version-kps.txt ]] || { [[ -s chart-version.txt ]] && mv chart-version.txt chart-version-kps.txt; }

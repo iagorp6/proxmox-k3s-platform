@@ -1,6 +1,7 @@
-# Copie para terraform.tfvars (que fica fora do git) e ajuste.
-pve_host_address = "198.51.100.14"
+# Copie para terraform.tfvars (fora do git) e ajuste.
+node_name        = "pve-01"
+pve_host_address = "192.0.2.6"
 
 # Reserva DHCP: vm_mac_address -> vm_ip
-vm_ip          = "198.51.100.71"
+vm_ip          = "192.0.2.5"
 vm_mac_address = "02:00:00:00:00:01"

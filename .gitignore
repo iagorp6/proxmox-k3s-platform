@@ -34,3 +34,8 @@ override.tf.json
 .terraformrc
 terraform.rc
 ansible/inventory/hosts.yml
+
+# Configuração específica do ambiente (nunca versionar)
+.env.local
+*.local.yaml
+!*.local.yaml.example

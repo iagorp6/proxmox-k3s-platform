@@ -1,0 +1,14 @@
+prometheus:
+  prometheusSpec:
+    additionalScrapeConfigs:
+      - job_name: proxmox-node
+        static_configs:
+          - targets: ["192.0.2.6:9100"]
+            labels:
+              host: pve-01
+      - job_name: proxmox-smartctl
+        scrape_interval: 5m
+        static_configs:
+          - targets: ["192.0.2.6:9633"]
+            labels:
+              host: pve-01

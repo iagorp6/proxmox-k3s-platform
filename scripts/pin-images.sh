@@ -2,7 +2,9 @@
 # Fixa imagens de containers pelo digest (imagem:tag@sha256:...) usando as imagens já presentes no node K3s.
 # Uso: scripts/pin-images.sh [diretório] (padrão: k8s/)
 set -euo pipefail
-NODE="${NODE:-ops@192.0.2.5}"
+# shellcheck source=/dev/null
+[[ -f "$(dirname "$0")/../.env.local" ]] && source "$(dirname "$0")/../.env.local"
+NODE="${NODE:-ops@${VM_HOST:?defina VM_HOST no .env.local}}"
 DIR="${1:-$(dirname "$0")/../k8s}"
 
 mapfile -t IMAGES < <(grep -rhoE 'image:\s*[^ @]+' "$DIR" --include='*.yaml' | awk '{print $2}' | grep -v '@' | sort -u)

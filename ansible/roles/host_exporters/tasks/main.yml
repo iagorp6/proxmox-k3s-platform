@@ -1,26 +1,82 @@
-- name: Install node_exporter and smartctl_exporter
+- name: Install node_exporter and smartmontools (Debian packages)
   ansible.builtin.apt:
     name:
       - prometheus-node-exporter
-      - prometheus-smartctl-exporter
       - smartmontools
     state: present
     update_cache: true
+
+- name: Resolve latest smartctl_exporter release (only when version is empty)
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/prometheus-community/smartctl_exporter/releases/latest
+    return_content: true
+    timeout: 15
+  register: smartctl_latest
+  when: smartctl_exporter_version | length == 0
+
+- name: Set smartctl_exporter version and URLs
+  ansible.builtin.set_fact:
+    smartctl_exporter_ver: "{{ (smartctl_exporter_version if smartctl_exporter_version | length > 0 else smartctl_latest.json.tag_name) | regex_replace('^v', '') }}"
+
+- name: Set smartctl_exporter release URL
+  ansible.builtin.set_fact:
+    smartctl_exporter_base: "https://github.com/prometheus-community/smartctl_exporter/releases/download/v{{ smartctl_exporter_ver }}"
+    smartctl_exporter_dir: "smartctl_exporter-{{ smartctl_exporter_ver }}.linux-amd64"
+
+- name: Show smartctl_exporter version
+  ansible.builtin.debug:
+    msg: "smartctl_exporter {{ smartctl_exporter_ver }}"
+
+- name: Download smartctl_exporter (sha256 verified)
+  ansible.builtin.get_url:
+    url: "{{ smartctl_exporter_base }}/{{ smartctl_exporter_dir }}.tar.gz"
+    dest: "/tmp/{{ smartctl_exporter_dir }}.tar.gz"
+    checksum: "sha256:{{ smartctl_exporter_base }}/sha256sums.txt"
+    mode: "0644"
+
+- name: Extract smartctl_exporter
+  ansible.builtin.unarchive:
+    src: "/tmp/{{ smartctl_exporter_dir }}.tar.gz"
+    dest: /tmp
+    remote_src: true
+    creates: "/tmp/{{ smartctl_exporter_dir }}/smartctl_exporter"
+
+- name: Install smartctl_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/{{ smartctl_exporter_dir }}/smartctl_exporter"
+    dest: /usr/local/bin/smartctl_exporter
+    mode: "0755"
+    remote_src: true
+  notify: Restart smartctl_exporter
+
+- name: Install smartctl_exporter systemd unit
+  ansible.builtin.template:
+    src: smartctl_exporter.service.j2
+    dest: /etc/systemd/system/smartctl_exporter.service
+    mode: "0644"
+  notify: Restart smartctl_exporter
 
 - name: Enable and start exporters
   ansible.builtin.systemd:
     name: "{{ item }}"
     enabled: true
     state: started
+    daemon_reload: true
   loop:
     - prometheus-node-exporter
-    - prometheus-smartctl-exporter
+    - smartctl_exporter
+
+- name: Apply pending restarts
+  ansible.builtin.meta: flush_handlers
 
 - name: Verify node_exporter metrics (ZFS + EDAC collectors)
   ansible.builtin.uri:
     url: http://127.0.0.1:9100/metrics
     return_content: true
   register: host_node_metrics
+  retries: 6
+  delay: 5
+  until: host_node_metrics.status == 200
   failed_when: "'node_zfs_' not in host_node_metrics.content or 'node_edac_' not in host_node_metrics.content"
 
 - name: Verify smartctl_exporter metrics
@@ -28,4 +84,6 @@
     url: http://127.0.0.1:9633/metrics
     return_content: true
   register: host_smart_metrics
-  failed_when: "'smartctl_device' not in host_smart_metrics.content"
+  retries: 12
+  delay: 10
+  until: host_smart_metrics.status == 200 and 'smartctl_device' in host_smart_metrics.content
