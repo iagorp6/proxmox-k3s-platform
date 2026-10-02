@@ -43,13 +43,13 @@ data:
     echo "Config applied: ${ini}"
   start.sh: |
     #!/bin/bash
-    set -euo pipefail
+    set -uo pipefail
     [ -p /tmp/console ] || mkfifo /tmp/console
+    # Mantém o console aberto (leitura e escrita): comandos via /tmp/console chegam ao servidor
+    # e, quando o servidor termina, o container termina junto (o Kubernetes reinicia o pod)
+    exec 3<>/tmp/console
     cd /pz/server
-    ARGS=(-servername "${PZ_SERVER_NAME}" -cachedir=/pz/data)
-    # Admin só é criado no primeiro boot; depois disso a senha não é passada (evita vazar em log)
-    if [ ! -f "/pz/data/db/${PZ_SERVER_NAME}.db" ]; then
-      echo "First boot: creating admin account"
-      ARGS+=(-adminusername admin -adminpassword "${PZ_ADMIN_PASSWORD}")
-    fi
-    tail -f /tmp/console | ./start-server.sh "${ARGS[@]}"
+    # A senha de admin vai em todo start: sem ela, o servidor trava pedindo a senha no terminal
+    ARGS=(-servername "${PZ_SERVER_NAME}" -cachedir=/pz/data -adminusername admin -adminpassword "${PZ_ADMIN_PASSWORD}")
+    # O pzexe imprime os argumentos (inclusive a senha): essas linhas são filtradas da saída
+    ./start-server.sh "${ARGS[@]}" <&3 2>&1 | grep --line-buffered -v '^pzexe: arg: '
