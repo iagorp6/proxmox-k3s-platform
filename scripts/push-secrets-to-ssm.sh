@@ -24,6 +24,7 @@ declare -A MAP=(
   [/homelab/backup/restic-password]=restic-zomboid
   [/homelab/monitoring/grafana-admin-password]=grafana-admin
   [/homelab/monitoring/discord-webhook-url]=discord-webhook-alertas
+  [/homelab/monitoring/healthchecks-watchdog-url]=healthchecks-watchdog
 )
 
 for param in "${!MAP[@]}"; do

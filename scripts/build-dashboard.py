@@ -43,16 +43,8 @@ def row(title, y, collapsed=False, panels=None):
 ONLINE = vmap([("0", "OFFLINE", RED), ("1", "ONLINE", GREEN)])
 P = []
 
-# ---------------- Guia de leitura ----------------
-P.append({"type": "text", "title": "", "gridPos": {"x": 0, "y": 0, "w": 24, "h": 2},
-          "options": {"mode": "markdown", "content":
-          "**Como ler:** leia de cima para baixo, do geral ao detalhe. "
-          "**Verde** = saudável · **laranja** = atenção · **vermelho** = agir. "
-          "Passe o mouse no **(i)** de cada painel para saber o que ele mede. "
-          "Seções de hardware e logs ficam recolhidas: abra quando precisar investigar."}})
-
 # ---------------- 1. Agora ----------------
-y = 2
+y = 0
 P.append(row("Agora", y)); y += 1
 P += [
   stat("Servidor", "O servidor responde ao RCON? Se OFFLINE por mais de 3 min, o alerta ZomboidDown dispara no Discord.",
