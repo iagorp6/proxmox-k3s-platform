@@ -1,0 +1,4 @@
+# Começa no perfil "basic"; subir para "moderate"/"production" conforme o código amadurece
+profile: basic
+exclude_paths:
+  - inventory/hosts.yml

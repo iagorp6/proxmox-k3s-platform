@@ -1,0 +1,19 @@
+# App raiz: aplicado uma única vez à mão; daí em diante tudo vem de k8s/argocd/apps/
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:iagorp6/proxmox-k3s-platform.git
+    targetRevision: main
+    path: k8s/argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
