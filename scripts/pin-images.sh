@@ -14,6 +14,7 @@ for img in "${IMAGES[@]}"; do
   ref="$img"
   [[ "$ref" == */* ]] || ref="library/$ref"
   [[ "${ref%%/*}" == *.* ]] || ref="docker.io/$ref"
+  # shellcheck disable=SC2029  # $ref é expandido localmente de propósito
   digest="$(ssh "$NODE" "sudo k3s crictl inspecti -o json '$ref' 2>/dev/null" | jq -r '.status.repoDigests[0] // empty' | sed 's/.*@//')"
   if [[ -z "$digest" ]]; then
     echo "AVISO: $img não está no node (rode o workload uma vez e repita)"; continue
