@@ -110,6 +110,8 @@ docs/ Runbooks
 4. **Helm** installs the observability stack, External Secrets and Argo CD, all with pinned chart versions.
 5. **Two bootstrap secrets** (the External Secrets AWS credential and the Argo CD deploy key) and one `kubectl apply` of the root app. Argo CD reconciles everything else, and External Secrets restores every Secret from SSM.
 
+Day-to-day tasks are wrapped in a `Makefile`: run `make help` to list them (`make ci` mirrors the GitHub Actions checks locally).
+
 ---
 
 ## The game server
