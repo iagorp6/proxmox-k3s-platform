@@ -17,7 +17,7 @@ spec:
       terminationGracePeriodSeconds: 90
       initContainers:
         - name: install
-          image: steamcmd/steamcmd:latest
+          image: steamcmd/steamcmd:latest@sha256:0855a0b03960dbf6da43fe4b1f36ec9def900c548688c694d2e6f8ee1a5189d6
           command: ["/bin/bash", "/scripts/install.sh"]
           envFrom:
             - configMapRef:
@@ -40,7 +40,7 @@ spec:
               mountPath: /scripts
       containers:
         - name: server
-          image: steamcmd/steamcmd:latest
+          image: steamcmd/steamcmd:latest@sha256:0855a0b03960dbf6da43fe4b1f36ec9def900c548688c694d2e6f8ee1a5189d6
           command: ["/bin/bash", "/scripts/start.sh"]
           securityContext:
             runAsUser: 1000
@@ -81,7 +81,7 @@ spec:
             - name: scripts
               mountPath: /scripts
         - name: exporter
-          image: python:3.13-slim
+          image: python:3.13-slim@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b
           command: ["python", "/exporter/exporter.py"]
           securityContext:
             runAsUser: 65534

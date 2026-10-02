@@ -19,7 +19,7 @@ spec:
           restartPolicy: Never
           initContainers:
             - name: save-world
-              image: curlimages/curl:latest
+              image: curlimages/curl:latest@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
               command: ["/bin/sh", "-c"]
               args:
                 - |
@@ -28,7 +28,7 @@ spec:
                   sleep 30
           containers:
             - name: restic
-              image: restic/restic:latest
+              image: restic/restic:latest@sha256:9940e6c7421ab3a21ee9fdc4e91596d04c792b600d31b102696c75cbf3ac4481
               command: ["/bin/sh", "-c"]
               args:
                 - |
