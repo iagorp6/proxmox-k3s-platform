@@ -21,6 +21,6 @@
 
 - name: Verify rule is active
   ansible.builtin.command: iptables -t raw -S PREROUTING
-  register: gameserver_raw_rules
+  register: gameserver_net_raw_rules
   changed_when: false
-  failed_when: "'--length ' ~ (gameserver_max_inbound_len + 1) ~ ':65535' not in gameserver_raw_rules.stdout"
+  failed_when: "'--length ' ~ (gameserver_net_max_inbound_len + 1) ~ ':65535' not in gameserver_net_raw_rules.stdout"

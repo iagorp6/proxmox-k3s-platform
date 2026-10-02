@@ -5,7 +5,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/smartctl_exporter --web.listen-address={{ smartctl_exporter_listen }} --smartctl.path=/usr/sbin/smartctl --smartctl.interval=60s
+ExecStart=/usr/local/bin/smartctl_exporter --web.listen-address={{ host_exporters_smartctl_listen }} --smartctl.path=/usr/sbin/smartctl --smartctl.interval=60s
 Restart=on-failure
 RestartSec=5s
 NoNewPrivileges=yes

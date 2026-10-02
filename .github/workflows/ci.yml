@@ -51,7 +51,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install ansible-lint
-        run: pip install --quiet ansible-core ansible-lint
+        run: pip install --quiet ansible-lint==
       - name: ansible-lint
         run: ansible-lint
 
