@@ -8,7 +8,7 @@ metadata:
 data:
   asunboid.json: |
     {
-      "title": "AsunBoid - Servidor de Jogo",
+      "title": "AsunBoid - Servidor de Jogo (GitOps)",
       "uid": "asunboid",
       "description": "Proxmox + K3s + Project Zomboid B42. Provisionado como código (Terraform, Ansible, Helm).",
       "timezone": "America/Sao_Paulo",
