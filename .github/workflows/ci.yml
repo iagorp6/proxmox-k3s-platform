@@ -25,7 +25,7 @@ jobs:
       run:
         working-directory: ${{ matrix.dir }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4
       - name: terraform fmt
         run: terraform fmt -check -recursive -diff
@@ -46,8 +46,8 @@ jobs:
       run:
         working-directory: ansible
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
       - name: Install ansible-lint
@@ -59,7 +59,7 @@ jobs:
     name: Kubernetes manifests
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Install kubeconform
         run: |
           mkdir -p "$HOME/bin"
@@ -94,7 +94,7 @@ jobs:
     name: Shell scripts
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: shellcheck
         run: shellcheck scripts/*.sh k8s/monitoring/deploy.sh
 
@@ -105,7 +105,7 @@ jobs:
     name: Security scan (Trivy)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Install Trivy
         run: |
           mkdir -p "$HOME/bin"
