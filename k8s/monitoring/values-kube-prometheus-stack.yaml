@@ -56,17 +56,32 @@ alertmanager:
   config:
     global:
       resolve_timeout: 5m
+    time_intervals:
+      # Restart diário do servidor (CronJob das 6h): evita alerta falso de queda
+      - name: restart-diario
+        time_intervals:
+          - times:
+              - start_time: "05:55"
+                end_time: "06:15"
+            location: America/Sao_Paulo
     route:
       receiver: discord
-      group_by: ["alertname", "severity"]
+      group_by: ["alertname"]
       group_wait: 30s
       group_interval: 5m
-      repeat_interval: 4h
+      repeat_interval: 12h
       routes:
+        # Dead man's switch: o Watchdog pinga o healthchecks.io; se parar, o healthchecks avisa
+        - receiver: healthchecks
+          matchers:
+            - alertname = "Watchdog"
+          group_wait: 0s
+          group_interval: 1m
+          repeat_interval: 1m
         - receiver: "null"
           matchers:
-            - alertname =~ "Watchdog|InfoInhibitor"
-        # Entrada/saída de jogadores: uma mensagem por player, sem repetição
+            - alertname = "InfoInhibitor"
+        # Entrada/saída de jogadores (antes da regra de info)
         - receiver: discord-players
           matchers:
             - notify = "players"
@@ -74,30 +89,54 @@ alertmanager:
           group_wait: 10s
           group_interval: 1m
           repeat_interval: 720h
+        # info não notifica
+        - receiver: "null"
+          matchers:
+            - severity = "info"
+        # Disponibilidade do jogo: silêncio durante o restart diário
+        - receiver: discord
+          matchers:
+            - alertname =~ "ZomboidDown|ZomboidExporterMissing"
+          mute_time_intervals: ["restart-diario"]
+          repeat_interval: 2h
+        - receiver: discord
+          matchers:
+            - severity = "critical"
+          repeat_interval: 2h
     inhibit_rules:
       - source_matchers: ["severity = critical"]
         target_matchers: ["severity = warning"]
         equal: ["alertname"]
+      # Com o host fora, alertas que dependem dele ficam mudos
+      - source_matchers: ["alertname = HostDown"]
+        target_matchers: ['alertname =~ "DiskSmartFailing|DiskReallocatedSectors|ZfsPoolNotOnline|EccUncorrectableErrors|EccCorrectableErrorsHigh|HostDiskSpaceLow"']
+      # Sem o pod, o restart e a memória não importam
+      - source_matchers: ["alertname = ZomboidExporterMissing"]
+        target_matchers: ['alertname =~ "ZomboidDown|ZomboidRestarted|ZomboidMemoryHigh"']
     receivers:
       - name: "null"
+      - name: healthchecks
+        webhook_configs:
+          - url_file: /etc/alertmanager/secrets/alertmanager-discord/healthchecks-url
+            send_resolved: false
       - name: discord
         discord_configs:
           - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/webhook-url
             send_resolved: true
-            title: '{{ if eq .Status "firing" }}🔥 ALERTA{{ else }}✅ RESOLVIDO{{ end }}: {{ .CommonLabels.alertname }}'
+            title: '{{ if eq .Status "firing" }}{{ if eq .CommonLabels.severity "critical" }}🔴{{ else }}🟠{{ end }} {{ or .CommonAnnotations.summary .CommonLabels.alertname }}{{ else }}✅ Resolvido: {{ or .CommonAnnotations.summary .CommonLabels.alertname }}{{ end }}'
             message: |-
-              {{ range .Alerts }}**{{ .Annotations.summary }}**
-              {{ .Annotations.description }}
-              Severidade: `{{ .Labels.severity }}` | Início: {{ .StartsAt | tz "America/Sao_Paulo" | date "02/01 15:04" }}
+              {{ range .Alerts }}{{ if eq .Status "firing" }}{{ .Annotations.description }}
+              {{ with .Annotations.action }}**O que fazer:** `{{ . }}`
+              {{ end }}Desde {{ .StartsAt | tz "America/Sao_Paulo" | date "02/01 15:04" }} · `{{ .Labels.alertname }}` · {{ .Labels.severity }}{{ else }}Normalizado às {{ .EndsAt | tz "America/Sao_Paulo" | date "15:04" }} · duração {{ (.EndsAt.Sub .StartsAt).Truncate 60000000000 }}{{ end }}
               {{ end }}
       - name: discord-players
         discord_configs:
           - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/webhook-url
-            content: '{{ if eq .Status "firing" }}<@&1555259172574986342>{{ end }}'
             send_resolved: true
+            content: '{{ if eq .Status "firing" }}<@&1555259172574986342>{{ end }}'
             title: '{{ if eq .Status "firing" }}🟢 {{ .CommonLabels.player }} entrou no servidor{{ else }}🔴 {{ .CommonLabels.player }} saiu do servidor{{ end }}'
             message: |-
-              {{ range .Alerts }}{{ if eq .Status "firing" }}Entrou às {{ .StartsAt | tz "America/Sao_Paulo" | date "15:04 (02/01)" }}{{ else }}Saiu às {{ .EndsAt | tz "America/Sao_Paulo" | date "15:04 (02/01)" }} · sessão de {{ .EndsAt.Sub .StartsAt }}{{ end }}
+              {{ range .Alerts }}{{ if eq .Status "firing" }}Entrou às {{ .StartsAt | tz "America/Sao_Paulo" | date "15:04 (02/01)" }}{{ else }}Saiu às {{ .EndsAt | tz "America/Sao_Paulo" | date "15:04 (02/01)" }} · sessão de {{ (.EndsAt.Sub .StartsAt).Truncate 60000000000 }}{{ end }}
               {{ end }}
 
 grafana:
