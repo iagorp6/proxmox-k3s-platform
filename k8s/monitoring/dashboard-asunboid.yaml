@@ -671,7 +671,7 @@ data:
         {
           "type": "table",
           "title": "Tempo online por jogador",
-          "description": "Tempo jogado em cada período e o último acesso. A barra da coluna de 30 dias funciona como ranking.",
+          "description": "Tempo jogado em cada período, total desde o início, mortes do personagem e último acesso. A barra da coluna de 30 dias funciona como ranking.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -706,6 +706,18 @@ data:
               "refId": "D",
               "instant": true,
               "format": "table"
+            },
+            {
+              "expr": "max by (player) (zomboid_player_playtime_seconds_total)",
+              "refId": "E",
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "expr": "round(sum by (player) (increase(zomboid_player_deaths_total[30d])))",
+              "refId": "F",
+              "instant": true,
+              "format": "table"
             }
           ],
           "fieldConfig": {
@@ -737,6 +749,22 @@ data:
                   {
                     "id": "unit",
                     "value": "dateTimeFromNow"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Mortes (30 dias)"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "none"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
                   }
                 ]
               },
@@ -784,14 +812,18 @@ data:
                   "Value #A": 1,
                   "Value #B": 2,
                   "Value #C": 3,
-                  "Value #D": 4
+                  "Value #D": 4,
+                  "Value #E": 5,
+                  "Value #F": 6
                 },
                 "renameByName": {
                   "player": "Jogador",
                   "Value #A": "Último acesso",
                   "Value #B": "Últimas 24h",
                   "Value #C": "Últimos 7 dias",
-                  "Value #D": "Últimos 30 dias"
+                  "Value #D": "Últimos 30 dias",
+                  "Value #E": "Total no servidor",
+                  "Value #F": "Mortes (30 dias)"
                 }
               }
             },

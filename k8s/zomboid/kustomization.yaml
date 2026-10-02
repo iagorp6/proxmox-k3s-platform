@@ -7,6 +7,17 @@ resources:
   - service.yaml
   - daily-restart.yaml
   - backup.yaml
-  - exporter-configmap.yaml
   - metrics.yaml
   - externalsecrets.yaml
+  - weekly-summary.yaml
+
+# Código Python versionado como arquivo; o Kustomize gera os ConfigMaps
+configMapGenerator:
+  - name: zomboid-exporter
+    files:
+      - exporter.py=exporter/exporter.py
+  - name: zomboid-weekly-summary
+    files:
+      - summary.py=exporter/weekly_summary.py
+generatorOptions:
+  disableNameSuffixHash: true

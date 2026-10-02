@@ -98,6 +98,9 @@ jobs:
       - name: shellcheck
         run: shellcheck scripts/*.sh k8s/monitoring/deploy.sh
 
+      - name: Python syntax
+        run: python3 -m py_compile k8s/zomboid/exporter/*.py scripts/*.py
+
   security:
     name: Security scan (Trivy)
     runs-on: ubuntu-latest

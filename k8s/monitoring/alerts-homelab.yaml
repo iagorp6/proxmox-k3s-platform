@@ -170,3 +170,23 @@ spec:
             notify: players
           annotations:
             summary: "{{ $labels.player }} está online"
+            description: >-
+              {{ with query "max(zomboid_players_online)" }}{{ . | first | value | printf "%.0f" }}{{ end }}/6 online:
+              {{ range $i, $s := query "max by (player) (zomboid_player_online)" }}{{ if $i }}, {{ end }}{{ $s.Labels.player }}{{ end }}
+        - alert: PlayerDied
+          expr: (time() - max by (player) (zomboid_player_last_death_timestamp_seconds)) < 180
+          labels:
+            severity: info
+            notify: events
+          annotations:
+            summary: "💀 {{ $labels.player }} morreu"
+            description: >-
+              {{ with query (printf "max(zomboid_player_last_death_hours_survived{player=%q})" $labels.player) }}O personagem sobreviveu {{ . | first | value | printf "%.0f" }} horas no jogo.{{ else }}Mais um para a horda.{{ end }}
+        - alert: PlayerMilestone
+          expr: max by (player) (zomboid_player_milestone_hours) > max by (player) (zomboid_player_milestone_hours offset 10m)
+          labels:
+            severity: info
+            notify: events
+          annotations:
+            summary: "🏆 {{ $labels.player }} completou {{ $value | printf \"%.0f\" }} horas no servidor"
+            description: "Tempo total jogado no AsunBoid."

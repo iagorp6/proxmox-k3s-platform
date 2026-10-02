@@ -110,15 +110,18 @@ P.append({"type": "state-timeline", "title": "Linha do tempo de sessões",
 y += 7
 dur = lambda r, ref: prom(f"sum by (player) (count_over_time(zomboid_player_online[{r}])) * 30", ref=ref, instant=True, fmt="table")
 P.append({"type": "table", "title": "Tempo online por jogador",
-          "description": "Tempo jogado em cada período e o último acesso. A barra da coluna de 30 dias funciona como ranking.",
+          "description": "Tempo jogado em cada período, total desde o início, mortes do personagem e último acesso. A barra da coluna de 30 dias funciona como ranking.",
           "datasource": DS, "gridPos": {"x": 0, "y": y, "w": 24, "h": 8},
           "targets": [prom("max by (player) (last_over_time(timestamp(zomboid_player_online)[30d:1m])) * 1000",
                            ref="A", instant=True, fmt="table"),
-                      dur("24h", "B"), dur("7d", "C"), dur("30d", "D")],
+                      dur("24h", "B"), dur("7d", "C"), dur("30d", "D"),
+                      prom("max by (player) (zomboid_player_playtime_seconds_total)", ref="E", instant=True, fmt="table"),
+                      prom("round(sum by (player) (increase(zomboid_player_deaths_total[30d])))", ref="F", instant=True, fmt="table")],
           "fieldConfig": {"defaults": {"unit": "dtdurations", "custom": {"align": "auto"}},
                           "overrides": [
                               {"matcher": {"id": "byName", "options": "Jogador"}, "properties": [{"id": "unit", "value": "string"}]},
                               {"matcher": {"id": "byName", "options": "Último acesso"}, "properties": [{"id": "unit", "value": "dateTimeFromNow"}]},
+                              {"matcher": {"id": "byName", "options": "Mortes (30 dias)"}, "properties": [{"id": "unit", "value": "none"}, {"id": "decimals", "value": 0}]},
                               {"matcher": {"id": "byName", "options": "Últimos 30 dias"}, "properties": [
                                   {"id": "custom.cellOptions", "value": {"type": "gauge", "mode": "gradient", "valueDisplayMode": "text"}},
                                   {"id": "color", "value": {"mode": "continuous-BlPu"}},
@@ -126,9 +129,10 @@ P.append({"type": "table", "title": "Tempo online por jogador",
           "transformations": [
               {"id": "merge", "options": {}},
               {"id": "organize", "options": {"excludeByName": {"Time": True},
-                  "indexByName": {"player": 0, "Value #A": 1, "Value #B": 2, "Value #C": 3, "Value #D": 4},
+                  "indexByName": {"player": 0, "Value #A": 1, "Value #B": 2, "Value #C": 3, "Value #D": 4, "Value #E": 5, "Value #F": 6},
                   "renameByName": {"player": "Jogador", "Value #A": "Último acesso", "Value #B": "Últimas 24h",
-                                   "Value #C": "Últimos 7 dias", "Value #D": "Últimos 30 dias"}}},
+                                   "Value #C": "Últimos 7 dias", "Value #D": "Últimos 30 dias",
+                                   "Value #E": "Total no servidor", "Value #F": "Mortes (30 dias)"}}},
               {"id": "sortBy", "options": {"sort": [{"field": "Últimos 30 dias", "desc": True}]}}],
           "options": {"showHeader": True, "sortBy": [{"displayName": "Últimos 30 dias", "desc": True}]}})
 y += 8

@@ -84,11 +84,17 @@ spec:
           image: python:3.13-slim@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b
           command: ["python", "/exporter/exporter.py"]
           securityContext:
-            runAsUser: 65534
-            runAsGroup: 65534
+            runAsUser: 1000
+            runAsGroup: 1000
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
           env:
+            - name: PZ_LOG_DIR
+              value: /pz/data/Logs
+            - name: STATE_FILE
+              value: /pz/data/exporter/state.json
+            - name: SEED_PROMETHEUS_URL
+              value: http://kps-kube-prometheus-stack-prometheus.monitoring.svc:9090
             - name: RCON_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -103,11 +109,13 @@ spec:
               cpu: 10m
               memory: 32Mi
             limits:
-              memory: 64Mi
+              memory: 128Mi
           volumeMounts:
             - name: exporter
               mountPath: /exporter
               readOnly: true
+            - name: data
+              mountPath: /pz
       volumes:
         - name: scripts
           configMap:

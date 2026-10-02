@@ -89,6 +89,14 @@ alertmanager:
           group_wait: 10s
           group_interval: 1m
           repeat_interval: 720h
+        # Eventos do jogo (morte e marcos): uma mensagem por evento, sem "resolvido"
+        - receiver: discord-events
+          matchers:
+            - notify = "events"
+          group_by: ["alertname", "player"]
+          group_wait: 10s
+          group_interval: 1m
+          repeat_interval: 720h
         # info não notifica
         - receiver: "null"
           matchers:
@@ -129,6 +137,12 @@ alertmanager:
               {{ with .Annotations.action }}**O que fazer:** `{{ . }}`
               {{ end }}Desde {{ .StartsAt | tz "America/Sao_Paulo" | date "02/01 15:04" }} · `{{ .Labels.alertname }}` · {{ .Labels.severity }}{{ else }}Normalizado às {{ .EndsAt | tz "America/Sao_Paulo" | date "15:04" }} · duração {{ (.EndsAt.Sub .StartsAt).Truncate 60000000000 }}{{ end }}
               {{ end }}
+      - name: discord-events
+        discord_configs:
+          - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/webhook-url
+            send_resolved: false
+            title: '{{ .CommonAnnotations.summary }}'
+            message: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
       - name: discord-players
         discord_configs:
           - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/webhook-url
@@ -136,7 +150,7 @@ alertmanager:
             content: '{{ if eq .Status "firing" }}<@&1555259172574986342>{{ end }}'
             title: '{{ if eq .Status "firing" }}🟢 {{ .CommonLabels.player }} entrou no servidor{{ else }}🔴 {{ .CommonLabels.player }} saiu do servidor{{ end }}'
             message: |-
-              {{ range .Alerts }}{{ if eq .Status "firing" }}Entrou às {{ .StartsAt | tz "America/Sao_Paulo" | date "15:04 (02/01)" }}{{ else }}Saiu às {{ .EndsAt | tz "America/Sao_Paulo" | date "15:04 (02/01)" }} · sessão de {{ (.EndsAt.Sub .StartsAt).Truncate 60000000000 }}{{ end }}
+              {{ range .Alerts }}{{ if eq .Status "firing" }}Entrou às {{ .StartsAt | tz "America/Sao_Paulo" | date "15:04 (02/01)" }} · {{ .Annotations.description }}{{ else }}Saiu às {{ .EndsAt | tz "America/Sao_Paulo" | date "15:04 (02/01)" }} · sessão de {{ (.EndsAt.Sub .StartsAt).Truncate 60000000000 }}{{ end }}
               {{ end }}
 
 grafana:
