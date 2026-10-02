@@ -30,6 +30,19 @@ ensure_tools() {
     pipx install --include-deps ansible-lint >/dev/null
   fi
   command -v shellcheck >/dev/null || { echo "ERRO: instale o shellcheck (sudo apt-get install -y shellcheck)"; exit 2; }
+  local out tool
+  for tool in terraform tflint kubeconform trivy ansible-lint shellcheck; do
+    out="$(tool_version "$tool" 2>&1 || true)"
+    [[ "$out" =~ [0-9]+\.[0-9]+ ]] || { echo "ERRO: $tool não responde com a versão (instalação corrompida?)"; exit 2; }
+  done
+}
+
+tool_version() {
+  case "$1" in
+    terraform)   terraform version ;;
+    kubeconform) kubeconform -v ;;
+    *)           "$1" --version ;;
+  esac
 }
 
 # ---------- cópia limpa: só o que o Git versionaria ----------
