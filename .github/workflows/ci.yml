@@ -76,6 +76,10 @@ jobs:
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             k8s/monitoring/alerts-homelab.yaml k8s/monitoring/dashboard-asunboid.yaml
+      - name: Dashboard YAML in sync with generator
+        run: |
+          python3 scripts/build-dashboard.py
+          git diff --exit-code k8s/monitoring/dashboard-asunboid.yaml
       - name: Validate Grafana dashboard JSON
         run: |
           python3 - <<'PY'

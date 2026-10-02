@@ -8,21 +8,22 @@ metadata:
 data:
   asunboid.json: |
     {
-      "title": "AsunBoid - Servidor de Jogo (GitOps)",
+      "title": "AsunBoid - Servidor de Jogo",
       "uid": "asunboid",
-      "description": "Proxmox + K3s + Project Zomboid B42. Provisionado como código (Terraform, Ansible, Helm).",
-      "timezone": "America/Sao_Paulo",
-      "refresh": "30s",
-      "time": {
-        "from": "now-24h",
-        "to": "now"
-      },
-      "schemaVersion": 39,
+      "description": "Project Zomboid B42 em K3s sobre Proxmox. Dashboard como código (GitOps via Argo CD).",
       "tags": [
         "homelab",
         "zomboid",
         "k3s"
       ],
+      "timezone": "America/Sao_Paulo",
+      "refresh": "1m",
+      "time": {
+        "from": "now-24h",
+        "to": "now"
+      },
+      "schemaVersion": 39,
+      "graphTooltip": 1,
       "templating": {
         "list": [
           {
@@ -31,59 +32,61 @@ data:
             "type": "datasource",
             "query": "prometheus",
             "current": {},
-            "hide": 0
+            "hide": 2
           }
         ]
       },
       "panels": [
         {
-          "type": "row",
-          "title": "Visão geral",
-          "collapsed": false,
+          "type": "text",
+          "title": "",
           "gridPos": {
             "x": 0,
             "y": 0,
             "w": 24,
+            "h": 2
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "**Como ler:** leia de cima para baixo, do geral ao detalhe. **Verde** = saudável · **laranja** = atenção · **vermelho** = agir. Passe o mouse no **(i)** de cada painel para saber o que ele mede. Seções de hardware e logs ficam recolhidas: abra quando precisar investigar."
+          },
+          "id": 1
+        },
+        {
+          "type": "row",
+          "title": "Agora",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 2,
+            "w": 24,
             "h": 1
           },
-          "panels": []
+          "panels": [],
+          "id": 2
         },
         {
           "type": "stat",
           "title": "Servidor",
-          "gridPos": {
-            "x": 0,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
+          "description": "O servidor responde ao RCON? Se OFFLINE por mais de 3 min, o alerta ZomboidDown dispara no Discord.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
+          "gridPos": {
+            "x": 0,
+            "y": 3,
+            "w": 4,
+            "h": 4
+          },
           "targets": [
             {
-              "expr": "max(zomboid_up)",
+              "expr": "max(zomboid_up) or vector(0)",
               "refId": "A"
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "mappings": [
-                {
-                  "type": "value",
-                  "options": {
-                    "0": {
-                      "text": "OFFLINE",
-                      "color": "red"
-                    },
-                    "1": {
-                      "text": "ONLINE",
-                      "color": "green"
-                    }
-                  }
-                }
-              ],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -96,27 +99,53 @@ data:
                     "value": 1
                   }
                 ]
-              }
-            }
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "OFFLINE",
+                      "color": "red",
+                      "index": 0
+                    },
+                    "1": {
+                      "text": "ONLINE",
+                      "color": "green",
+                      "index": 1
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
           },
           "options": {
             "colorMode": "background",
             "graphMode": "none",
-            "textMode": "value"
-          }
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "id": 3
         },
         {
           "type": "stat",
           "title": "Players online",
-          "gridPos": {
-            "x": 4,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
+          "description": "Jogadores conectados agora, de no máximo 6 vagas.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 4,
+            "y": 3,
+            "w": 4,
+            "h": 4
           },
           "targets": [
             {
@@ -126,7 +155,6 @@ data:
           ],
           "fieldConfig": {
             "defaults": {
-              "decimals": 0,
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -135,76 +163,47 @@ data:
                     "value": null
                   }
                 ]
-              }
-            }
+              },
+              "unit": "suffix: / 6",
+              "decimals": 0
+            },
+            "overrides": []
           },
           "options": {
             "colorMode": "value",
-            "graphMode": "area"
-          }
-        },
-        {
-          "type": "stat",
-          "title": "Pico de players (24h)",
-          "gridPos": {
-            "x": 8,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "max_over_time((max(zomboid_players_online))[24h:1m])",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "decimals": 0,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "purple",
-                    "value": null
-                  }
-                ]
-              }
+            "graphMode": "area",
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
             }
           },
-          "options": {
-            "colorMode": "value",
-            "graphMode": "none"
-          }
+          "id": 4
         },
         {
           "type": "stat",
           "title": "Disponibilidade (7 dias)",
-          "description": "SLO: % do tempo em que o servidor respondeu ao RCON",
-          "gridPos": {
-            "x": 12,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
+          "description": "SLO: % do tempo em que o servidor respondeu nos últimos 7 dias. Meta: 99%. O restart diário das 6h consome cerca de 0,3%.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
+          "gridPos": {
+            "x": 8,
+            "y": 3,
+            "w": 4,
+            "h": 4
+          },
           "targets": [
             {
-              "expr": "avg_over_time((max(zomboid_up))[7d:5m])",
+              "expr": "avg_over_time((max(zomboid_up) or vector(0))[7d:5m])",
               "refId": "A"
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "percentunit",
-              "decimals": 2,
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -221,36 +220,47 @@ data:
                     "value": 0.99
                   }
                 ]
-              }
-            }
+              },
+              "unit": "percentunit",
+              "decimals": 2
+            },
+            "overrides": []
           },
           "options": {
             "colorMode": "background",
-            "graphMode": "none"
-          }
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "id": 5
         },
         {
           "type": "stat",
-          "title": "Uptime desde o último restart",
-          "gridPos": {
-            "x": 16,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
+          "title": "No ar há",
+          "description": "Tempo desde que o processo do servidor iniciou (restart diário, deploy ou crash).",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
+          "gridPos": {
+            "x": 12,
+            "y": 3,
+            "w": 4,
+            "h": 4
+          },
           "targets": [
             {
-              "expr": "time() - max(kube_pod_start_time{namespace=\"zomboid\",pod=\"zomboid-0\"})",
+              "expr": "time() - max(kube_pod_container_state_started{namespace=\"zomboid\",container=\"server\"})",
               "refId": "A"
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "s",
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -259,27 +269,37 @@ data:
                     "value": null
                   }
                 ]
-              }
-            }
+              },
+              "unit": "dtdurations"
+            },
+            "overrides": []
           },
           "options": {
             "colorMode": "value",
-            "graphMode": "none"
-          }
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "id": 6
         },
         {
           "type": "stat",
-          "title": "Último backup (há)",
-          "description": "Backup diário criptografado no AWS S3 (restic)",
-          "gridPos": {
-            "x": 20,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
+          "title": "Último backup",
+          "description": "Tempo desde o último backup bem-sucedido do mundo (restic → AWS S3, diário às 5h30). Vermelho acima de 26h.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 3,
+            "w": 4,
+            "h": 4
           },
           "targets": [
             {
@@ -289,7 +309,6 @@ data:
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "s",
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -306,288 +325,46 @@ data:
                     "value": 93600
                   }
                 ]
-              }
-            }
-          },
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none"
-          }
-        },
-        {
-          "type": "gauge",
-          "title": "Memória do servidor",
-          "gridPos": {
-            "x": 0,
-            "y": 5,
-            "w": 4,
-            "h": 4
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "max(container_memory_working_set_bytes{namespace=\"zomboid\",container=\"server\"}) / max(kube_pod_container_resource_limits{namespace=\"zomboid\",container=\"server\",resource=\"memory\"})",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percentunit",
-              "min": 0,
-              "max": 1,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 0.8
-                  },
-                  {
-                    "color": "red",
-                    "value": 0.9
-                  }
-                ]
-              }
-            }
-          }
-        },
-        {
-          "type": "stat",
-          "title": "CPU do servidor (cores)",
-          "gridPos": {
-            "x": 4,
-            "y": 5,
-            "w": 4,
-            "h": 4
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"zomboid\",container=\"server\"}[5m]))",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "decimals": 2,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 2
-                  },
-                  {
-                    "color": "red",
-                    "value": 2.7
-                  }
-                ]
-              }
-            }
-          },
-          "options": {
-            "colorMode": "value",
-            "graphMode": "area"
-          }
-        },
-        {
-          "type": "stat",
-          "title": "SMART dos discos",
-          "gridPos": {
-            "x": 8,
-            "y": 5,
-            "w": 4,
-            "h": 4
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "min(smartctl_device_smart_status)",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "mappings": [
-                {
-                  "type": "value",
-                  "options": {
-                    "0": {
-                      "text": "FALHA",
-                      "color": "red"
-                    },
-                    "1": {
-                      "text": "OK",
-                      "color": "green"
-                    }
-                  }
-                }
-              ],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "red",
-                    "value": null
-                  },
-                  {
-                    "color": "green",
-                    "value": 1
-                  }
-                ]
-              }
-            }
-          },
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none"
-          }
-        },
-        {
-          "type": "stat",
-          "title": "Pool ZFS",
-          "gridPos": {
-            "x": 12,
-            "y": 5,
-            "w": 4,
-            "h": 4
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "max(node_zfs_zpool_state{zpool=\"rpool\",state=\"online\"})",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "mappings": [
-                {
-                  "type": "value",
-                  "options": {
-                    "0": {
-                      "text": "DEGRADADO",
-                      "color": "red"
-                    },
-                    "1": {
-                      "text": "ONLINE",
-                      "color": "green"
-                    }
-                  }
-                }
-              ],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "red",
-                    "value": null
-                  },
-                  {
-                    "color": "green",
-                    "value": 1
-                  }
-                ]
-              }
-            }
-          },
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none"
-          }
-        },
-        {
-          "type": "stat",
-          "title": "Erros de memória (ECC)",
-          "description": "Corrigidos / não corrigidos desde o boot do host",
-          "gridPos": {
-            "x": 16,
-            "y": 5,
-            "w": 4,
-            "h": 4
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "sum(node_edac_correctable_errors_total) or vector(0)",
-              "legendFormat": "corrigidos",
-              "refId": "A"
+              },
+              "unit": "dtdurations"
             },
-            {
-              "expr": "sum(node_edac_uncorrectable_errors_total) or vector(0)",
-              "legendFormat": "não corrigidos",
-              "refId": "B"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "decimals": 0,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 1
-                  }
-                ]
-              }
-            }
+            "overrides": []
           },
           "options": {
-            "colorMode": "value",
+            "colorMode": "background",
             "graphMode": "none",
-            "textMode": "value_and_name"
-          }
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "id": 7
         },
         {
           "type": "stat",
           "title": "Alertas ativos",
-          "gridPos": {
-            "x": 20,
-            "y": 5,
-            "w": 4,
-            "h": 4
-          },
+          "description": "Problemas disparados agora (os mesmos enviados ao Discord). Entradas de jogadores não contam.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
+          "gridPos": {
+            "x": 20,
+            "y": 3,
+            "w": 4,
+            "h": 4
+          },
           "targets": [
             {
-              "expr": "count(ALERTS{alertstate=\"firing\",alertname!~\"Watchdog|InfoInhibitor\"}) or vector(0)",
+              "expr": "count(ALERTS{alertstate=\"firing\",alertname!~\"Watchdog|InfoInhibitor|PlayerOnline\"}) or vector(0)",
               "refId": "A"
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "decimals": 0,
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -600,13 +377,108 @@ data:
                     "value": 1
                   }
                 ]
-              }
-            }
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "Nenhum",
+                      "color": "green",
+                      "index": 0
+                    }
+                  }
+                }
+              ],
+              "decimals": 0
+            },
+            "overrides": []
           },
           "options": {
             "colorMode": "background",
-            "graphMode": "none"
-          }
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "id": 8
+        },
+        {
+          "type": "state-timeline",
+          "title": "Servidor no ar (período selecionado)",
+          "description": "Faixa verde = servidor respondendo; vermelha = fora do ar. Mostra quando e por quanto tempo houve quedas.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 7,
+            "w": 24,
+            "h": 3
+          },
+          "targets": [
+            {
+              "expr": "max(zomboid_up) or vector(0)",
+              "refId": "A",
+              "legendFormat": "Servidor"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "OFFLINE",
+                      "color": "red",
+                      "index": 0
+                    },
+                    "1": {
+                      "text": "ONLINE",
+                      "color": "green",
+                      "index": 1
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              },
+              "custom": {
+                "fillOpacity": 85,
+                "lineWidth": 0
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showValue": "never",
+            "mergeValues": true,
+            "rowHeight": 0.8,
+            "legend": {
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "id": 9
         },
         {
           "type": "row",
@@ -614,607 +486,39 @@ data:
           "collapsed": false,
           "gridPos": {
             "x": 0,
-            "y": 9,
-            "w": 24,
-            "h": 1
-          },
-          "panels": []
-        },
-        {
-          "type": "timeseries",
-          "title": "Players online",
-          "gridPos": {
-            "x": 0,
             "y": 10,
-            "w": 16,
-            "h": 8
+            "w": 24,
+            "h": 1
           },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "max(zomboid_players_online)",
-              "legendFormat": "players",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "min": 0,
-              "decimals": 0,
-              "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "stepAfter",
-                "fillOpacity": 25
-              }
-            }
-          }
+          "panels": [],
+          "id": 10
         },
         {
           "type": "table",
-          "title": "Quem está online agora",
+          "title": "Online agora",
+          "description": "Quem está conectado neste momento e quanto jogou nas últimas 24h.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
           "gridPos": {
-            "x": 16,
-            "y": 10,
+            "x": 0,
+            "y": 11,
             "w": 8,
             "h": 8
           },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
           "targets": [
             {
-              "expr": "max by (player) (zomboid_player_online)",
-              "format": "table",
+              "expr": "(sum by (player) (count_over_time(zomboid_player_online[24h])) * 30) and on (player) max by (player) (zomboid_player_online)",
+              "refId": "A",
               "instant": true,
-              "refId": "A"
-            }
-          ],
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "Time": true,
-                  "Value": true
-                },
-                "renameByName": {
-                  "player": "Jogador"
-                }
-              }
-            }
-          ]
-        },
-        {
-          "type": "row",
-          "title": "Recursos",
-          "collapsed": false,
-          "gridPos": {
-            "x": 0,
-            "y": 18,
-            "w": 24,
-            "h": 1
-          },
-          "panels": []
-        },
-        {
-          "type": "timeseries",
-          "title": "Memória do servidor do jogo",
-          "gridPos": {
-            "x": 0,
-            "y": 19,
-            "w": 8,
-            "h": 8
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "max(container_memory_working_set_bytes{namespace=\"zomboid\",container=\"server\"})",
-              "legendFormat": "em uso",
-              "refId": "A"
-            },
-            {
-              "expr": "max(kube_pod_container_resource_limits{namespace=\"zomboid\",container=\"server\",resource=\"memory\"})",
-              "legendFormat": "limit",
-              "refId": "B"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "bytes",
-              "min": 0
-            }
-          }
-        },
-        {
-          "type": "timeseries",
-          "title": "CPU do servidor do jogo (cores)",
-          "gridPos": {
-            "x": 8,
-            "y": 19,
-            "w": 8,
-            "h": 8
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"zomboid\",container=\"server\"}[5m]))",
-              "legendFormat": "cpu",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "min": 0
-            }
-          }
-        },
-        {
-          "type": "timeseries",
-          "title": "Tráfego de rede do servidor",
-          "gridPos": {
-            "x": 16,
-            "y": 19,
-            "w": 8,
-            "h": 8
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"zomboid\",pod=\"zomboid-0\"}[5m])) * 8",
-              "legendFormat": "entrada",
-              "refId": "A"
-            },
-            {
-              "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"zomboid\",pod=\"zomboid-0\"}[5m])) * 8",
-              "legendFormat": "saída",
-              "refId": "B"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "bps",
-              "min": 0
-            }
-          }
-        },
-        {
-          "type": "row",
-          "title": "Saúde do hardware (HPE DL20 Gen9)",
-          "collapsed": false,
-          "gridPos": {
-            "x": 0,
-            "y": 27,
-            "w": 24,
-            "h": 1
-          },
-          "panels": []
-        },
-        {
-          "type": "timeseries",
-          "title": "Memória disponível (VM e host)",
-          "gridPos": {
-            "x": 0,
-            "y": 28,
-            "w": 12,
-            "h": 8
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "node_memory_MemAvailable_bytes{job=\"node-exporter\"}",
-              "legendFormat": "VM k3s-01",
-              "refId": "A"
-            },
-            {
-              "expr": "node_memory_MemAvailable_bytes{job=\"proxmox-node\"}",
-              "legendFormat": "host Proxmox",
-              "refId": "B"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "bytes",
-              "min": 0
-            }
-          }
-        },
-        {
-          "type": "timeseries",
-          "title": "Temperatura dos discos",
-          "gridPos": {
-            "x": 12,
-            "y": 28,
-            "w": 12,
-            "h": 8
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "smartctl_device_temperature{temperature_type=\"current\"}",
-              "legendFormat": "{{device}}",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "celsius",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 50
-                  }
-                ]
-              },
-              "custom": {
-                "thresholdsStyle": {
-                  "mode": "line"
-                }
-              }
-            }
-          }
-        },
-        {
-          "type": "row",
-          "title": "Logs do servidor (Loki)",
-          "collapsed": false,
-          "gridPos": {
-            "x": 0,
-            "y": 36,
-            "w": 24,
-            "h": 1
-          },
-          "panels": []
-        },
-        {
-          "type": "timeseries",
-          "title": "Volume de logs por nível",
-          "gridPos": {
-            "x": 0,
-            "y": 37,
-            "w": 24,
-            "h": 6
-          },
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "targets": [
-            {
-              "expr": "sum by (level) (count_over_time({namespace=\"zomboid\", container=\"server\"} [5m]))",
-              "legendFormat": "{{level}}",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "min": 0,
-              "custom": {
-                "drawStyle": "bars",
-                "fillOpacity": 70,
-                "stacking": {
-                  "mode": "normal"
-                }
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "ERROR"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "red"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "WARN"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "orange"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "LOG"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "green"
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "type": "logs",
-          "title": "Conexões de jogadores",
-          "gridPos": {
-            "x": 0,
-            "y": 43,
-            "w": 12,
-            "h": 10
-          },
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "targets": [
-            {
-              "expr": "{namespace=\"zomboid\", container=\"server\"} |~ \"(?i)(connected|disconnect|login|logged)\"",
-              "refId": "A"
-            }
-          ],
-          "options": {
-            "showTime": true,
-            "wrapLogMessage": true,
-            "sortOrder": "Descending"
-          }
-        },
-        {
-          "type": "logs",
-          "title": "Erros e avisos",
-          "gridPos": {
-            "x": 12,
-            "y": 43,
-            "w": 12,
-            "h": 10
-          },
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "targets": [
-            {
-              "expr": "{namespace=\"zomboid\", container=\"server\", level=~\"ERROR|WARN\"}",
-              "refId": "A"
-            }
-          ],
-          "options": {
-            "showTime": true,
-            "wrapLogMessage": true,
-            "sortOrder": "Descending"
-          }
-        },
-        {
-          "type": "row",
-          "title": "Alertas",
-          "collapsed": false,
-          "gridPos": {
-            "x": 0,
-            "y": 53,
-            "w": 24,
-            "h": 1
-          },
-          "panels": []
-        },
-        {
-          "type": "table",
-          "title": "Alertas disparados agora (enviados ao Discord)",
-          "gridPos": {
-            "x": 0,
-            "y": 54,
-            "w": 24,
-            "h": 6
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "ALERTS{alertstate=\"firing\",alertname!~\"Watchdog|InfoInhibitor\"}",
-              "format": "table",
-              "instant": true,
-              "refId": "A"
-            }
-          ],
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "Time": true,
-                  "Value": true,
-                  "__name__": true,
-                  "alertstate": true
-                },
-                "renameByName": {
-                  "alertname": "Alerta",
-                  "severity": "Severidade"
-                }
-              }
-            }
-          ]
-        },
-        {
-          "type": "row",
-          "title": "Ranking e acessos",
-          "collapsed": false,
-          "gridPos": {
-            "x": 0,
-            "y": 60,
-            "w": 24,
-            "h": 1
-          },
-          "panels": []
-        },
-        {
-          "type": "bargauge",
-          "title": "Ranking de horas online (30 dias)",
-          "gridPos": {
-            "x": 0,
-            "y": 61,
-            "w": 14,
-            "h": 9
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "sort_desc(sum by (player) (count_over_time(zomboid_player_online[30d])) * 30 / 3600)",
-              "legendFormat": "{{player}}",
-              "instant": true,
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "h",
-              "decimals": 1,
-              "min": 0,
-              "color": {
-                "mode": "continuous-BlPu"
-              }
-            }
-          },
-          "options": {
-            "orientation": "horizontal",
-            "displayMode": "gradient",
-            "showUnfilled": true,
-            "valueMode": "color"
-          }
-        },
-        {
-          "type": "table",
-          "title": "Último acesso por jogador",
-          "gridPos": {
-            "x": 14,
-            "y": 61,
-            "w": 10,
-            "h": 9
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "max by (player) (last_over_time(timestamp(zomboid_player_online)[30d:1m])) * 1000",
-              "format": "table",
-              "instant": true,
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "dateTimeAsLocal"
-            }
-          },
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "Time": true
-                },
-                "renameByName": {
-                  "player": "Jogador",
-                  "Value": "Último acesso"
-                }
-              }
-            },
-            {
-              "id": "sortBy",
-              "options": {
-                "sort": [
-                  {
-                    "field": "Último acesso",
-                    "desc": true
-                  }
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "type": "table",
-          "title": "Tempo online por jogador",
-          "gridPos": {
-            "x": 0,
-            "y": 70,
-            "w": 24,
-            "h": 9
-          },
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "targets": [
-            {
-              "expr": "sum by (player) (count_over_time(zomboid_player_online[24h])) * 30",
-              "format": "table",
-              "instant": true,
-              "refId": "A"
-            },
-            {
-              "expr": "sum by (player) (count_over_time(zomboid_player_online[7d])) * 30",
-              "format": "table",
-              "instant": true,
-              "refId": "B"
-            },
-            {
-              "expr": "sum by (player) (count_over_time(zomboid_player_online[30d])) * 30",
-              "format": "table",
-              "instant": true,
-              "refId": "C"
+              "format": "table"
             }
           ],
           "fieldConfig": {
             "defaults": {
               "unit": "dtdurations",
-              "custom": {
-                "align": "auto",
-                "cellOptions": {
-                  "type": "color-text"
-                }
-              }
+              "noValue": "Ninguém online agora"
             },
             "overrides": [
               {
@@ -1233,6 +537,254 @@ data:
           },
           "transformations": [
             {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "player": "Jogador",
+                  "Value": "Jogou nas últimas 24h"
+                }
+              }
+            }
+          ],
+          "options": {
+            "showHeader": true
+          },
+          "id": 11
+        },
+        {
+          "type": "timeseries",
+          "title": "Players online ao longo do tempo",
+          "description": "Quantos jogadores estavam conectados em cada momento. Linha tracejada = limite de 6 vagas.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 11,
+            "w": 16,
+            "h": 8
+          },
+          "targets": [
+            {
+              "expr": "max(zomboid_players_online)",
+              "refId": "A",
+              "legendFormat": "players"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "min": 0,
+              "max": 6,
+              "decimals": 0,
+              "color": {
+                "mode": "fixed",
+                "fixedColor": "blue"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 6
+                  }
+                ]
+              },
+              "custom": {
+                "lineInterpolation": "stepAfter",
+                "fillOpacity": 25,
+                "lineWidth": 2,
+                "thresholdsStyle": {
+                  "mode": "dashed"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "id": 12
+        },
+        {
+          "type": "state-timeline",
+          "title": "Linha do tempo de sessões",
+          "description": "Cada faixa é um jogador; o trecho colorido é o período em que ele esteve online.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 19,
+            "w": 24,
+            "h": 7
+          },
+          "targets": [
+            {
+              "expr": "max by (player) (zomboid_player_online)",
+              "refId": "A",
+              "legendFormat": "{{player}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "1": {
+                      "text": "online",
+                      "color": "green",
+                      "index": 0
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "custom": {
+                "fillOpacity": 80,
+                "lineWidth": 0,
+                "insertNulls": 90000
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showValue": "never",
+            "mergeValues": true,
+            "rowHeight": 0.7,
+            "legend": {
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "id": 13
+        },
+        {
+          "type": "table",
+          "title": "Tempo online por jogador",
+          "description": "Tempo jogado em cada período e o último acesso. A barra da coluna de 30 dias funciona como ranking.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 26,
+            "w": 24,
+            "h": 8
+          },
+          "targets": [
+            {
+              "expr": "max by (player) (last_over_time(timestamp(zomboid_player_online)[30d:1m])) * 1000",
+              "refId": "A",
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "expr": "sum by (player) (count_over_time(zomboid_player_online[24h])) * 30",
+              "refId": "B",
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "expr": "sum by (player) (count_over_time(zomboid_player_online[7d])) * 30",
+              "refId": "C",
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "expr": "sum by (player) (count_over_time(zomboid_player_online[30d])) * 30",
+              "refId": "D",
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "dtdurations",
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Jogador"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Último acesso"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dateTimeFromNow"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Últimos 30 dias"
+                },
+                "properties": [
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "gradient",
+                      "valueDisplayMode": "text"
+                    }
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "continuous-BlPu"
+                    }
+                  },
+                  {
+                    "id": "min",
+                    "value": 0
+                  }
+                ]
+              }
+            ]
+          },
+          "transformations": [
+            {
               "id": "merge",
               "options": {}
             },
@@ -1242,11 +794,19 @@ data:
                 "excludeByName": {
                   "Time": true
                 },
+                "indexByName": {
+                  "player": 0,
+                  "Value #A": 1,
+                  "Value #B": 2,
+                  "Value #C": 3,
+                  "Value #D": 4
+                },
                 "renameByName": {
                   "player": "Jogador",
-                  "Value #A": "Últimas 24h",
-                  "Value #B": "Últimos 7 dias",
-                  "Value #C": "Últimos 30 dias"
+                  "Value #A": "Último acesso",
+                  "Value #B": "Últimas 24h",
+                  "Value #C": "Últimos 7 dias",
+                  "Value #D": "Últimos 30 dias"
                 }
               }
             },
@@ -1261,7 +821,748 @@ data:
                 ]
               }
             }
-          ]
+          ],
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "Últimos 30 dias",
+                "desc": true
+              }
+            ]
+          },
+          "id": 14
+        },
+        {
+          "type": "row",
+          "title": "Servidor do jogo (recursos)",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 34,
+            "w": 24,
+            "h": 1
+          },
+          "panels": [],
+          "id": 15
+        },
+        {
+          "type": "timeseries",
+          "title": "Memória do servidor",
+          "description": "Memória usada pelo jogo contra o limite do container (linha vermelha). Se encostar no limite, o Kubernetes mata o processo (OOMKilled). Alerta acima de 90%.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 35,
+            "w": 10,
+            "h": 8
+          },
+          "targets": [
+            {
+              "expr": "max(container_memory_working_set_bytes{namespace=\"zomboid\",container=\"server\"})",
+              "refId": "A",
+              "legendFormat": "em uso"
+            },
+            {
+              "expr": "max(kube_pod_container_resource_limits{namespace=\"zomboid\",container=\"server\",resource=\"memory\"})",
+              "refId": "B",
+              "legendFormat": "limite"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "min": 0,
+              "custom": {
+                "fillOpacity": 20,
+                "lineWidth": 2
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "limite"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  },
+                  {
+                    "id": "custom.fillOpacity",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.lineStyle",
+                    "value": {
+                      "fill": "dash",
+                      "dash": [
+                        10,
+                        10
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "id": 16
+        },
+        {
+          "type": "timeseries",
+          "title": "CPU do servidor",
+          "description": "Núcleos de CPU usados pelo jogo. A VM tem 4 vCPUs (linha tracejada). Picos durante a carga do mundo são normais.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 10,
+            "y": 35,
+            "w": 10,
+            "h": 8
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"zomboid\",container=\"server\"}[5m]))",
+              "refId": "A",
+              "legendFormat": "cores"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "softMax": 4,
+              "decimals": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 4
+                  }
+                ]
+              },
+              "custom": {
+                "fillOpacity": 20,
+                "lineWidth": 2,
+                "axisLabel": "cores",
+                "thresholdsStyle": {
+                  "mode": "dashed"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "id": 17
+        },
+        {
+          "type": "stat",
+          "title": "Crashes (7 dias)",
+          "description": "Reinícios inesperados do processo do jogo (crash ou OOMKilled). Restarts planejados não contam.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 20,
+            "y": 35,
+            "w": 4,
+            "h": 8
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"zomboid\",container=\"server\"}[7d])) or vector(0)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 3
+                  }
+                ]
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "Nenhum",
+                      "color": "green",
+                      "index": 0
+                    }
+                  }
+                }
+              ],
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "id": 18
+        },
+        {
+          "type": "row",
+          "title": "Hardware do host (HPE DL20 Gen9)",
+          "collapsed": true,
+          "gridPos": {
+            "x": 0,
+            "y": 43,
+            "w": 24,
+            "h": 1
+          },
+          "panels": [
+            {
+              "type": "stat",
+              "title": "SMART dos discos",
+              "description": "Autoteste dos discos. FALHA = disco com falha prevista. No ZFS RAID0, perder um disco é perder o pool.",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 44,
+                "w": 4,
+                "h": 4
+              },
+              "targets": [
+                {
+                  "expr": "min(smartctl_device_smart_status)",
+                  "refId": "A"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "red",
+                        "value": null
+                      },
+                      {
+                        "color": "green",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "FALHA",
+                          "color": "red",
+                          "index": 0
+                        },
+                        "1": {
+                          "text": "OK",
+                          "color": "green",
+                          "index": 1
+                        }
+                      }
+                    }
+                  ],
+                  "noValue": "sem dados"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                }
+              },
+              "id": 20
+            },
+            {
+              "type": "stat",
+              "title": "Pool ZFS",
+              "description": "Estado do pool de armazenamento (rpool).",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 4,
+                "y": 44,
+                "w": 4,
+                "h": 4
+              },
+              "targets": [
+                {
+                  "expr": "max(node_zfs_zpool_state{zpool=\"rpool\",state=\"online\"})",
+                  "refId": "A"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "red",
+                        "value": null
+                      },
+                      {
+                        "color": "green",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "DEGRADADO",
+                          "color": "red",
+                          "index": 0
+                        },
+                        "1": {
+                          "text": "ONLINE",
+                          "color": "green",
+                          "index": 1
+                        }
+                      }
+                    }
+                  ],
+                  "noValue": "sem dados"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                }
+              },
+              "id": 21
+            },
+            {
+              "type": "stat",
+              "title": "Erros de memória ECC (24h)",
+              "description": "Erros detectados pela memória ECC. Alguns corrigidos são toleráveis; não corrigidos exigem ação.",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 8,
+                "y": 44,
+                "w": 4,
+                "h": 4
+              },
+              "targets": [
+                {
+                  "expr": "(sum(increase(node_edac_correctable_errors_total[24h])) + sum(increase(node_edac_uncorrectable_errors_total[24h]))) or vector(0)",
+                  "refId": "A"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 1
+                      },
+                      {
+                        "color": "red",
+                        "value": 10
+                      }
+                    ]
+                  },
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Nenhum",
+                          "color": "green",
+                          "index": 0
+                        }
+                      }
+                    }
+                  ],
+                  "decimals": 0,
+                  "noValue": "sem dados"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                }
+              },
+              "id": 22
+            },
+            {
+              "type": "stat",
+              "title": "Temperatura dos discos",
+              "description": "Maior temperatura entre os discos. Acima de 50 °C reduz a vida útil.",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 44,
+                "w": 4,
+                "h": 4
+              },
+              "targets": [
+                {
+                  "expr": "max(smartctl_device_temperature{temperature_type=\"current\"})",
+                  "refId": "A"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 45
+                      },
+                      {
+                        "color": "red",
+                        "value": 50
+                      }
+                    ]
+                  },
+                  "unit": "celsius",
+                  "noValue": "sem dados"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                }
+              },
+              "id": 23
+            },
+            {
+              "type": "stat",
+              "title": "Espaço livre no pool",
+              "description": "Espaço livre no armazenamento do host (inclui o disco da VM).",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 16,
+                "y": 44,
+                "w": 4,
+                "h": 4
+              },
+              "targets": [
+                {
+                  "expr": "min(node_filesystem_avail_bytes{job=\"proxmox-node\",mountpoint=\"/\"} / node_filesystem_size_bytes{job=\"proxmox-node\",mountpoint=\"/\"})",
+                  "refId": "A"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "red",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.15
+                      },
+                      {
+                        "color": "green",
+                        "value": 0.25
+                      }
+                    ]
+                  },
+                  "unit": "percentunit",
+                  "decimals": 0,
+                  "noValue": "sem dados"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                }
+              },
+              "id": 24
+            },
+            {
+              "type": "stat",
+              "title": "RAM disponível no host",
+              "description": "Memória livre no Proxmox (24 GB no total; a VM do K3s reserva 18 GB).",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 20,
+                "y": 44,
+                "w": 4,
+                "h": 4
+              },
+              "targets": [
+                {
+                  "expr": "node_memory_MemAvailable_bytes{job=\"proxmox-node\"} / node_memory_MemTotal_bytes{job=\"proxmox-node\"}",
+                  "refId": "A"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "red",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.1
+                      },
+                      {
+                        "color": "green",
+                        "value": 0.2
+                      }
+                    ]
+                  },
+                  "unit": "percentunit",
+                  "decimals": 0,
+                  "noValue": "sem dados"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                }
+              },
+              "id": 25
+            }
+          ],
+          "id": 19
+        },
+        {
+          "type": "row",
+          "title": "Logs e alertas",
+          "collapsed": true,
+          "gridPos": {
+            "x": 0,
+            "y": 44,
+            "w": 24,
+            "h": 1
+          },
+          "panels": [
+            {
+              "type": "table",
+              "title": "Alertas disparados agora",
+              "description": "Lista dos problemas ativos (os mesmos enviados ao Discord).",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 45,
+                "w": 24,
+                "h": 5
+              },
+              "targets": [
+                {
+                  "expr": "ALERTS{alertstate=\"firing\",alertname!~\"Watchdog|InfoInhibitor|PlayerOnline\"}",
+                  "refId": "A",
+                  "instant": true,
+                  "format": "table"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "Nenhum alerta ativo"
+                },
+                "overrides": []
+              },
+              "transformations": [
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true,
+                      "Value": true,
+                      "__name__": true,
+                      "alertstate": true
+                    },
+                    "renameByName": {
+                      "alertname": "Alerta",
+                      "severity": "Severidade"
+                    }
+                  }
+                }
+              ],
+              "id": 27
+            },
+            {
+              "type": "logs",
+              "title": "Entradas e saídas de jogadores",
+              "description": "Linhas do log do servidor sobre conexões.",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 50,
+                "w": 12,
+                "h": 10
+              },
+              "targets": [
+                {
+                  "expr": "{namespace=\"zomboid\", container=\"server\"} |~ \"(?i)(connected|disconnect|logged)\"",
+                  "refId": "A"
+                }
+              ],
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": true,
+                "sortOrder": "Descending",
+                "enableLogDetails": true
+              },
+              "id": 28
+            },
+            {
+              "type": "logs",
+              "title": "Erros e avisos do servidor",
+              "description": "Somente linhas WARN e ERROR. Senhas nunca chegam ao Loki (filtradas na coleta).",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 50,
+                "w": 12,
+                "h": 10
+              },
+              "targets": [
+                {
+                  "expr": "{namespace=\"zomboid\", container=\"server\", level=~\"ERROR|WARN\"}",
+                  "refId": "A"
+                }
+              ],
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": true,
+                "sortOrder": "Descending",
+                "enableLogDetails": true
+              },
+              "id": 29
+            }
+          ],
+          "id": 26
         }
       ]
     }
