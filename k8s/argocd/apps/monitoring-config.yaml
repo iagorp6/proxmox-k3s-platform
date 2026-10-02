@@ -10,7 +10,7 @@ spec:
     targetRevision: main
     path: k8s/monitoring
     directory:
-      include: "{alerts-homelab.yaml,dashboard-asunboid.yaml}"
+      include: "{alerts-homelab.yaml,dashboard-asunboid.yaml,externalsecrets.yaml}"
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring

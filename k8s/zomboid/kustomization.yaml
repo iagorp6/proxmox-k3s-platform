@@ -9,3 +9,4 @@ resources:
   - backup.yaml
   - exporter-configmap.yaml
   - metrics.yaml
+  - externalsecrets.yaml
