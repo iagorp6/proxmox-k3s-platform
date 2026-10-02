@@ -16,7 +16,7 @@ concurrency:
 jobs:
   terraform:
     name: Terraform (${{ matrix.dir }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -25,15 +25,15 @@ jobs:
       run:
         working-directory: ${{ matrix.dir }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v4
       - name: terraform fmt
         run: terraform fmt -check -recursive -diff
       - name: terraform init (sem backend)
         run: terraform init -backend=false -input=false
       - name: terraform validate
         run: terraform validate -no-color
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: terraform-linters/setup-tflint@v6
       - name: tflint
         run: |
           tflint --init --config "$GITHUB_WORKSPACE/.tflint.hcl"
@@ -41,15 +41,15 @@ jobs:
 
   ansible:
     name: Ansible lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ansible
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - name: Install ansible-lint
         run: pip install --quiet ansible-lint==
       - name: ansible-lint
@@ -57,9 +57,9 @@ jobs:
 
   kubernetes:
     name: Kubernetes manifests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install kubeconform
         run: |
           mkdir -p "$HOME/bin"
@@ -92,9 +92,9 @@ jobs:
 
   scripts:
     name: Shell scripts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: shellcheck
         run: shellcheck scripts/*.sh k8s/monitoring/deploy.sh
 
@@ -103,9 +103,9 @@ jobs:
 
   security:
     name: Security scan (Trivy)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Trivy
         run: |
           mkdir -p "$HOME/bin"
