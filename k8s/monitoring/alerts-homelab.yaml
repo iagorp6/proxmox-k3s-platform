@@ -18,7 +18,9 @@ spec:
             description: "O servidor não responde ao RCON há mais de 5 minutos. Os jogadores não conseguem entrar."
             action: "kubectl -n zomboid get pods e kubectl -n zomboid logs zomboid-0 -c server --tail=30"
         - alert: ZomboidExporterMissing
-          expr: absent(zomboid_up)
+          expr: |
+            absent(zomboid_up)
+            and on() (kube_statefulset_replicas{namespace="zomboid",statefulset="zomboid"} > 0)
           for: 5m
           labels:
             severity: critical
@@ -160,6 +162,21 @@ spec:
             summary: "{{ $labels.container }} ({{ $labels.namespace }}) morto por falta de memória"
             description: "O container foi OOMKilled nos últimos 15 minutos."
             action: "Comparar o uso com o limite e ajustar os resources no values ou no manifest."
+
+    - name: terraria
+      rules:
+        - alert: TerrariaDown
+          expr: |
+            kube_statefulset_replicas{namespace="terraria",statefulset="terraria"} > 0
+            unless on (namespace, statefulset)
+            kube_statefulset_status_replicas_ready{namespace="terraria",statefulset="terraria"} > 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Servidor do Terraria fora do ar"
+            description: "O Terraria é o jogo ativo, mas o pod não está pronto há mais de 10 minutos."
+            action: "kubectl -n terraria get pods e kubectl -n terraria logs terraria-0 -c server --tail=30"
 
     - name: players
       rules:

@@ -20,6 +20,7 @@ trap 'rm -f "$TMP"' EXIT
 declare -A MAP=(
   [/homelab/zomboid/admin-password]=zomboid-admin
   [/homelab/zomboid/server-password]=zomboid-entrada
+  [/homelab/terraria/server-password]=terraria-entrada
   [/homelab/zomboid/rcon-password]=zomboid-rcon
   [/homelab/backup/restic-password]=restic-zomboid
   [/homelab/monitoring/grafana-admin-password]=grafana-admin

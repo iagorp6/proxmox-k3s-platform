@@ -70,6 +70,11 @@ jobs:
           kubectl kustomize k8s/zomboid | kubeconform -strict -summary \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+      - name: Validate terraria (kustomize)
+        run: |
+          kubectl kustomize k8s/games/terraria | kubeconform -strict -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
       - name: Validate monitoring manifests
         run: |
           kubeconform -strict -summary \

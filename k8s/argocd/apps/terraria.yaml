@@ -1,0 +1,15 @@
+# Sync MANUAL: quem liga e desliga é o scripts/switch-game.py
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: terraria
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:iagorp6/proxmox-k3s-platform.git
+    targetRevision: main
+    path: k8s/games/terraria
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: terraria
