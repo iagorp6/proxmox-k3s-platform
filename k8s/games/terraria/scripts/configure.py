@@ -31,3 +31,14 @@ ssc = json.loads(ssc_path.read_text(encoding="utf-8")) if ssc_path.exists() else
 ssc.setdefault("Settings", {}).update({"Enabled": True})
 ssc_path.write_text(json.dumps(ssc, indent=2), encoding="utf-8")
 print("sscconfig.json atualizado (SSC habilitado)")
+
+# Mensagem de boas-vindas (MOTD), gerenciada pela plataforma: sobrescrita a cada inicialização.
+MOTD = """[c/FFD700:=== Bem-vindo ao AsunBoid ===]
+[c/FF6347:Seu personagem fica PARADO no spawn ate voce entrar na sua conta.]
+[c/00FF7F:Primeira vez aqui?] Digite [c/FFFFFF:/register SUASENHA] no chat (Enter abre o chat).
+[c/00FF7F:Ja tem conta?] Digite [c/FFFFFF:/login SUASENHA] (nas proximas vezes o login e automatico).
+[c/87CEEB:Todo mundo comeca do zero. Seus itens ficam salvos no servidor.]
+[c/87CEEB:Mundo Mestre: morrer custa metade do dinheiro, os itens continuam com voce.]
+Online agora: %players%"""
+(DATA / "tshock" / "motd.txt").write_text(MOTD + "\n", encoding="utf-8")
+print("motd.txt atualizado")

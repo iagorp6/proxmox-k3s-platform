@@ -88,7 +88,7 @@ spec:
                 -worldselectpath /worlds -additionalplugins /plugins \
                 -world "/worlds/${WORLD_NAME}.wld" -autocreate "${WORLD_SIZE}" \
                 -worldname "${WORLD_NAME}" -difficulty "${WORLD_DIFFICULTY}" \
-                -maxplayers 6 -port 7777 <&3
+                -maxplayers 6 -port 7777 -lang 8 <&3
           env:
             - name: WORLD_NAME
               value: AsunBoid
