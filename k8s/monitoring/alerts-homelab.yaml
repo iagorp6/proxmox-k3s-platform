@@ -186,6 +186,16 @@ spec:
 
     - name: terraria
       rules:
+        - alert: TerrariaPlayerOnline
+          expr: max by (player) (game_player_online{game="terraria"}) == 1
+          labels:
+            severity: info
+            notify: players
+          annotations:
+            summary: "{{ $labels.player }} está online no Terraria"
+            description: >-
+              {{ with query "max(game_players_online{game='terraria'})" }}{{ . | first | value | printf "%.0f" }}{{ end }}/6 no Terraria:
+              {{ range $i, $s := query "max by (player) (game_player_online{game='terraria'})" }}{{ if $i }}, {{ end }}{{ $s.Labels.player }}{{ end }}
         - alert: TerrariaDown
           expr: |
             kube_statefulset_replicas{namespace="terraria",statefulset="terraria"} > 0

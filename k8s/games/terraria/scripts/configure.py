@@ -8,7 +8,7 @@ import os
 import pathlib
 
 DATA = pathlib.Path("/data")
-for sub in ("tshock", "worlds", "plugins"):
+for sub in ("tshock", "worlds", "plugins", "exporter"):
     (DATA / sub).mkdir(parents=True, exist_ok=True)
 
 cfg_path = DATA / "tshock" / "config.json"
@@ -18,7 +18,9 @@ settings.update({
     "ServerPassword": os.environ["SERVER_PASSWORD"],
     "ServerPort": 7777,
     "MaxSlots": int(os.environ.get("MAX_SLOTS", "6")),
-    "RestApiEnabled": False,
+    "RestApiEnabled": True,   # só dentro do pod (porta 7878 fora do Service), para o exporter
+    "RestApiPort": 7878,
+    "ApplicationRestTokens": {os.environ["TSHOCK_TOKEN"]: {"Username": "exporter", "UserGroupName": "superadmin"}},
     "SoftcoreOnly": True,   # só personagens Clássicos: morrer perde metade do dinheiro, não os itens
 })
 cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")

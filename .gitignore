@@ -39,3 +39,7 @@ ansible/inventory/hosts.yml
 .env.local
 *.local.yaml
 !*.local.yaml.example
+
+# Python
+__pycache__/
+*.pyc
