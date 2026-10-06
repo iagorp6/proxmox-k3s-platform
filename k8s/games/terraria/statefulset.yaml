@@ -101,17 +101,23 @@ spec:
               containerPort: 7777
               protocol: TCP
           startupProbe:                 # a geração do mundo na primeira subida leva alguns minutos
-            tcpSocket:
-              port: game
+            exec:
+              # Sonda passiva: confere se há socket LISTEN na 7777 (0x1E61) sem abrir conexão.
+              # Sondas TCP ocupam vagas de jogador no Terraria e acabam esgotando o servidor.
+              command: ["sh", "-c", "grep -qiE ':1E61 [0-9A-F]+:0000 0A' /proc/net/tcp /proc/net/tcp6"]
             periodSeconds: 10
             failureThreshold: 60
           readinessProbe:
-            tcpSocket:
-              port: game
+            exec:
+              # Sonda passiva: confere se há socket LISTEN na 7777 (0x1E61) sem abrir conexão.
+              # Sondas TCP ocupam vagas de jogador no Terraria e acabam esgotando o servidor.
+              command: ["sh", "-c", "grep -qiE ':1E61 [0-9A-F]+:0000 0A' /proc/net/tcp /proc/net/tcp6"]
             periodSeconds: 10
           livenessProbe:
-            tcpSocket:
-              port: game
+            exec:
+              # Sonda passiva: confere se há socket LISTEN na 7777 (0x1E61) sem abrir conexão.
+              # Sondas TCP ocupam vagas de jogador no Terraria e acabam esgotando o servidor.
+              command: ["sh", "-c", "grep -qiE ':1E61 [0-9A-F]+:0000 0A' /proc/net/tcp /proc/net/tcp6"]
             periodSeconds: 30
             failureThreshold: 3
           lifecycle:
