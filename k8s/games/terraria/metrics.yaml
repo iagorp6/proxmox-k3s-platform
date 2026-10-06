@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: terraria-metrics
+  namespace: terraria
+  labels:
+    app.kubernetes.io/name: terraria-metrics
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: terraria
+  ports:
+    - name: metrics
+      port: 9105
+      targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: terraria
+  namespace: terraria
+  labels:
+    release: kps
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: terraria-metrics
+  endpoints:
+    - port: metrics
+      interval: 30s

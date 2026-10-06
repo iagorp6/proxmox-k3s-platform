@@ -6,6 +6,7 @@ resources:
   - externalsecrets.yaml
   - statefulset.yaml
   - service.yaml
+  - metrics.yaml
   - backup.yaml
 patches:
   - path: replicas.yaml   # gerado por scripts/switch-game.py
@@ -13,5 +14,6 @@ configMapGenerator:
   - name: terraria-scripts
     files:
       - configure.py=scripts/configure.py
+      - exporter.py=scripts/exporter.py
 generatorOptions:
   disableNameSuffixHash: true

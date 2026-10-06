@@ -39,7 +39,7 @@ GAMES = {
     "terraria": {
         "title": "Terraria", "port": 16261,
         "dir": "k8s/games/terraria", "ns": "terraria", "sts": "terraria", "app": "terraria",
-        "players_metric": None, "exporter": None,
+        "players_metric": "game_players_online", "exporter": "exporter",
         "suspend_when_idle": [],
     },
 }
@@ -105,7 +105,7 @@ def players_online(g):
             "'http://127.0.0.1:9105/metrics',timeout=5).read().decode())")
     r = run(["kubectl", "-n", g["ns"], "exec", f"{g['sts']}-0", "-c", g["exporter"], "--",
              "python", "-c", code], check=False)
-    m = re.search(rf"^{g['players_metric']}\s+(\d+)", r.stdout or "", re.M)
+    m = re.search(rf"^{g['players_metric']}(?:\{{[^}}]*\}})?\s+(\d+)", r.stdout or "", re.M)
     return int(m.group(1)) if m else None
 
 

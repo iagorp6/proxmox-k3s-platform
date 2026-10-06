@@ -38,6 +38,11 @@ spec:
                   key: server-password
             - name: MAX_SLOTS
               value: "6"
+            - name: TSHOCK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: terraria-secrets
+                  key: rest-token
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -146,6 +151,39 @@ spec:
             - name: data
               mountPath: /plugins
               subPath: plugins
+        - name: exporter
+          image: python:3.13-slim@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b
+          command: ["python", "/scripts/exporter.py"]
+          env:
+            - name: TSHOCK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: terraria-secrets
+                  key: rest-token
+            - name: STATE_FILE
+              value: /data/exporter/state.json
+          ports:
+            - name: metrics
+              containerPort: 9105
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 96Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: data
+              mountPath: /data/exporter
+              subPath: exporter
       volumes:
         - name: app
           emptyDir:
