@@ -1,0 +1,65 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: terraria-backup
+  namespace: terraria
+spec:
+  schedule: "45 5 * * *"
+  timeZone: America/Sao_Paulo
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1654
+            runAsGroup: 1654
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: restic
+              image: restic/restic:latest@sha256:9940e6c7421ab3a21ee9fdc4e91596d04c792b600d31b102696c75cbf3ac4481
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  restic backup /data/worlds /data/tshock --exclude /data/tshock/logs \
+                    --tag terraria --host terraria --retry-lock 10m
+                  restic forget --tag terraria --host terraria \
+                    --keep-daily 7 --keep-weekly 4 --prune --retry-lock 10m
+                  restic snapshots --tag terraria --latest 1
+              envFrom:
+                - secretRef:
+                    name: terraria-backup
+              env:
+                - name: RESTIC_CACHE_DIR
+                  value: /cache
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+                - name: cache
+                  mountPath: /cache
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: data-terraria-0
+                readOnly: true
+            - name: cache
+              emptyDir: {}

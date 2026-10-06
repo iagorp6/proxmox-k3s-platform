@@ -1,0 +1,134 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: terraria
+  namespace: terraria
+  labels:
+    app.kubernetes.io/name: terraria
+    platform.homelab/game: terraria
+spec:
+  serviceName: terraria
+  replicas: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: terraria
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: terraria
+        platform.homelab/game: terraria
+    spec:
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1654
+        runAsGroup: 1654
+        fsGroup: 1654
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: configure
+          image: python:3.13-slim@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b
+          command: ["python", "/scripts/configure.py"]
+          env:
+            - name: SERVER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: terraria-secrets
+                  key: server-password
+            - name: MAX_SLOTS
+              value: "6"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+      containers:
+        - name: server
+          image: ghcr.io/pryaxis/tshock:6.2.1@sha256:70e59a8e6b4c79b5fad469d320962c1fc98625ed3a955510a2f2641dbff2f7e7
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # Console via FIFO (mesmo padrão do Zomboid): `echo <cmd> > /tmp/console`
+              rm -f /tmp/console && mkfifo /tmp/console
+              exec 3<>/tmp/console
+              exec ./TShock.Server \
+                -configpath /tshock -logpath /tshock/logs -crashdir /tshock/crashes \
+                -worldselectpath /worlds -additionalplugins /plugins \
+                -world "/worlds/${WORLD_NAME}.wld" -autocreate "${WORLD_SIZE}" \
+                -worldname "${WORLD_NAME}" -difficulty "${WORLD_DIFFICULTY}" \
+                -maxplayers 6 -port 7777 <&3
+          env:
+            - name: WORLD_NAME
+              value: AsunBoid
+            - name: WORLD_SIZE          # 1 pequeno, 2 médio, 3 grande
+              value: "2"
+            - name: WORLD_DIFFICULTY    # 0 Classic, 1 Expert, 2 Master, 3 Journey
+              value: "0"
+          ports:
+            - name: game
+              containerPort: 7777
+              protocol: TCP
+          startupProbe:                 # a geração do mundo na primeira subida leva alguns minutos
+            tcpSocket:
+              port: game
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: game
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: game
+            periodSeconds: 30
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "echo off > /tmp/console; sleep 40"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 200m
+              memory: 1Gi
+            limits:
+              memory: 1536Mi
+          volumeMounts:
+            - name: data
+              mountPath: /tshock
+              subPath: tshock
+            - name: data
+              mountPath: /worlds
+              subPath: worlds
+            - name: data
+              mountPath: /plugins
+              subPath: plugins
+      volumes:
+        - name: scripts
+          configMap:
+            name: terraria-scripts
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 5Gi

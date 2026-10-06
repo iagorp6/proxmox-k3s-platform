@@ -21,3 +21,6 @@ configMapGenerator:
       - summary.py=exporter/weekly_summary.py
 generatorOptions:
   disableNameSuffixHash: true
+
+patches:
+  - path: replicas.yaml   # gerado por scripts/switch-game.py

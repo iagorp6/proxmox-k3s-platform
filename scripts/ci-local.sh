@@ -69,6 +69,7 @@ tf_check() {
 
 k8s_check() {
   kubectl kustomize k8s/zomboid | kubeconform -strict -summary -schema-location default -schema-location "$CRD_CATALOG" || return 1
+  kubectl kustomize k8s/games/terraria | kubeconform -strict -summary -schema-location default -schema-location "$CRD_CATALOG" || return 1
   kubeconform -strict -summary -schema-location default -schema-location "$CRD_CATALOG" \
     k8s/monitoring/alerts-homelab.yaml k8s/monitoring/dashboard-asunboid.yaml k8s/monitoring/externalsecrets.yaml \
     k8s/argocd/root.yaml k8s/argocd/apps/*.yaml k8s/external-secrets/cluster-secret-store.yaml || return 1

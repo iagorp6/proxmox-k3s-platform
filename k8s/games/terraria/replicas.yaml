@@ -1,0 +1,8 @@
+# Gerado por scripts/switch-game.py: não edite à mão.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: terraria
+  namespace: terraria
+spec:
+  replicas: 0

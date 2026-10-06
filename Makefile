@@ -31,3 +31,6 @@ deploy-eso: ## Instala/atualiza o External Secrets Operator
 
 deploy-argocd: ## Instala/atualiza o Argo CD
 > ./k8s/argocd/deploy.sh
+
+switch-game: ## Troca o jogo ativo (ex.: make switch-game GAME=terraria)
+> ./scripts/switch-game.py $(GAME)
