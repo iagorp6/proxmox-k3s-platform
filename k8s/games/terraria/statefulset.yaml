@@ -59,7 +59,7 @@ spec:
           # O TShock grava ServerLog.txt na pasta do programa (/server, do root na imagem).
           # Copiamos o servidor para um emptyDir gravável e rodamos sem root a partir dele.
           image: ghcr.io/pryaxis/tshock:6.2.1@sha256:70e59a8e6b4c79b5fad469d320962c1fc98625ed3a955510a2f2641dbff2f7e7
-          command: ["/bin/sh", "-c", "cp -R --preserve=mode,timestamps /server/. /app/ && echo 'servidor copiado para /app'"]
+          command: ["/bin/sh", "-c", "rm -rf /app/server && cp -R --preserve=mode,timestamps /server /app/server && echo 'servidor copiado para /app/server'"]
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -76,7 +76,7 @@ spec:
       containers:
         - name: server
           image: ghcr.io/pryaxis/tshock:6.2.1@sha256:70e59a8e6b4c79b5fad469d320962c1fc98625ed3a955510a2f2641dbff2f7e7
-          workingDir: /app
+          workingDir: /app/server
           command: ["/bin/sh", "-c"]
           args:
             - |
