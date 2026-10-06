@@ -151,6 +151,15 @@ spec:
 
     - name: cluster
       rules:
+        - alert: ServiceLBPortConflict
+          expr: max by (pod) (kube_pod_status_phase{namespace="kube-system",pod=~"svclb-.*",phase="Pending"}) == 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "ServiceLB sem porta livre: {{ $labels.pod }}"
+            description: "O pod do ServiceLB não conseguiu reservar a porta no nó. O Service correspondente fica inacessível de fora."
+            action: "kubectl -n kube-system describe pod {{ $labels.pod }} | tail -10 e conferir portas repetidas entre os Services"
         - alert: ContainerOOMKilled
           expr: |
             increase(kube_pod_container_status_restarts_total[15m]) > 0

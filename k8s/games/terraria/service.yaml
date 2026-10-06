@@ -5,6 +5,7 @@ metadata:
   namespace: terraria
   labels:
     app.kubernetes.io/name: terraria
+    platform.homelab/game: terraria
 spec:
   type: LoadBalancer
   selector:

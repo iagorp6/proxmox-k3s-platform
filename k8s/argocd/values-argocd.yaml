@@ -5,6 +5,30 @@ configs:
   cm:
     admin.enabled: true
     timeout.reconciliation: 180s
+    # Service LoadBalancer de jogo sem IP = jogo inativo (o ServiceLB do K3s só publica o IP
+    # com destinos prontos). Outros LoadBalancers sem IP continuam "Progressing".
+    # Conflito de porta real é coberto pelo alerta ServiceLBPortConflict.
+    resource.customizations.health.Service: |
+      hs = {}
+      if obj.spec ~= nil and obj.spec.type == "LoadBalancer" then
+        local lb = obj.status and obj.status.loadBalancer
+        if lb ~= nil and lb.ingress ~= nil and #lb.ingress > 0 then
+          hs.status = "Healthy"
+          hs.message = "LoadBalancer com IP atribuído"
+          return hs
+        end
+        local labels = (obj.metadata and obj.metadata.labels) or {}
+        if labels["platform.homelab/game"] ~= nil then
+          hs.status = "Healthy"
+          hs.message = "Jogo inativo: sem destinos prontos, o ServiceLB não publica IP"
+          return hs
+        end
+        hs.status = "Progressing"
+        hs.message = "Aguardando IP do LoadBalancer"
+        return hs
+      end
+      hs.status = "Healthy"
+      return hs
 
 dex:
   enabled: false
