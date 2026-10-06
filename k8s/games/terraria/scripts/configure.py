@@ -19,6 +19,7 @@ settings.update({
     "ServerPort": 7777,
     "MaxSlots": int(os.environ.get("MAX_SLOTS", "6")),
     "RestApiEnabled": False,
+    "SoftcoreOnly": True,   # só personagens Clássicos: morrer perde metade do dinheiro, não os itens
 })
 cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 print(f"config.json atualizado ({len(settings)} chaves em Settings)")

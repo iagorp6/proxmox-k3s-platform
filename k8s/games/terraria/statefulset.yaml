@@ -93,9 +93,9 @@ spec:
             - name: WORLD_NAME
               value: AsunBoid
             - name: WORLD_SIZE          # 1 pequeno, 2 médio, 3 grande
-              value: "2"
+              value: "3"
             - name: WORLD_DIFFICULTY    # 0 Classic, 1 Expert, 2 Master, 3 Journey
-              value: "0"
+              value: "2"
           ports:
             - name: game
               containerPort: 7777
@@ -125,9 +125,9 @@ spec:
           resources:
             requests:
               cpu: 200m
-              memory: 1Gi
-            limits:
               memory: 1536Mi
+            limits:
+              memory: 2560Mi
           volumeMounts:
             - name: app
               mountPath: /app
