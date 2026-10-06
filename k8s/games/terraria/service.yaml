@@ -11,6 +11,6 @@ spec:
     app.kubernetes.io/name: terraria
   ports:
     - name: game
-      port: 7777
-      targetPort: game
+      port: 16261          # mesma porta externa do Zomboid (aqui em TCP; o Zomboid usa UDP)
+      targetPort: game     # 7777 dentro do container
       protocol: TCP
