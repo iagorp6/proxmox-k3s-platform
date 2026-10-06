@@ -34,3 +34,6 @@ deploy-argocd: ## Instala/atualiza o Argo CD
 
 switch-game: ## Troca o jogo ativo (ex.: make switch-game GAME=terraria)
 > ./scripts/switch-game.py $(GAME)
+
+status: ## Estado da plataforma (jogo ativo, réplicas, alertas)
+> ./scripts/platform-status.sh
