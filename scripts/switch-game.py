@@ -2,21 +2,28 @@
 """Troca o jogo ativo da plataforma (um jogo por vez), sempre pelo Git.
 
 Fluxo: confere jogadores online no jogo atual -> salva o mundo -> grava os patches de
-réplicas + platform/active-game.yaml -> commit/push -> sincroniza no Argo CD primeiro o
-jogo que sai (preStop salva de novo) e depois o que entra -> espera ficar pronto.
+réplicas + platform/active-game.yaml -> commit/push -> avisa o Discord -> sincroniza no
+Argo CD primeiro o jogo que sai (preStop salva de novo) e depois o que entra -> espera
+ficar pronto -> avisa o Discord com o endereço de conexão.
 
 Uso:
-  scripts/switch-game.py <jogo>            troca de verdade
-  scripts/switch-game.py <jogo> --force    ignora a checagem de jogadores online
-  scripts/switch-game.py <jogo> --dry-run  só mostra/grava os arquivos, sem git/kubectl
+  scripts/switch-game.py <jogo>              troca de verdade
+  scripts/switch-game.py <jogo> --force      ignora a checagem de jogadores online
+  scripts/switch-game.py <jogo> --dry-run    só mostra/grava os arquivos, sem git/kubectl
+  scripts/switch-game.py <jogo> --no-notify  não avisa o Discord
+
+Configuração local (.env.local, fora do Git): GAME_HOST (endereço que os jogadores usam)
+e DISCORD_ROLE_ID (cargo mencionado quando o jogo fica pronto; opcional).
 """
 import argparse
+import base64
 import json
 import pathlib
 import re
 import subprocess
 import sys
 import time
+import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ACTIVE_FILE = ROOT / "platform" / "active-game.yaml"
@@ -24,16 +31,19 @@ ACTIVE_FILE = ROOT / "platform" / "active-game.yaml"
 # Registro dos jogos implantados (a fase de generalização vai derivar isto do catálogo)
 GAMES = {
     "zomboid": {
+        "title": "Project Zomboid", "port": 16261,
         "dir": "k8s/zomboid", "ns": "zomboid", "sts": "zomboid", "app": "zomboid",
         "players_metric": "zomboid_players_online", "exporter": "exporter",
         "suspend_when_idle": ["zomboid-daily-restart"],
     },
     "terraria": {
+        "title": "Terraria", "port": 16261,
         "dir": "k8s/games/terraria", "ns": "terraria", "sts": "terraria", "app": "terraria",
         "players_metric": None, "exporter": None,
         "suspend_when_idle": [],
     },
 }
+COLOR_INFO, COLOR_OK, COLOR_FAIL = 0xF1C40F, 0x2ECC71, 0xE74C3C
 
 
 def run(cmd, check=True, capture=True):
@@ -41,6 +51,39 @@ def run(cmd, check=True, capture=True):
     if check and r.returncode != 0:
         sys.exit(f"ERRO: {' '.join(cmd)}\n{(r.stderr or r.stdout).strip()}")
     return r
+
+
+def env_local():
+    env, path = {}, ROOT / ".env.local"
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                env[key.strip()] = value.strip().strip('"').strip("'")
+    return env
+
+
+def notify(title, description, color, mention=False):
+    """Envia um embed ao Discord pelo webhook guardado no cluster (Secret vindo do SSM)."""
+    r = run(["kubectl", "-n", "zomboid", "get", "secret", "discord-webhook",
+             "-o", "jsonpath={.data.webhook-url}"], check=False)
+    if r.returncode != 0 or not r.stdout.strip():
+        print("  AVISO: webhook do Discord indisponível; aviso não enviado")
+        return
+    url = base64.b64decode(r.stdout.strip()).decode()
+    payload = {"username": "AsunBoid", "embeds": [{"title": title, "description": description, "color": color}]}
+    role = env_local().get("DISCORD_ROLE_ID")
+    if mention and role:
+        payload["content"] = f"<@&{role}>"
+        payload["allowed_mentions"] = {"roles": [role]}
+    req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), method="POST",
+                                 headers={"Content-Type": "application/json", "User-Agent": "AsunBoid-SwitchGame/1.0"})
+    try:
+        urllib.request.urlopen(req, timeout=10)
+        print("  aviso enviado ao Discord")
+    except Exception as exc:  # noqa: BLE001 - aviso é best-effort, não interrompe a troca
+        print(f"  AVISO: falha ao avisar o Discord: {exc}")
 
 
 def current_active():
@@ -119,11 +162,27 @@ def argo_sync(app, revision):
     sys.exit(f"ERRO: timeout esperando o sync de {app}")
 
 
+def apply_switch(previous, target, sha):
+    if previous in GAMES:
+        print(f"Parando {previous}...")
+        argo_sync(GAMES[previous]["app"], sha)
+        run(["kubectl", "-n", GAMES[previous]["ns"], "wait", "--for=delete",
+             f"pod/{GAMES[previous]['sts']}-0", "--timeout=300s"], check=False)
+    for name in GAMES:
+        if name not in (previous, target):
+            argo_sync(GAMES[name]["app"], sha)
+    print(f"Subindo {target}...")
+    argo_sync(GAMES[target]["app"], sha)
+    g = GAMES[target]
+    run(["kubectl", "-n", g["ns"], "rollout", "status", f"statefulset/{g['sts']}", "--timeout=900s"], capture=False)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("game", choices=sorted(GAMES))
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--no-notify", action="store_true")
     a = ap.parse_args()
 
     target, previous = a.game, current_active()
@@ -164,18 +223,23 @@ def main():
     run(["git", "push"])
     sha = run(["git", "rev-parse", "HEAD"]).stdout.strip()
 
-    if previous in GAMES:
-        print(f"Parando {previous}...")
-        argo_sync(GAMES[previous]["app"], sha)
-        run(["kubectl", "-n", GAMES[previous]["ns"], "wait", "--for=delete",
-             f"pod/{GAMES[previous]['sts']}-0", "--timeout=300s"], check=False)
-    for name in GAMES:
-        if name not in (previous, target):
-            argo_sync(GAMES[name]["app"], sha)
-    print(f"Subindo {target}...")
-    argo_sync(GAMES[target]["app"], sha)
-    g = GAMES[target]
-    run(["kubectl", "-n", g["ns"], "rollout", "status", f"statefulset/{g['sts']}", "--timeout=900s"], capture=False)
+    t_name = GAMES[target]["title"]
+    p_name = GAMES[previous]["title"] if previous in GAMES else "nenhum"
+    send = (lambda *args, **kw: None) if a.no_notify else notify
+    send(f"🔄 Trocando de {p_name} para {t_name}",
+         "O servidor fica indisponível por alguns minutos. Aviso aqui quando estiver pronto.", COLOR_INFO)
+    started = time.time()
+    try:
+        apply_switch(previous, target, sha)
+    except SystemExit as exc:
+        send(f"⚠️ A troca para {t_name} não terminou",
+             "Algo deu errado na troca. O administrador já foi avisado pelo terminal.", COLOR_FAIL)
+        raise exc
+
+    minutes = max(1, round((time.time() - started) / 60))
+    host = env_local().get("GAME_HOST")
+    where = f"Conecte em **`{host}:{GAMES[target]['port']}`**." if host else "Use o endereço de sempre."
+    send(f"🎮 {t_name} está no ar!", f"{where}\nA troca levou cerca de {minutes} min.", COLOR_OK, mention=True)
     print(f"OK: {target} é o jogo ativo.")
     return 0
 

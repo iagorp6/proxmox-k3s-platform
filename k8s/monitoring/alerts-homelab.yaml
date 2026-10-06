@@ -51,23 +51,35 @@ spec:
 
     - name: backup
       rules:
-        - alert: ZomboidBackupFailed
-          expr: kube_job_status_failed{namespace="zomboid",job_name=~"zomboid-backup-.*"} > 0
+        # Genéricas: valem para qualquer CronJob "<algo>-backup", em qualquer namespace de jogo
+        - alert: BackupLastRunFailed
+          expr: |
+            (
+              max by (namespace, cronjob) (kube_cronjob_status_last_schedule_time{cronjob=~".+-backup"})
+              - max by (namespace, cronjob) (kube_cronjob_status_last_successful_time{cronjob=~".+-backup"})
+            ) > 3600
+            or
+            (
+              max by (namespace, cronjob) (kube_cronjob_status_last_schedule_time{cronjob=~".+-backup"})
+              unless on (namespace, cronjob)
+              kube_cronjob_status_last_successful_time{cronjob=~".+-backup"}
+            )
+          for: 30m
           labels:
             severity: critical
           annotations:
-            summary: "Backup do mundo falhou"
-            description: "O job {{ $labels.job_name }} terminou com erro."
-            action: "kubectl -n zomboid logs job/{{ $labels.job_name }} -c restic --tail=30"
-        - alert: ZomboidBackupStale
-          expr: time() - max(kube_cronjob_status_last_successful_time{namespace="zomboid",cronjob="zomboid-backup"}) > 26 * 3600
+            summary: "Backup de {{ $labels.namespace }} falhou na última execução"
+            description: "A execução mais recente do CronJob {{ $labels.cronjob }} não terminou com sucesso."
+            action: "kubectl -n {{ $labels.namespace }} logs $(kubectl -n {{ $labels.namespace }} get jobs -o name --sort-by=.metadata.creationTimestamp | tail -1) --tail=30"
+        - alert: BackupStale
+          expr: time() - max by (namespace, cronjob) (kube_cronjob_status_last_successful_time{cronjob=~".+-backup"}) > 26 * 3600
           for: 15m
           labels:
             severity: critical
           annotations:
-            summary: "Nenhum backup bem-sucedido nas últimas 26h"
-            description: "O backup diário das 5h30 não rodou ou não terminou com sucesso."
-            action: "kubectl -n zomboid create job --from=cronjob/zomboid-backup backup-manual"
+            summary: "Sem backup bem-sucedido de {{ $labels.namespace }} há mais de 26h"
+            description: "O CronJob {{ $labels.cronjob }} não tem sucesso registrado nas últimas 26 horas."
+            action: "kubectl -n {{ $labels.namespace }} create job --from=cronjob/{{ $labels.cronjob }} backup-manual"
 
     - name: host
       rules:
