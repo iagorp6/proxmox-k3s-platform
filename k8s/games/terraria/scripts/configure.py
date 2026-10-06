@@ -23,3 +23,11 @@ settings.update({
 })
 cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 print(f"config.json atualizado ({len(settings)} chaves em Settings)")
+
+# Server-Side Characters: inventário/vida/mana guardados no servidor por conta.
+# Todo jogador começa com o kit inicial do servidor, independente do personagem local.
+ssc_path = DATA / "tshock" / "sscconfig.json"
+ssc = json.loads(ssc_path.read_text(encoding="utf-8")) if ssc_path.exists() else {}
+ssc.setdefault("Settings", {}).update({"Enabled": True})
+ssc_path.write_text(json.dumps(ssc, indent=2), encoding="utf-8")
+print("sscconfig.json atualizado (SSC habilitado)")
