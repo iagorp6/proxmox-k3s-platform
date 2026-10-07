@@ -5,6 +5,8 @@ Para cada jogo com status "active" e campo "namespace", grava:
   k8s/games/<jogo>/platform.generated.yaml  Service do jogo, métricas (Service + ServiceMonitor),
                                             backup (ExternalSecret + CronJob restic)
   k8s/argocd/apps/<jogo>.yaml               Application do Argo CD (sync manual)
+E, para o conjunto desses jogos:
+  k8s/monitoring/alerts-games.generated.yaml  alertas por jogo (fora do ar, restart, memória)
 O StatefulSet continua escrito à mão em cada jogo (é a parte realmente específica).
 Uso: python3 scripts/render-games.py [--check]   (--check falha se algo gerado estiver desatualizado)
 """
@@ -119,6 +121,53 @@ def render_game(g):
     }
 
 
+def render_alerts(games):
+    """PrometheusRule com os alertas que todo jogo do catálogo recebe, sem lista escrita à mão."""
+    ns = "|".join(g["namespace"] for g in games)
+    server = f'namespace=~"{ns}",container="server"'
+    rules = [{
+        "alert": "GameDown",
+        "expr": (f'kube_statefulset_replicas{{namespace=~"{ns}"}} > 0\n'
+                 "unless on (namespace, statefulset)\n"
+                 f'kube_statefulset_status_replicas_ready{{namespace=~"{ns}"}} > 0\n'),
+        "for": "10m",
+        "labels": {"severity": "critical"},
+        "annotations": {
+            "summary": "Servidor de {{ $labels.namespace }} fora do ar",
+            "description": "{{ $labels.namespace }} é o jogo ativo, mas o pod não está pronto há mais de 10 minutos.",
+            "action": "kubectl -n {{ $labels.namespace }} get pods e kubectl -n {{ $labels.namespace }} logs {{ $labels.statefulset }}-0 -c server --tail=30",
+        },
+    }, {
+        "alert": "GameRestarted",
+        "expr": f"increase(kube_pod_container_status_restarts_total{{{server}}}[15m]) > 0",
+        "labels": {"severity": "warning"},
+        "annotations": {
+            "summary": "Servidor de {{ $labels.namespace }} reiniciou sozinho",
+            "description": "O processo do jogo caiu e o Kubernetes o reiniciou. Trocas de jogo e deploys não disparam este alerta.",
+            "action": "kubectl -n {{ $labels.namespace }} logs {{ $labels.pod }} -c server --previous --tail=40",
+        },
+    }, {
+        "alert": "GameMemoryHigh",
+        "expr": (f"max by (namespace, pod) (container_memory_working_set_bytes{{{server}}})\n"
+                 f'/ max by (namespace, pod) (kube_pod_container_resource_limits{{{server},resource="memory"}})\n'
+                 "> 0.9\n"),
+        "for": "10m",
+        "labels": {"severity": "warning"},
+        "annotations": {
+            "summary": "Servidor de {{ $labels.namespace }} perto do limite de memória",
+            "description": "Uso de {{ $value | humanizePercentage }} do limite. Risco de OOMKilled.",
+            "action": "Comparar o pico no dashboard e avaliar subir o limite de memória no StatefulSet de {{ $labels.namespace }}.",
+        },
+    }]
+    doc = {
+        "apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule",
+        "metadata": {"name": "homelab-game-alerts", "namespace": "monitoring"},
+        "spec": {"groups": [{"name": "games-catalog", "rules": rules}]},
+    }
+    return {ROOT / "k8s" / "monitoring" / "alerts-games.generated.yaml":
+            HEADER + f"# Jogos cobertos (status active no catálogo): {', '.join(g['name'] for g in games)}\n" + dump([doc])[len(HEADER):]}
+
+
 def main():
     check = "--check" in sys.argv
     errors = catalog.problems()
@@ -126,9 +175,11 @@ def main():
         print("ERRO: catálogo de jogos inválido:\n" + "\n".join(f"  {e}" for e in errors))
         return 1
     outputs = {}
-    for g in catalog.games():
-        if g["status"] == "active":
-            outputs.update(render_game(g))
+    generated = [g for g in catalog.games() if g["status"] == "active"]
+    for g in generated:
+        outputs.update(render_game(g))
+    if generated:
+        outputs.update(render_alerts(generated))
     stale = []
     for path, content in outputs.items():
         current = path.read_text(encoding="utf-8") if path.exists() else None
