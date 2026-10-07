@@ -111,6 +111,7 @@ jobs:
         run: |
           sudo apt-get install -y -qq python3-yaml >/dev/null
           python3 scripts/render-games.py --check
+          bash scripts/check-minecraft-pin.sh
       - name: shellcheck
         run: shellcheck scripts/*.sh k8s/monitoring/deploy.sh
 
