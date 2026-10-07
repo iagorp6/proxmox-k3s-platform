@@ -1,0 +1,8 @@
+# Gerado por scripts/switch-game.py: não edite à mão.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minecraft
+  namespace: minecraft
+spec:
+  replicas: 0

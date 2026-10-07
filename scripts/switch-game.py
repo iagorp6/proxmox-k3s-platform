@@ -42,6 +42,14 @@ GAMES = {
         "players_metric": "game_players_online", "exporter": "exporter",
         "suspend_when_idle": [],
     },
+    "minecraft": {
+        "title": "Minecraft (COBBLEVERSE)", "port": 16262,
+        "dir": "k8s/games/minecraft", "ns": "minecraft", "sts": "minecraft", "app": "minecraft",
+        "players_metric": "game_players_online", "exporter": "exporter",
+        "suspend_when_idle": [],
+        "save_cmd": "rcon-cli save-all flush",
+        "join_hint": "Use o COBBLEVERSE versão 1.7.42 no Modrinth App (a mesma do servidor).",
+    },
 }
 COLOR_INFO, COLOR_OK, COLOR_FAIL = 0xF1C40F, 0x2ECC71, 0xE74C3C
 
@@ -113,7 +121,7 @@ def save_world(g):
     if not pod_running(g):
         return
     r = run(["kubectl", "-n", g["ns"], "exec", f"{g['sts']}-0", "-c", "server", "--",
-             "sh", "-c", "echo save > /tmp/console"], check=False)
+             "sh", "-c", g.get("save_cmd", "echo save > /tmp/console")], check=False)
     print(f"  save enviado ao console de {g['sts']}" if r.returncode == 0 else f"  AVISO: não consegui enviar save para {g['sts']}")
 
 
@@ -239,7 +247,9 @@ def main():
     minutes = max(1, round((time.time() - started) / 60))
     host = env_local().get("GAME_HOST")
     where = f"Conecte em **`{host}:{GAMES[target]['port']}`**." if host else "Use o endereço de sempre."
-    send(f"🎮 {t_name} está no ar!", f"{where}\nA troca levou cerca de {minutes} min.", COLOR_OK, mention=True)
+    hint = GAMES[target].get("join_hint")
+    body = f"{where}\n{hint}\nA troca levou cerca de {minutes} min." if hint else f"{where}\nA troca levou cerca de {minutes} min."
+    send(f"🎮 {t_name} está no ar!", body, COLOR_OK, mention=True)
     print(f"OK: {target} é o jogo ativo.")
     return 0
 

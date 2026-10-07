@@ -1,0 +1,146 @@
+# Gerado por scripts/render-games.py a partir de game.yaml: não edite à mão.
+apiVersion: v1
+kind: Service
+metadata:
+  name: minecraft
+  namespace: minecraft
+  labels:
+    app.kubernetes.io/name: minecraft
+    platform.homelab/game: minecraft
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: minecraft
+  ports:
+  - name: game
+    port: 16262
+    targetPort: game
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minecraft-metrics
+  namespace: minecraft
+  labels:
+    app.kubernetes.io/name: minecraft-metrics
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: minecraft
+  ports:
+  - name: metrics
+    port: 9105
+    targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: minecraft
+  namespace: minecraft
+  labels:
+    release: kps
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minecraft-metrics
+  endpoints:
+  - port: metrics
+    interval: 30s
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: minecraft-backup
+  namespace: minecraft
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: aws-ssm
+  target:
+    name: minecraft-backup
+    creationPolicy: Owner
+  data:
+  - secretKey: RESTIC_REPOSITORY
+    remoteRef:
+      key: /homelab/backup/restic-repository
+  - secretKey: RESTIC_PASSWORD
+    remoteRef:
+      key: /homelab/backup/restic-password
+  - secretKey: AWS_ACCESS_KEY_ID
+    remoteRef:
+      key: /homelab/backup/restic-aws-access-key-id
+  - secretKey: AWS_SECRET_ACCESS_KEY
+    remoteRef:
+      key: /homelab/backup/restic-aws-secret-access-key
+  - secretKey: AWS_DEFAULT_REGION
+    remoteRef:
+      key: /homelab/backup/aws-region
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: minecraft-backup
+  namespace: minecraft
+spec:
+  schedule: 15 5 * * *
+  timeZone: America/Sao_Paulo
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: restic
+            image: restic/restic:latest@sha256:9940e6c7421ab3a21ee9fdc4e91596d04c792b600d31b102696c75cbf3ac4481
+            command:
+            - /bin/sh
+            - -c
+            args:
+            - |
+              set -e
+              restic backup /data/world --tag minecraft --host minecraft --retry-lock 10m
+              restic forget --tag minecraft --host minecraft --keep-daily 7 --keep-weekly 4 --prune --retry-lock 10m
+              restic snapshots --tag minecraft --latest 1
+            envFrom:
+            - secretRef:
+                name: minecraft-backup
+            env:
+            - name: RESTIC_CACHE_DIR
+              value: /cache
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                memory: 512Mi
+            volumeMounts:
+            - name: data
+              mountPath: /data
+              readOnly: true
+            - name: cache
+              mountPath: /cache
+          volumes:
+          - name: data
+            persistentVolumeClaim:
+              claimName: data-minecraft-0
+              readOnly: true
+          - name: cache
+            emptyDir: {}
