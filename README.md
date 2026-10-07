@@ -131,7 +131,7 @@ Three games share one platform and only one runs at a time: the VM fits a single
 - **Catalog-driven.** Each game declares its name, ports, backup paths and schedule in `k8s/games/<game>/game.yaml`. `scripts/render-games.py` generates the game Service, the metrics Service and ServiceMonitor, the restic backup (ExternalSecret + CronJob) and the Argo CD Application. Only the StatefulSet and the game's own Secrets are hand-written, because that is where games really differ. The dashboard generator, the switch script, the status command and CI read the same catalog (`scripts/catalog.py`), so no script keeps its own list of games. CI fails if a generated file is stale or the catalog is inconsistent.
 - **Switching is a commit.** `make switch-game GAME=terraria` refuses to run while anyone is online, saves the world, flips the replica patches and `platform/active-game.yaml`, commits, syncs the outgoing game first and the incoming one second, and announces on Discord when the new server is ready. Git always says what is running.
 - **One metric contract.** The exporter sidecar of each catalog game exposes `game_up`, `game_players_online`, `game_player_online{player}` and `game_player_playtime_seconds_total{player}`, whatever the protocol behind it, so a new game reuses the same dashboard panels, alerts and Discord notifications.
-- **Alerts follow the desired state.** `GameDown` compares `kube_statefulset_replicas` with ready replicas, so a stopped game never pages.
+- **Alerts follow the desired state.** `GameDown` compares `kube_statefulset_replicas` with ready replicas, so a stopped game never pages. It is generated from the catalog together with `GameRestarted` and `GameMemoryHigh`, so every new game gets the same alert set without anyone editing a rule.
 - **Players get a one-file installer.** For the modded Minecraft server, `docs/minecraft/install-cobbleverse.ps1` installs the exact modpack version the server runs, downloading every mod from the official CDN and verifying its SHA-512.
 - **Decisions are written down** in `docs/adr/`: why not Agones or a game panel, why Git owns the active game, and why a generator replaced Kustomize components.
 
@@ -271,7 +271,6 @@ A Budgets alarm fires above USD 1/month, and a CloudWatch alarm watches the size
 
 - [ ] Timed full DR drill and published RTO
 - [ ] Migrate Project Zomboid to the catalog and the `game_*` metric contract
-- [ ] Generate the per-game alert rules from the catalog (the dashboard, switch script and CI already read it)
 - [ ] Manage the Helm releases (monitoring, External Secrets, Argo CD) through Argo CD
 - [ ] Renovate for image digests and chart versions
 - [ ] Migrate to the non-deprecated `proxmox_download_file` resource

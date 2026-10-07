@@ -186,19 +186,8 @@ spec:
 
     - name: games
       rules:
-        # Genéricas: valem para todo jogo no contrato game_* (Terraria, Minecraft e os próximos)
-        - alert: GameDown
-          expr: |
-            kube_statefulset_replicas{namespace=~"terraria|minecraft"} > 0
-            unless on (namespace, statefulset)
-            kube_statefulset_status_replicas_ready{namespace=~"terraria|minecraft"} > 0
-          for: 10m
-          labels:
-            severity: critical
-          annotations:
-            summary: "Servidor de {{ $labels.namespace }} fora do ar"
-            description: "{{ $labels.namespace }} é o jogo ativo, mas o pod não está pronto há mais de 10 minutos."
-            action: "kubectl -n {{ $labels.namespace }} get pods e kubectl -n {{ $labels.namespace }} logs {{ $labels.statefulset }}-0 -c server --tail=30"
+        # GameDown, GameRestarted e GameMemoryHigh são gerados do catálogo: alerts-games.generated.yaml
+        # Genérica: vale para todo jogo no contrato game_*
         - alert: GamePlayerOnline
           expr: max by (game, player) (game_player_online) == 1
           labels:

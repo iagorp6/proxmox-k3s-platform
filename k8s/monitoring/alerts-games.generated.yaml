@@ -1,0 +1,43 @@
+# Gerado por scripts/render-games.py a partir de game.yaml: não edite à mão.
+# Jogos cobertos (status active no catálogo): minecraft, terraria
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab-game-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: games-catalog
+    rules:
+    - alert: GameDown
+      expr: |
+        kube_statefulset_replicas{namespace=~"minecraft|terraria"} > 0
+        unless on (namespace, statefulset)
+        kube_statefulset_status_replicas_ready{namespace=~"minecraft|terraria"} > 0
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: Servidor de {{ $labels.namespace }} fora do ar
+        description: '{{ $labels.namespace }} é o jogo ativo, mas o pod não está pronto há mais de 10 minutos.'
+        action: kubectl -n {{ $labels.namespace }} get pods e kubectl -n {{ $labels.namespace }} logs {{ $labels.statefulset }}-0 -c server --tail=30
+    - alert: GameRestarted
+      expr: increase(kube_pod_container_status_restarts_total{namespace=~"minecraft|terraria",container="server"}[15m]) > 0
+      labels:
+        severity: warning
+      annotations:
+        summary: Servidor de {{ $labels.namespace }} reiniciou sozinho
+        description: O processo do jogo caiu e o Kubernetes o reiniciou. Trocas de jogo e deploys não disparam este alerta.
+        action: kubectl -n {{ $labels.namespace }} logs {{ $labels.pod }} -c server --previous --tail=40
+    - alert: GameMemoryHigh
+      expr: |
+        max by (namespace, pod) (container_memory_working_set_bytes{namespace=~"minecraft|terraria",container="server"})
+        / max by (namespace, pod) (kube_pod_container_resource_limits{namespace=~"minecraft|terraria",container="server",resource="memory"})
+        > 0.9
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: Servidor de {{ $labels.namespace }} perto do limite de memória
+        description: Uso de {{ $value | humanizePercentage }} do limite. Risco de OOMKilled.
+        action: Comparar o pico no dashboard e avaliar subir o limite de memória no StatefulSet de {{ $labels.namespace }}.
