@@ -13,7 +13,7 @@ PROM = os.getenv("PROMETHEUS_URL", "http://kps-kube-prometheus-stack-prometheus.
 WEBHOOK = os.environ["DISCORD_WEBHOOK_URL"]
 BRT = timezone(timedelta(hours=-3))
 UA = {"User-Agent": "AsunBoid-WeeklySummary/2.0"}
-TITLES = {"zomboid": "Project Zomboid", "terraria": "Terraria"}
+TITLES = {"zomboid": "Project Zomboid", "terraria": "Terraria", "minecraft": "Minecraft"}
 
 HOURS_7D = ('label_replace(sum by (player) (count_over_time(zomboid_player_online[7d])) * 30, "game", "zomboid", "", "") '
             'or sum by (game, player) (count_over_time(game_player_online[7d])) * 30')
