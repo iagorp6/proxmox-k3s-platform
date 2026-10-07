@@ -66,7 +66,7 @@ data:
           },
           "targets": [
             {
-              "expr": "label_replace(label_replace(label_replace(label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"zomboid|terraria|minecraft\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"), \"jogo\", \"Project Zomboid\", \"game\", \"zomboid\"), \"jogo\", \"Terraria\", \"game\", \"terraria\"), \"jogo\", \"Minecraft\", \"game\", \"minecraft\")",
+              "expr": "label_replace(label_replace(label_replace(label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"), \"jogo\", \"Minecraft\", \"game\", \"minecraft\"), \"jogo\", \"Terraria\", \"game\", \"terraria\"), \"jogo\", \"Project Zomboid\", \"game\", \"zomboid\")",
               "refId": "A",
               "legendFormat": "{{jogo}}"
             }
@@ -115,7 +115,7 @@ data:
           },
           "targets": [
             {
-              "expr": "max((label_replace(max(zomboid_up), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"zomboid|terraria|minecraft\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
+              "expr": "max((label_replace(max(zomboid_up), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
               "refId": "A"
             }
           ],
@@ -183,7 +183,7 @@ data:
           },
           "targets": [
             {
-              "expr": "sum((label_replace(max(zomboid_players_online), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_players_online)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"zomboid|terraria|minecraft\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
+              "expr": "sum((label_replace(max(zomboid_players_online), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_players_online)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
               "refId": "A"
             }
           ],
@@ -232,7 +232,7 @@ data:
           },
           "targets": [
             {
-              "expr": "avg_over_time((max((label_replace(max(zomboid_up), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"zomboid|terraria|minecraft\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0))[7d:5m])",
+              "expr": "avg_over_time((max((label_replace(max(zomboid_up), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0))[7d:5m])",
               "refId": "A"
             }
           ],
@@ -409,12 +409,12 @@ data:
           },
           "targets": [
             {
-              "expr": "max by (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"zomboid|terraria|minecraft\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))",
+              "expr": "max by (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))",
               "refId": "A",
               "legendFormat": "{{game}}"
             },
             {
-              "expr": "max((label_replace(max(zomboid_up), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"zomboid|terraria|minecraft\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
+              "expr": "max((label_replace(max(zomboid_up), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
               "refId": "B",
               "legendFormat": "Servidor no ar"
             }
@@ -571,8 +571,8 @@ data:
                       {
                         "type": "value",
                         "options": {
-                          "zomboid": {
-                            "text": "Project Zomboid",
+                          "minecraft": {
+                            "text": "Minecraft",
                             "color": "text",
                             "index": 0
                           },
@@ -581,8 +581,8 @@ data:
                             "color": "text",
                             "index": 1
                           },
-                          "minecraft": {
-                            "text": "Minecraft",
+                          "zomboid": {
+                            "text": "Project Zomboid",
                             "color": "text",
                             "index": 2
                           }
@@ -833,8 +833,8 @@ data:
                       {
                         "type": "value",
                         "options": {
-                          "zomboid": {
-                            "text": "Project Zomboid",
+                          "minecraft": {
+                            "text": "Minecraft",
                             "color": "text",
                             "index": 0
                           },
@@ -843,8 +843,8 @@ data:
                             "color": "text",
                             "index": 1
                           },
-                          "minecraft": {
-                            "text": "Minecraft",
+                          "zomboid": {
+                            "text": "Project Zomboid",
                             "color": "text",
                             "index": 2
                           }
@@ -1007,12 +1007,12 @@ data:
           },
           "targets": [
             {
-              "expr": "max by (namespace) (container_memory_working_set_bytes{namespace=~\"zomboid|terraria|minecraft\",container=\"server\"})",
+              "expr": "max by (namespace) (container_memory_working_set_bytes{namespace=~\"minecraft|terraria|zomboid\",container=\"server\"})",
               "refId": "A",
               "legendFormat": "{{namespace}} em uso"
             },
             {
-              "expr": "max by (namespace) (kube_pod_container_resource_limits{namespace=~\"zomboid|terraria|minecraft\",container=\"server\",resource=\"memory\"})",
+              "expr": "max by (namespace) (kube_pod_container_resource_limits{namespace=~\"minecraft|terraria|zomboid\",container=\"server\",resource=\"memory\"})",
               "refId": "B",
               "legendFormat": "{{namespace}} limite"
             }
@@ -1085,7 +1085,7 @@ data:
           },
           "targets": [
             {
-              "expr": "sum by (namespace) (rate(container_cpu_usage_seconds_total{namespace=~\"zomboid|terraria|minecraft\",container=\"server\"}[5m]))",
+              "expr": "sum by (namespace) (rate(container_cpu_usage_seconds_total{namespace=~\"minecraft|terraria|zomboid\",container=\"server\"}[5m]))",
               "refId": "A",
               "legendFormat": "{{namespace}}"
             }
@@ -1147,7 +1147,7 @@ data:
           },
           "targets": [
             {
-              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=~\"zomboid|terraria|minecraft\",container=\"server\"}[7d])) or vector(0)",
+              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=~\"minecraft|terraria|zomboid\",container=\"server\"}[7d])) or vector(0)",
               "refId": "A"
             }
           ],
@@ -1667,7 +1667,7 @@ data:
               },
               "targets": [
                 {
-                  "expr": "{namespace=~\"zomboid|terraria|minecraft\", container=\"server\"} |~ \"(?i)(connected|disconnect|logged|has joined|has left)\"",
+                  "expr": "{namespace=~\"minecraft|terraria|zomboid\", container=\"server\"} |~ \"(?i)(connected|disconnect|logged|has joined|has left)\"",
                   "refId": "A"
                 }
               ],
@@ -1695,7 +1695,7 @@ data:
               },
               "targets": [
                 {
-                  "expr": "{namespace=~\"zomboid|terraria|minecraft\", container=\"server\"} |~ \"(?i)(error|exception|warn)\"",
+                  "expr": "{namespace=~\"minecraft|terraria|zomboid\", container=\"server\"} |~ \"(?i)(error|exception|warn)\"",
                   "refId": "A"
                 }
               ],

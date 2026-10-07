@@ -56,9 +56,11 @@ tf_check() {
 }
 
 k8s_check() {
-  kubectl kustomize k8s/zomboid | kubeconform -strict -summary -schema-location default -schema-location "$CRD_CATALOG" || return 1
-  kubectl kustomize k8s/games/terraria | kubeconform -strict -summary -schema-location default -schema-location "$CRD_CATALOG" || return 1
-  kubectl kustomize k8s/games/minecraft | kubeconform -strict -summary -schema-location default -schema-location "$CRD_CATALOG" || return 1
+  local dir dirs
+  dirs="$(python3 scripts/catalog.py dirs)" || return 1
+  for dir in $dirs; do   # todos os jogos do catálogo (k8s/**/game.yaml)
+    kubectl kustomize "$dir" | kubeconform -strict -summary -schema-location default -schema-location "$CRD_CATALOG" || return 1
+  done
   kubeconform -strict -summary -schema-location default -schema-location "$CRD_CATALOG" \
     k8s/monitoring/alerts-homelab.yaml k8s/monitoring/dashboard-asunboid.yaml k8s/monitoring/externalsecrets.yaml \
     k8s/argocd/root.yaml k8s/argocd/apps/*.yaml k8s/external-secrets/cluster-secret-store.yaml || return 1
@@ -71,7 +73,7 @@ k8s_check() {
 }
 
 scripts_check() {
-  shellcheck scripts/*.sh k8s/*/deploy.sh && python3 scripts/render-games.py --check && python3 -m py_compile k8s/zomboid/exporter/*.py k8s/games/terraria/scripts/*.py k8s/games/minecraft/scripts/*.py scripts/*.py
+  shellcheck scripts/*.sh k8s/*/deploy.sh && python3 scripts/render-games.py --check && python3 -m py_compile k8s/zomboid/exporter/*.py k8s/games/*/scripts/*.py scripts/*.py
 }
 
 security_check() {
