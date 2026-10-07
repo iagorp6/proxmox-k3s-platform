@@ -5,4 +5,4 @@ metadata:
   name: minecraft
   namespace: minecraft
 spec:
-  replicas: 0
+  replicas: 1
