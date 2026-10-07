@@ -1,6 +1,7 @@
 """Resumo semanal da plataforma de jogos no Discord (stdlib only).
 
-Multi-jogo: une as métricas zomboid_* (Zomboid) e game_* (contrato da plataforma, Terraria).
+Multi-jogo: une as métricas zomboid_* (Zomboid) e game_* (contrato da plataforma).
+Com DRY_RUN=1 só imprime o que enviaria, sem postar no Discord (para testar o CronJob).
 """
 import json
 import os
@@ -89,6 +90,9 @@ def build():
 
 def main():
     payload = json.dumps(build()).encode("utf-8")
+    if os.getenv("DRY_RUN"):
+        print(json.dumps(json.loads(payload), indent=2, ensure_ascii=False), flush=True)
+        return
     req = urllib.request.Request(WEBHOOK, data=payload, method="POST",
                                  headers={**UA, "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=30) as r:

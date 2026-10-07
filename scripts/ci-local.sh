@@ -58,7 +58,7 @@ tf_check() {
 k8s_check() {
   local dir dirs
   dirs="$(python3 scripts/catalog.py dirs)" || return 1
-  for dir in $dirs; do   # todos os jogos do catálogo (k8s/**/game.yaml)
+  for dir in k8s/platform $dirs; do   # peças da plataforma + todos os jogos do catálogo (k8s/**/game.yaml)
     kubectl kustomize "$dir" | kubeconform -strict -summary -schema-location default -schema-location "$CRD_CATALOG" || return 1
   done
   kubeconform -strict -summary -schema-location default -schema-location "$CRD_CATALOG" \
@@ -74,7 +74,7 @@ k8s_check() {
 }
 
 scripts_check() {
-  shellcheck scripts/*.sh k8s/*/deploy.sh && python3 scripts/render-games.py --check && bash scripts/check-minecraft-pin.sh && python3 -m py_compile k8s/zomboid/exporter/*.py k8s/games/*/scripts/*.py scripts/*.py
+  shellcheck scripts/*.sh k8s/*/deploy.sh && python3 scripts/render-games.py --check && bash scripts/check-minecraft-pin.sh && python3 -m py_compile k8s/zomboid/exporter/*.py k8s/platform/*.py k8s/games/*/scripts/*.py scripts/*.py
 }
 
 security_check() {

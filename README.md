@@ -96,8 +96,9 @@ terraform/ Proxmox VM (cloud image, cloud-init, DHCP-reserved NIC)
 terraform-aws/ S3 (backups + state), least-privilege IAM, SSM parameters, Budgets
 ansible/ K3s install, game-server network tuning, host exporters
 k8s/argocd/ Argo CD install + app of apps
-k8s/zomboid/ Project Zomboid: server, exporter source, backup/restart/summary CronJobs
+k8s/zomboid/ Project Zomboid: server, exporter source, backup and restart CronJobs
 k8s/games/ One directory per catalog game (Terraria, Minecraft): game.yaml, StatefulSet, generated manifests
+k8s/platform/ Workloads that belong to no game: weekly Discord summary, shared webhook Secret
 platform/ Active game and platform defaults read by the generator
 k8s/monitoring/ Helm values, alert rules, generated Grafana dashboard
 k8s/external-secrets/ External Secrets Operator + ClusterSecretStore (AWS SSM)

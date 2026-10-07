@@ -72,7 +72,7 @@ def env_local():
 
 def notify(title, description, color, mention=False):
     """Envia um embed ao Discord pelo webhook guardado no cluster (Secret vindo do SSM)."""
-    r = run(["kubectl", "-n", "zomboid", "get", "secret", "discord-webhook",
+    r = run(["kubectl", "-n", "platform", "get", "secret", "discord-webhook",
              "-o", "jsonpath={.data.webhook-url}"], check=False)
     if r.returncode != 0 or not r.stdout.strip():
         print("  AVISO: webhook do Discord indisponível; aviso não enviado")

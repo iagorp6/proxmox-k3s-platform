@@ -1,22 +1,16 @@
+# Peças da plataforma que não pertencem a um jogo: continuam no ar seja qual for o jogo ativo.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+namespace: platform
 resources:
   - namespace.yaml
-  - configmap.yaml
-  - statefulset.yaml
-  - service.yaml
-  - daily-restart.yaml
-  - backup.yaml
-  - metrics.yaml
   - externalsecrets.yaml
+  - weekly-summary.yaml
 
 # Código Python versionado como arquivo; o Kustomize gera o ConfigMap
 configMapGenerator:
-  - name: zomboid-exporter
+  - name: weekly-summary
     files:
-      - exporter.py=exporter/exporter.py
+      - summary.py=weekly_summary.py
 generatorOptions:
   disableNameSuffixHash: true
-
-patches:
-  - path: replicas.yaml   # gerado por scripts/switch-game.py
