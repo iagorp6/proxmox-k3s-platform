@@ -25,15 +25,20 @@ jobs:
       run:
         working-directory: ${{ matrix.dir }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: hashicorp/setup-terraform@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.16.5"
       - name: terraform fmt
         run: terraform fmt -check -recursive -diff
       - name: terraform init (sem backend)
         run: terraform init -backend=false -input=false
       - name: terraform validate
         run: terraform validate -no-color
-      - uses: terraform-linters/setup-tflint@v6
+      - name: Install tflint (versão fixa, SHA-256 conferido)
+        run: |
+          bash "$GITHUB_WORKSPACE/scripts/install-ci-tools.sh" "$HOME/bin" tflint
+          echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: tflint
         run: |
           tflint --init --config "$GITHUB_WORKSPACE/.tflint.hcl"
@@ -46,8 +51,8 @@ jobs:
       run:
         working-directory: ansible
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
       - name: Install ansible-lint
@@ -59,11 +64,10 @@ jobs:
     name: Kubernetes manifests
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - name: Install kubeconform
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install kubeconform (versão fixa, SHA-256 conferido)
         run: |
-          mkdir -p "$HOME/bin"
-          curl -fsSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz -C "$HOME/bin" kubeconform
+          bash scripts/install-ci-tools.sh "$HOME/bin" kubeconform
           echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: Validate zomboid (kustomize)
         run: |
@@ -104,7 +108,7 @@ jobs:
     name: Shell scripts
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Game platform
         run: |
           sudo apt-get install -y -qq python3-yaml >/dev/null
@@ -119,11 +123,10 @@ jobs:
     name: Security scan (Trivy)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - name: Install Trivy
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Trivy (versão fixa, SHA-256 conferido)
         run: |
-          mkdir -p "$HOME/bin"
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "$HOME/bin"
+          bash scripts/install-ci-tools.sh "$HOME/bin" trivy
           echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: Secret scan (falha o build)
         run: trivy fs --scanners secret --exit-code 1 --no-progress .
