@@ -26,6 +26,33 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: users
+          # online-mode=false: gera whitelist.json e ops.json com UUIDs offline
+          image: python:3.13-slim@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b
+          command: ["python", "/scripts/users.py"]
+          env:
+            - name: PLAYERS
+              value: "iagoat,anaodemaleta,vitinho,matarindo,churrasco,cabecudo,plucas"
+            - name: OPERATORS
+              value: "iagoat"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
       containers:
         - name: server
           image: itzg/minecraft-server:java21@sha256:3da0b5e26a3adccc4ed8708f90058e84ebc09fc6f8ced0abc02a1156be656bf7
@@ -42,6 +69,8 @@ spec:
               value: 6G
             - name: USE_AIKAR_FLAGS
               value: "true"
+            - name: MODS                       # mods extras, além do modpack (versão fixada pela URL)
+              value: "https://cdn.modrinth.com/data/aZj58GfX/versions/bga5lUKd/easyauth-mc1.21-3.4.4.jar"
             - name: MAX_PLAYERS
               value: "6"
             - name: MOTD
@@ -51,15 +80,11 @@ spec:
             - name: SIMULATION_DISTANCE
               value: "6"
             - name: ONLINE_MODE
-              value: "true"
+              value: "false"   # contas não originais; autenticação pelo EasyAuth
             - name: ENABLE_WHITELIST
               value: "true"
             - name: ENFORCE_WHITELIST
               value: "true"
-            - name: WHITELIST
-              value: "iagoat,anaodemaleta,vitinho,matarindo,churrasco,cabecudo,plucas"
-            - name: OPS
-              value: "iagoat"
             - name: ENABLE_RCON
               value: "true"
             - name: RCON_PASSWORD
