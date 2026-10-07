@@ -86,8 +86,8 @@ spec:
               value: cobbleverse
             - name: MODRINTH_VERSION           # versão fixa: os jogadores precisam da MESMA
               value: 4SKGla61
-            - name: MEMORY                     # heap da JVM; o limite do container fica ~2 GiB acima
-              value: 6G
+            - name: MEMORY                     # heap da JVM (já nasce alocado); a diferença até o limite é
+              value: 6G                        # para memória fora do heap: classes dos mods, JIT, GC, buffers
             - name: USE_AIKAR_FLAGS
               value: "true"
             - name: MODS                       # mods extras, além do modpack (versão fixada pela URL)
@@ -142,9 +142,9 @@ spec:
           resources:
             requests:
               cpu: "1"
-              memory: 7Gi
+              memory: 10Gi
             limits:
-              memory: 8Gi
+              memory: 10Gi
           volumeMounts:
             - name: data
               mountPath: /data
