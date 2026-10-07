@@ -81,6 +81,8 @@ spec:
               value: "6"
             - name: ONLINE_MODE
               value: "false"   # contas não originais; autenticação pelo EasyAuth
+            - name: ENFORCE_SECURE_PROFILE     # contas não originais não têm perfil assinado; autenticação é do EasyAuth
+              value: "false"
             - name: ENABLE_WHITELIST
               value: "true"
             - name: ENFORCE_WHITELIST
