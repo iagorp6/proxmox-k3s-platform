@@ -25,32 +25,30 @@ import sys
 import time
 import urllib.request
 
+import catalog
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ACTIVE_FILE = ROOT / "platform" / "active-game.yaml"
 
-# Registro dos jogos implantados (a fase de generalização vai derivar isto do catálogo)
-GAMES = {
-    "zomboid": {
-        "title": "Project Zomboid", "port": 16261,
-        "dir": "k8s/zomboid", "ns": "zomboid", "sts": "zomboid", "app": "zomboid",
-        "players_metric": "zomboid_players_online", "exporter": "exporter",
-        "suspend_when_idle": ["zomboid-daily-restart"],
-    },
-    "terraria": {
-        "title": "Terraria", "port": 16261,
-        "dir": "k8s/games/terraria", "ns": "terraria", "sts": "terraria", "app": "terraria",
-        "players_metric": "game_players_online", "exporter": "exporter",
-        "suspend_when_idle": [],
-    },
-    "minecraft": {
-        "title": "Minecraft (COBBLEVERSE)", "port": 16262,
-        "dir": "k8s/games/minecraft", "ns": "minecraft", "sts": "minecraft", "app": "minecraft",
-        "players_metric": "game_players_online", "exporter": "exporter",
-        "suspend_when_idle": [],
-        "save_cmd": "rcon-cli save-all flush",
-        "join_hint": "Use o COBBLEVERSE versão 1.7.42 no Modrinth App (a mesma do servidor).",
-    },
-}
+
+def _from_catalog(g):
+    """Converte uma entrada do catálogo (game.yaml) no que a troca precisa saber do jogo."""
+    sw = g.get("switch") or {}
+    entry = {
+        "title": g["displayName"], "port": g["ports"][0]["port"],
+        "dir": g["dir"], "ns": g["namespace"], "sts": g["name"], "app": g["name"],
+        "players_metric": sw.get("playersMetric", "game_players_online"), "exporter": "exporter",
+        "suspend_when_idle": sw.get("suspendWhenIdle", []),
+    }
+    if sw.get("saveCommand"):
+        entry["save_cmd"] = sw["saveCommand"]
+    if sw.get("joinHint"):
+        entry["join_hint"] = sw["joinHint"]
+    return entry
+
+
+# Jogos implantados, lidos do catálogo (k8s/**/game.yaml): não há lista de jogos neste script.
+GAMES = {g["name"]: _from_catalog(g) for g in catalog.games()}
 COLOR_INFO, COLOR_OK, COLOR_FAIL = 0xF1C40F, 0x2ECC71, 0xE74C3C
 
 

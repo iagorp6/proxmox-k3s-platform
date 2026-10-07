@@ -9,11 +9,14 @@ Uso: python3 scripts/build-dashboard.py
 import json
 import pathlib
 
+import catalog
+
 DS = {"type": "prometheus", "uid": "${datasource}"}
 LOKI = {"type": "loki", "uid": "loki"}
 GREEN, ORANGE, RED = "green", "orange", "red"
-NS = "zomboid|terraria|minecraft"
-TITLES = [("zomboid", "Project Zomboid"), ("terraria", "Terraria"), ("minecraft", "Minecraft")]
+# Jogos lidos do catálogo (k8s/**/game.yaml): o namespace de cada jogo é o próprio nome dele.
+NS = "|".join(g["namespace"] for g in catalog.games())
+TITLES = [(g["name"], g["displayName"]) for g in catalog.games()]
 
 # ---------- PromQL: unificação zomboid_* + game_* ----------
 ACTIVE = (f'label_replace(max by (namespace) (kube_statefulset_replicas{{namespace=~"{NS}"}}) > 0, '

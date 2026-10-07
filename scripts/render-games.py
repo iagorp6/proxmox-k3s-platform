@@ -13,6 +13,8 @@ import sys
 
 import yaml
 
+import catalog
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEFAULTS = yaml.safe_load((ROOT / "platform" / "defaults.yaml").read_text(encoding="utf-8"))
 
@@ -119,10 +121,13 @@ def render_game(g):
 
 def main():
     check = "--check" in sys.argv
+    errors = catalog.problems()
+    if errors:
+        print("ERRO: catálogo de jogos inválido:\n" + "\n".join(f"  {e}" for e in errors))
+        return 1
     outputs = {}
-    for f in sorted((ROOT / "k8s" / "games").glob("*/game.yaml")):
-        g = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
-        if g.get("status") == "active" and g.get("namespace"):
+    for g in catalog.games():
+        if g["status"] == "active":
             outputs.update(render_game(g))
     stale = []
     for path, content in outputs.items():

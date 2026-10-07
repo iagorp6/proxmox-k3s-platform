@@ -1,6 +1,6 @@
 # Catálogo da plataforma: o render-games.py gera Service, métricas, backup e o App do Argo CD.
 name: minecraft
-displayName: Minecraft (COBBLEVERSE)
+displayName: Minecraft
 status: active
 memory: 10Gi
 monitoring: rcon
@@ -13,3 +13,6 @@ backup:
   pvc: data-minecraft-0
   paths: [/data/world]
 metrics: true
+switch:
+  saveCommand: rcon-cli save-all flush
+  joinHint: "Modpack COBBLEVERSE: use o instalador do grupo (install-cobbleverse.ps1), ele baixa a mesma versão que o servidor roda."

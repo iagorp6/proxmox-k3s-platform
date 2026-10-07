@@ -128,7 +128,7 @@ Three games share one platform and only one runs at a time: the VM fits a single
 | Terraria | TShock, image pinned by digest | TShock REST API | Non-root, characters stored on the server |
 | Minecraft | Fabric modpack pinned by version ID | RCON | Whitelist plus in-game password authentication |
 
-- **Catalog-driven.** Each game declares its name, ports, backup paths and schedule in `k8s/games/<game>/game.yaml`. `scripts/render-games.py` generates the game Service, the metrics Service and ServiceMonitor, the restic backup (ExternalSecret + CronJob) and the Argo CD Application. Only the StatefulSet and the game's own Secrets are hand-written, because that is where games really differ. CI fails if a generated file is stale.
+- **Catalog-driven.** Each game declares its name, ports, backup paths and schedule in `k8s/games/<game>/game.yaml`. `scripts/render-games.py` generates the game Service, the metrics Service and ServiceMonitor, the restic backup (ExternalSecret + CronJob) and the Argo CD Application. Only the StatefulSet and the game's own Secrets are hand-written, because that is where games really differ. The dashboard generator, the switch script, the status command and CI read the same catalog (`scripts/catalog.py`), so no script keeps its own list of games. CI fails if a generated file is stale or the catalog is inconsistent.
 - **Switching is a commit.** `make switch-game GAME=terraria` refuses to run while anyone is online, saves the world, flips the replica patches and `platform/active-game.yaml`, commits, syncs the outgoing game first and the incoming one second, and announces on Discord when the new server is ready. Git always says what is running.
 - **One metric contract.** The exporter sidecar of each catalog game exposes `game_up`, `game_players_online`, `game_player_online{player}` and `game_player_playtime_seconds_total{player}`, whatever the protocol behind it, so a new game reuses the same dashboard panels, alerts and Discord notifications.
 - **Alerts follow the desired state.** `GameDown` compares `kube_statefulset_replicas` with ready replicas, so a stopped game never pages.
@@ -271,7 +271,7 @@ A Budgets alarm fires above USD 1/month, and a CloudWatch alarm watches the size
 
 - [ ] Timed full DR drill and published RTO
 - [ ] Migrate Project Zomboid to the catalog and the `game_*` metric contract
-- [ ] Derive the alert, dashboard and switch-script game lists from the catalog
+- [ ] Generate the per-game alert rules from the catalog (the dashboard, switch script and CI already read it)
 - [ ] Manage the Helm releases (monitoring, External Secrets, Argo CD) through Argo CD
 - [ ] Renovate for image digests and chart versions
 - [ ] Migrate to the non-deprecated `proxmox_download_file` resource
