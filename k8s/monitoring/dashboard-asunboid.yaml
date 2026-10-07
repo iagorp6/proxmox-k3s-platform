@@ -8,12 +8,12 @@ metadata:
 data:
   asunboid.json: |
     {
-      "title": "AsunBoid - Servidor de Jogo",
+      "title": "AsunBoid - Plataforma de Jogos",
       "uid": "asunboid",
-      "description": "Project Zomboid B42 em K3s sobre Proxmox. Dashboard como código (GitOps via Argo CD).",
+      "description": "Plataforma de jogos em K3s sobre Proxmox (um jogo ativo por vez). Dashboard como código (GitOps via Argo CD).",
       "tags": [
         "homelab",
-        "zomboid",
+        "games",
         "k3s"
       ],
       "timezone": "America/Sao_Paulo",
@@ -52,8 +52,8 @@ data:
         },
         {
           "type": "stat",
-          "title": "Servidor",
-          "description": "O servidor responde ao RCON? Se OFFLINE por mais de 3 min, o alerta ZomboidDown dispara no Discord.",
+          "title": "Jogo ativo",
+          "description": "Jogo no ar agora (troca com make switch-game GAME=<jogo>).",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -66,7 +66,56 @@ data:
           },
           "targets": [
             {
-              "expr": "max(zomboid_up) or vector(0)",
+              "expr": "label_replace(label_replace(label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"zomboid|terraria\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"), \"jogo\", \"Project Zomboid\", \"game\", \"zomboid\"), \"jogo\", \"Terraria\", \"game\", \"terraria\")",
+              "refId": "A",
+              "legendFormat": "{{jogo}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              },
+              "noValue": "nenhum"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "name",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "id": 2
+        },
+        {
+          "type": "stat",
+          "title": "Servidor",
+          "description": "O jogo ativo responde (RCON no Zomboid, API REST no Terraria)? Alerta no Discord se cair.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 4,
+            "y": 1,
+            "w": 4,
+            "h": 4
+          },
+          "targets": [
+            {
+              "expr": "max((label_replace(max(zomboid_up), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"zomboid|terraria\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
               "refId": "A"
             }
           ],
@@ -116,25 +165,25 @@ data:
               ]
             }
           },
-          "id": 2
+          "id": 3
         },
         {
           "type": "stat",
           "title": "Players online",
-          "description": "Jogadores conectados agora, de no máximo 6 vagas.",
+          "description": "Jogadores conectados no jogo ativo, de no máximo 6 vagas.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "gridPos": {
-            "x": 4,
+            "x": 8,
             "y": 1,
             "w": 4,
             "h": 4
           },
           "targets": [
             {
-              "expr": "max(zomboid_players_online)",
+              "expr": "sum((label_replace(max(zomboid_players_online), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_players_online)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"zomboid|terraria\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
               "refId": "A"
             }
           ],
@@ -165,25 +214,25 @@ data:
               ]
             }
           },
-          "id": 3
+          "id": 4
         },
         {
           "type": "stat",
           "title": "Disponibilidade (7 dias)",
-          "description": "SLO: % do tempo em que o servidor respondeu nos últimos 7 dias. Meta: 99%. O restart diário das 6h consome cerca de 0,3%.",
+          "description": "SLO: % do tempo em que o jogo ativo respondeu nos últimos 7 dias. Trocas de jogo e o restart diário contam como indisponibilidade. Meta: 99%.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "gridPos": {
-            "x": 8,
+            "x": 12,
             "y": 1,
             "w": 4,
             "h": 4
           },
           "targets": [
             {
-              "expr": "avg_over_time((max(zomboid_up) or vector(0))[7d:5m])",
+              "expr": "avg_over_time((max((label_replace(max(zomboid_up), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"zomboid|terraria\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0))[7d:5m])",
               "refId": "A"
             }
           ],
@@ -222,60 +271,12 @@ data:
               ]
             }
           },
-          "id": 4
-        },
-        {
-          "type": "stat",
-          "title": "No ar há",
-          "description": "Tempo desde que o processo do servidor iniciou (restart diário, deploy ou crash).",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
-          "targets": [
-            {
-              "expr": "time() - max(kube_pod_container_state_started{namespace=\"zomboid\",container=\"server\"})",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "text",
-                    "value": null
-                  }
-                ]
-              },
-              "unit": "dtdurations"
-            },
-            "overrides": []
-          },
-          "options": {
-            "colorMode": "value",
-            "graphMode": "none",
-            "textMode": "value",
-            "justifyMode": "center",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            }
-          },
           "id": 5
         },
         {
           "type": "stat",
-          "title": "Último backup",
-          "description": "Tempo desde o último backup bem-sucedido do mundo (restic → AWS S3, diário às 5h30). Vermelho acima de 26h.",
+          "title": "Backup mais antigo",
+          "description": "Tempo desde o último backup bem-sucedido do jogo mais atrasado (restic → AWS S3, diário). Vermelho acima de 26h.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -288,7 +289,7 @@ data:
           },
           "targets": [
             {
-              "expr": "time() - max(kube_cronjob_status_last_successful_time{namespace=\"zomboid\",cronjob=\"zomboid-backup\"})",
+              "expr": "time() - min(kube_cronjob_status_last_successful_time{cronjob=~\".+-backup\"})",
               "refId": "A"
             }
           ],
@@ -344,7 +345,7 @@ data:
           },
           "targets": [
             {
-              "expr": "count(ALERTS{alertstate=\"firing\",alertname!~\"Watchdog|InfoInhibitor|PlayerOnline\"}) or vector(0)",
+              "expr": "count(ALERTS{alertstate=\"firing\",alertname!~\"Watchdog|InfoInhibitor|.*PlayerOnline\"}) or vector(0)",
               "refId": "A"
             }
           ],
@@ -394,8 +395,8 @@ data:
         },
         {
           "type": "state-timeline",
-          "title": "Servidor no ar (período selecionado)",
-          "description": "Faixa verde = servidor respondendo; vermelha = fora do ar. Mostra quando e por quanto tempo houve quedas.",
+          "title": "Jogo ativo e disponibilidade",
+          "description": "Linha de cima: qual jogo estava no ar. Linha de baixo: verde = respondendo, vermelho = fora (inclui o tempo de cada troca).",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -404,34 +405,22 @@ data:
             "x": 0,
             "y": 5,
             "w": 24,
-            "h": 3
+            "h": 5
           },
           "targets": [
             {
-              "expr": "max(zomboid_up) or vector(0)",
+              "expr": "max by (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"zomboid|terraria\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))",
               "refId": "A",
-              "legendFormat": "Servidor"
+              "legendFormat": "{{game}}"
+            },
+            {
+              "expr": "max((label_replace(max(zomboid_up), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"zomboid|terraria\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
+              "refId": "B",
+              "legendFormat": "Servidor no ar"
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "mappings": [
-                {
-                  "type": "value",
-                  "options": {
-                    "0": {
-                      "text": "OFFLINE",
-                      "color": "red",
-                      "index": 0
-                    },
-                    "1": {
-                      "text": "ONLINE",
-                      "color": "green",
-                      "index": 1
-                    }
-                  }
-                }
-              ],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -447,10 +436,70 @@ data:
               },
               "custom": {
                 "fillOpacity": 85,
-                "lineWidth": 0
+                "lineWidth": 0,
+                "insertNulls": 90000
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Servidor no ar"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "0": {
+                            "text": "OFFLINE",
+                            "color": "red",
+                            "index": 0
+                          },
+                          "1": {
+                            "text": "ONLINE",
+                            "color": "green",
+                            "index": 1
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "^(zomboid|terraria)$"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "1": {
+                            "text": "ativo",
+                            "color": "blue",
+                            "index": 0
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "blue"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "showValue": "never",
@@ -471,7 +520,7 @@ data:
           "collapsed": false,
           "gridPos": {
             "x": 0,
-            "y": 8,
+            "y": 10,
             "w": 24,
             "h": 1
           },
@@ -488,13 +537,13 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 9,
+            "y": 11,
             "w": 8,
             "h": 8
           },
           "targets": [
             {
-              "expr": "(sum by (player) (count_over_time(zomboid_player_online[24h])) * 30) and on (player) max by (player) (zomboid_player_online)",
+              "expr": "(label_replace(sum by (player) (count_over_time(zomboid_player_online[24h])) * 30, \"game\", \"zomboid\", \"\", \"\") or sum by (game, player) (count_over_time(game_player_online[24h])) * 30) and on (game, player) (label_replace(max by (player) (zomboid_player_online), \"game\", \"zomboid\", \"\", \"\") or max by (game, player) (game_player_online))",
               "refId": "A",
               "instant": true,
               "format": "table"
@@ -506,6 +555,38 @@ data:
               "noValue": "Ninguém online agora"
             },
             "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Jogo"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "zomboid": {
+                            "text": "Project Zomboid",
+                            "color": "text",
+                            "index": 0
+                          },
+                          "terraria": {
+                            "text": "Terraria",
+                            "color": "text",
+                            "index": 1
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
               {
                 "matcher": {
                   "id": "byName",
@@ -527,7 +608,13 @@ data:
                 "excludeByName": {
                   "Time": true
                 },
+                "indexByName": {
+                  "game": 0,
+                  "player": 1,
+                  "Value": 2
+                },
                 "renameByName": {
+                  "game": "Jogo",
                   "player": "Jogador",
                   "Value": "Jogou nas últimas 24h"
                 }
@@ -542,22 +629,22 @@ data:
         {
           "type": "timeseries",
           "title": "Players online ao longo do tempo",
-          "description": "Quantos jogadores estavam conectados em cada momento. Linha tracejada = limite de 6 vagas.",
+          "description": "Jogadores conectados em cada jogo. Linha tracejada = limite de 6 vagas.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "gridPos": {
             "x": 8,
-            "y": 9,
+            "y": 11,
             "w": 16,
             "h": 8
           },
           "targets": [
             {
-              "expr": "max(zomboid_players_online)",
+              "expr": "label_replace(max(zomboid_players_online), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_players_online)",
               "refId": "A",
-              "legendFormat": "players"
+              "legendFormat": "{{game}}"
             }
           ],
           "fieldConfig": {
@@ -565,10 +652,6 @@ data:
               "min": 0,
               "max": 6,
               "decimals": 0,
-              "color": {
-                "mode": "fixed",
-                "fixedColor": "blue"
-              },
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -595,10 +678,11 @@ data:
           },
           "options": {
             "legend": {
-              "showLegend": false
+              "displayMode": "list",
+              "placement": "bottom"
             },
             "tooltip": {
-              "mode": "single"
+              "mode": "multi"
             }
           },
           "id": 11
@@ -606,22 +690,22 @@ data:
         {
           "type": "state-timeline",
           "title": "Linha do tempo de sessões",
-          "description": "Cada faixa é um jogador; o trecho colorido é o período em que ele esteve online.",
+          "description": "Cada faixa é um jogador em um jogo; o trecho colorido é o período em que ele esteve online.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "gridPos": {
             "x": 0,
-            "y": 17,
+            "y": 19,
             "w": 24,
             "h": 7
           },
           "targets": [
             {
-              "expr": "max by (player) (zomboid_player_online)",
+              "expr": "label_replace(max by (player) (zomboid_player_online), \"game\", \"zomboid\", \"\", \"\") or max by (game, player) (game_player_online)",
               "refId": "A",
-              "legendFormat": "{{player}}"
+              "legendFormat": "{{player}} ({{game}})"
             }
           ],
           "fieldConfig": {
@@ -671,50 +755,50 @@ data:
         {
           "type": "table",
           "title": "Tempo online por jogador",
-          "description": "Tempo jogado em cada período, total desde o início, mortes do personagem e último acesso. A barra da coluna de 30 dias funciona como ranking.",
+          "description": "Por jogo: tempo jogado em cada período, total desde o início, mortes (Zomboid) e último acesso. A barra dos 30 dias funciona como ranking.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "gridPos": {
             "x": 0,
-            "y": 24,
+            "y": 26,
             "w": 24,
-            "h": 8
+            "h": 9
           },
           "targets": [
             {
-              "expr": "max by (player) (last_over_time(timestamp(zomboid_player_online)[30d:1m])) * 1000",
+              "expr": "label_replace(max by (player) (last_over_time(timestamp(zomboid_player_online)[30d:1m])) * 1000, \"game\", \"zomboid\", \"\", \"\") or max by (game, player) (last_over_time(timestamp(game_player_online)[30d:1m])) * 1000",
               "refId": "A",
               "instant": true,
               "format": "table"
             },
             {
-              "expr": "sum by (player) (count_over_time(zomboid_player_online[24h])) * 30",
+              "expr": "label_replace(sum by (player) (count_over_time(zomboid_player_online[24h])) * 30, \"game\", \"zomboid\", \"\", \"\") or sum by (game, player) (count_over_time(game_player_online[24h])) * 30",
               "refId": "B",
               "instant": true,
               "format": "table"
             },
             {
-              "expr": "sum by (player) (count_over_time(zomboid_player_online[7d])) * 30",
+              "expr": "label_replace(sum by (player) (count_over_time(zomboid_player_online[7d])) * 30, \"game\", \"zomboid\", \"\", \"\") or sum by (game, player) (count_over_time(game_player_online[7d])) * 30",
               "refId": "C",
               "instant": true,
               "format": "table"
             },
             {
-              "expr": "sum by (player) (count_over_time(zomboid_player_online[30d])) * 30",
+              "expr": "label_replace(sum by (player) (count_over_time(zomboid_player_online[30d])) * 30, \"game\", \"zomboid\", \"\", \"\") or sum by (game, player) (count_over_time(game_player_online[30d])) * 30",
               "refId": "D",
               "instant": true,
               "format": "table"
             },
             {
-              "expr": "max by (player) (zomboid_player_playtime_seconds_total)",
+              "expr": "label_replace(max by (player) (zomboid_player_playtime_seconds_total), \"game\", \"zomboid\", \"\", \"\") or max by (game, player) (game_player_playtime_seconds_total)",
               "refId": "E",
               "instant": true,
               "format": "table"
             },
             {
-              "expr": "round(sum by (player) (increase(zomboid_player_deaths_total[30d])))",
+              "expr": "label_replace(round(sum by (player) (increase(zomboid_player_deaths_total[30d]))), \"game\", \"zomboid\", \"\", \"\")",
               "refId": "F",
               "instant": true,
               "format": "table"
@@ -728,6 +812,38 @@ data:
               }
             },
             "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Jogo"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "zomboid": {
+                            "text": "Project Zomboid",
+                            "color": "text",
+                            "index": 0
+                          },
+                          "terraria": {
+                            "text": "Terraria",
+                            "color": "text",
+                            "index": 1
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
               {
                 "matcher": {
                   "id": "byName",
@@ -808,15 +924,17 @@ data:
                   "Time": true
                 },
                 "indexByName": {
-                  "player": 0,
-                  "Value #A": 1,
-                  "Value #B": 2,
-                  "Value #C": 3,
-                  "Value #D": 4,
-                  "Value #E": 5,
-                  "Value #F": 6
+                  "game": 0,
+                  "player": 1,
+                  "Value #A": 2,
+                  "Value #B": 3,
+                  "Value #C": 4,
+                  "Value #D": 5,
+                  "Value #E": 6,
+                  "Value #F": 7
                 },
                 "renameByName": {
+                  "game": "Jogo",
                   "player": "Jogador",
                   "Value #A": "Último acesso",
                   "Value #B": "Últimas 24h",
@@ -856,7 +974,7 @@ data:
           "collapsed": false,
           "gridPos": {
             "x": 0,
-            "y": 32,
+            "y": 35,
             "w": 24,
             "h": 1
           },
@@ -866,27 +984,27 @@ data:
         {
           "type": "timeseries",
           "title": "Memória do servidor",
-          "description": "Memória usada pelo jogo contra o limite do container (linha vermelha). Se encostar no limite, o Kubernetes mata o processo (OOMKilled). Alerta acima de 90%.",
+          "description": "Memória usada pelo jogo ativo contra o limite do container (linha vermelha). Encostar no limite = OOMKilled.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "gridPos": {
             "x": 0,
-            "y": 33,
+            "y": 36,
             "w": 10,
             "h": 8
           },
           "targets": [
             {
-              "expr": "max(container_memory_working_set_bytes{namespace=\"zomboid\",container=\"server\"})",
+              "expr": "max by (namespace) (container_memory_working_set_bytes{namespace=~\"zomboid|terraria\",container=\"server\"})",
               "refId": "A",
-              "legendFormat": "em uso"
+              "legendFormat": "{{namespace}} em uso"
             },
             {
-              "expr": "max(kube_pod_container_resource_limits{namespace=\"zomboid\",container=\"server\",resource=\"memory\"})",
+              "expr": "max by (namespace) (kube_pod_container_resource_limits{namespace=~\"zomboid|terraria\",container=\"server\",resource=\"memory\"})",
               "refId": "B",
-              "legendFormat": "limite"
+              "legendFormat": "{{namespace}} limite"
             }
           ],
           "fieldConfig": {
@@ -901,8 +1019,8 @@ data:
             "overrides": [
               {
                 "matcher": {
-                  "id": "byName",
-                  "options": "limite"
+                  "id": "byRegexp",
+                  "options": ".*limite$"
                 },
                 "properties": [
                   {
@@ -944,22 +1062,22 @@ data:
         {
           "type": "timeseries",
           "title": "CPU do servidor",
-          "description": "Núcleos de CPU usados pelo jogo. A VM tem 4 vCPUs (linha tracejada). Picos durante a carga do mundo são normais.",
+          "description": "Núcleos usados pelo jogo ativo. A VM tem 4 vCPUs (linha tracejada).",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "gridPos": {
             "x": 10,
-            "y": 33,
+            "y": 36,
             "w": 10,
             "h": 8
           },
           "targets": [
             {
-              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"zomboid\",container=\"server\"}[5m]))",
+              "expr": "sum by (namespace) (rate(container_cpu_usage_seconds_total{namespace=~\"zomboid|terraria\",container=\"server\"}[5m]))",
               "refId": "A",
-              "legendFormat": "cores"
+              "legendFormat": "{{namespace}}"
             }
           ],
           "fieldConfig": {
@@ -994,10 +1112,11 @@ data:
           },
           "options": {
             "legend": {
-              "showLegend": false
+              "displayMode": "list",
+              "placement": "bottom"
             },
             "tooltip": {
-              "mode": "single"
+              "mode": "multi"
             }
           },
           "id": 16
@@ -1005,20 +1124,20 @@ data:
         {
           "type": "stat",
           "title": "Crashes (7 dias)",
-          "description": "Reinícios inesperados do processo do jogo (crash ou OOMKilled). Restarts planejados não contam.",
+          "description": "Reinícios inesperados do processo de algum jogo (crash ou OOMKilled). Trocas e restarts planejados não contam.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "gridPos": {
             "x": 20,
-            "y": 33,
+            "y": 36,
             "w": 4,
             "h": 8
           },
           "targets": [
             {
-              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"zomboid\",container=\"server\"}[7d])) or vector(0)",
+              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=~\"zomboid|terraria\",container=\"server\"}[7d])) or vector(0)",
               "refId": "A"
             }
           ],
@@ -1076,7 +1195,7 @@ data:
           "collapsed": true,
           "gridPos": {
             "x": 0,
-            "y": 41,
+            "y": 44,
             "w": 24,
             "h": 1
           },
@@ -1091,7 +1210,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 42,
+                "y": 45,
                 "w": 4,
                 "h": 4
               },
@@ -1160,7 +1279,7 @@ data:
               },
               "gridPos": {
                 "x": 4,
-                "y": 42,
+                "y": 45,
                 "w": 4,
                 "h": 4
               },
@@ -1229,7 +1348,7 @@ data:
               },
               "gridPos": {
                 "x": 8,
-                "y": 42,
+                "y": 45,
                 "w": 4,
                 "h": 4
               },
@@ -1298,7 +1417,7 @@ data:
               },
               "gridPos": {
                 "x": 12,
-                "y": 42,
+                "y": 45,
                 "w": 4,
                 "h": 4
               },
@@ -1355,7 +1474,7 @@ data:
               },
               "gridPos": {
                 "x": 16,
-                "y": 42,
+                "y": 45,
                 "w": 4,
                 "h": 4
               },
@@ -1413,7 +1532,7 @@ data:
               },
               "gridPos": {
                 "x": 20,
-                "y": 42,
+                "y": 45,
                 "w": 4,
                 "h": 4
               },
@@ -1470,7 +1589,7 @@ data:
           "collapsed": true,
           "gridPos": {
             "x": 0,
-            "y": 42,
+            "y": 45,
             "w": 24,
             "h": 1
           },
@@ -1485,13 +1604,13 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 43,
+                "y": 46,
                 "w": 24,
                 "h": 5
               },
               "targets": [
                 {
-                  "expr": "ALERTS{alertstate=\"firing\",alertname!~\"Watchdog|InfoInhibitor|PlayerOnline\"}",
+                  "expr": "ALERTS{alertstate=\"firing\",alertname!~\"Watchdog|InfoInhibitor|.*PlayerOnline\"}",
                   "refId": "A",
                   "instant": true,
                   "format": "table"
@@ -1525,20 +1644,20 @@ data:
             {
               "type": "logs",
               "title": "Entradas e saídas de jogadores",
-              "description": "Linhas do log do servidor sobre conexões.",
+              "description": "Linhas dos logs dos servidores sobre conexões.",
               "datasource": {
                 "type": "loki",
                 "uid": "loki"
               },
               "gridPos": {
                 "x": 0,
-                "y": 48,
+                "y": 51,
                 "w": 12,
                 "h": 10
               },
               "targets": [
                 {
-                  "expr": "{namespace=\"zomboid\", container=\"server\"} |~ \"(?i)(connected|disconnect|logged)\"",
+                  "expr": "{namespace=~\"zomboid|terraria\", container=\"server\"} |~ \"(?i)(connected|disconnect|logged|has joined|has left)\"",
                   "refId": "A"
                 }
               ],
@@ -1552,21 +1671,21 @@ data:
             },
             {
               "type": "logs",
-              "title": "Erros e avisos do servidor",
-              "description": "Somente linhas WARN e ERROR. Senhas nunca chegam ao Loki (filtradas na coleta).",
+              "title": "Erros e avisos dos servidores",
+              "description": "Linhas com erro, exceção ou aviso. Senhas nunca chegam ao Loki (filtradas na coleta).",
               "datasource": {
                 "type": "loki",
                 "uid": "loki"
               },
               "gridPos": {
                 "x": 12,
-                "y": 48,
+                "y": 51,
                 "w": 12,
                 "h": 10
               },
               "targets": [
                 {
-                  "expr": "{namespace=\"zomboid\", container=\"server\", level=~\"ERROR|WARN\"}",
+                  "expr": "{namespace=~\"zomboid|terraria\", container=\"server\"} |~ \"(?i)(error|exception|warn)\"",
                   "refId": "A"
                 }
               ],
