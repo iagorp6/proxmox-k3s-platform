@@ -23,7 +23,7 @@ RCON_PASSWORD = os.environ["RCON_PASSWORD"]
 PORT = int(os.getenv("EXPORTER_PORT", "9105"))
 POLL_SECONDS = int(os.getenv("POLL_SECONDS", "15"))
 STATE_FILE = os.getenv("STATE_FILE", "/data/exporter/state.json")
-# Ex.: "There are 2 of a max of 6 players online: iagoat, joao"
+# Ex.: "There are 2 of a max of 6 players online: IguinhoGamerPvP, joao"
 LIST_RE = re.compile(r"There are (\d+) of a max(?: of)? \d+ players online:?\s*(.*)", re.S)
 
 lock = threading.Lock()
