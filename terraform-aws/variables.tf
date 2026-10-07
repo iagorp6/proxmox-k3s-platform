@@ -20,3 +20,9 @@ variable "budget_limit_usd" {
   type        = string
   default     = "1"
 }
+
+variable "backup_size_alert_gb" {
+  description = "Tamanho do bucket de backup (GB) a partir do qual o alarme dispara"
+  type        = number
+  default     = 15
+}
