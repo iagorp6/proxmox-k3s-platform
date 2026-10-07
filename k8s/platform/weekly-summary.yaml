@@ -1,8 +1,8 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: zomboid-weekly-summary
-  namespace: zomboid
+  name: weekly-summary
+  namespace: platform
 spec:
   schedule: "0 20 * * 0"
   timeZone: America/Sao_Paulo
@@ -49,4 +49,4 @@ spec:
           volumes:
             - name: app
               configMap:
-                name: zomboid-weekly-summary
+                name: weekly-summary
