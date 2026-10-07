@@ -13,5 +13,6 @@ configMapGenerator:
     files:
       - exporter.py=scripts/exporter.py
       - users.py=scripts/users.py
+      - easyauth.py=scripts/easyauth.py
 generatorOptions:
   disableNameSuffixHash: true

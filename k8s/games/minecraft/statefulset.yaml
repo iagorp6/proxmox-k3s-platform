@@ -53,6 +53,27 @@ spec:
             - name: scripts
               mountPath: /scripts
               readOnly: true
+        - name: auth-messages
+          # mensagens do EasyAuth em português (config/EasyAuth/translation.conf)
+          image: python:3.13-slim@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b
+          command: ["python", "/scripts/easyauth.py"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
       containers:
         - name: server
           image: itzg/minecraft-server:java21@sha256:3da0b5e26a3adccc4ed8708f90058e84ebc09fc6f8ced0abc02a1156be656bf7
