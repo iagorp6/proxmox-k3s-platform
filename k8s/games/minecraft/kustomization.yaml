@@ -12,5 +12,6 @@ configMapGenerator:
   - name: minecraft-scripts
     files:
       - exporter.py=scripts/exporter.py
+      - users.py=scripts/users.py
 generatorOptions:
   disableNameSuffixHash: true
