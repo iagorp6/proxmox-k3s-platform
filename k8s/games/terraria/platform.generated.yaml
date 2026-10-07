@@ -1,0 +1,146 @@
+# Gerado por scripts/render-games.py a partir de game.yaml: não edite à mão.
+apiVersion: v1
+kind: Service
+metadata:
+  name: terraria
+  namespace: terraria
+  labels:
+    app.kubernetes.io/name: terraria
+    platform.homelab/game: terraria
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: terraria
+  ports:
+  - name: game
+    port: 16261
+    targetPort: game
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: terraria-metrics
+  namespace: terraria
+  labels:
+    app.kubernetes.io/name: terraria-metrics
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: terraria
+  ports:
+  - name: metrics
+    port: 9105
+    targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: terraria
+  namespace: terraria
+  labels:
+    release: kps
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: terraria-metrics
+  endpoints:
+  - port: metrics
+    interval: 30s
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: terraria-backup
+  namespace: terraria
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: aws-ssm
+  target:
+    name: terraria-backup
+    creationPolicy: Owner
+  data:
+  - secretKey: RESTIC_REPOSITORY
+    remoteRef:
+      key: /homelab/backup/restic-repository
+  - secretKey: RESTIC_PASSWORD
+    remoteRef:
+      key: /homelab/backup/restic-password
+  - secretKey: AWS_ACCESS_KEY_ID
+    remoteRef:
+      key: /homelab/backup/restic-aws-access-key-id
+  - secretKey: AWS_SECRET_ACCESS_KEY
+    remoteRef:
+      key: /homelab/backup/restic-aws-secret-access-key
+  - secretKey: AWS_DEFAULT_REGION
+    remoteRef:
+      key: /homelab/backup/aws-region
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: terraria-backup
+  namespace: terraria
+spec:
+  schedule: 45 5 * * *
+  timeZone: America/Sao_Paulo
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1654
+            runAsGroup: 1654
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: restic
+            image: restic/restic:latest@sha256:9940e6c7421ab3a21ee9fdc4e91596d04c792b600d31b102696c75cbf3ac4481
+            command:
+            - /bin/sh
+            - -c
+            args:
+            - |
+              set -e
+              restic backup /data/worlds /data/tshock --exclude /data/tshock/logs --tag terraria --host terraria --retry-lock 10m
+              restic forget --tag terraria --host terraria --keep-daily 7 --keep-weekly 4 --prune --retry-lock 10m
+              restic snapshots --tag terraria --latest 1
+            envFrom:
+            - secretRef:
+                name: terraria-backup
+            env:
+            - name: RESTIC_CACHE_DIR
+              value: /cache
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                memory: 512Mi
+            volumeMounts:
+            - name: data
+              mountPath: /data
+              readOnly: true
+            - name: cache
+              mountPath: /cache
+          volumes:
+          - name: data
+            persistentVolumeClaim:
+              claimName: data-terraria-0
+              readOnly: true
+          - name: cache
+            emptyDir: {}

@@ -1,0 +1,5 @@
+# Padrões da plataforma de jogos (lidos por scripts/render-games.py)
+repoURL: git@github.com:iagorp6/proxmox-k3s-platform.git
+resticImage: restic/restic:latest@sha256:9940e6c7421ab3a21ee9fdc4e91596d04c792b600d31b102696c75cbf3ac4481
+backupRetention: { daily: 7, weekly: 4 }
+metricsPort: 9105

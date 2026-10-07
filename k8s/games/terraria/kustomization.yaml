@@ -5,9 +5,7 @@ resources:
   - namespace.yaml
   - externalsecrets.yaml
   - statefulset.yaml
-  - service.yaml
-  - metrics.yaml
-  - backup.yaml
+  - platform.generated.yaml   # gerado por scripts/render-games.py
 patches:
   - path: replicas.yaml   # gerado por scripts/switch-game.py
 configMapGenerator:
