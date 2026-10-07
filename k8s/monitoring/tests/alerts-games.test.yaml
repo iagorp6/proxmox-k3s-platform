@@ -1,0 +1,84 @@
+rule_files: [alerts-games.generated.yaml]
+evaluation_interval: 1m
+tests:
+  - name: jogo ativo sem pod pronto dispara GameDown; jogo parado nao
+    interval: 1m
+    input_series:
+      - series: 'kube_statefulset_replicas{namespace="minecraft",statefulset="minecraft"}'
+        values: '1x20'
+      - series: 'kube_statefulset_status_replicas_ready{namespace="minecraft",statefulset="minecraft"}'
+        values: '0x20'
+      - series: 'kube_statefulset_replicas{namespace="terraria",statefulset="terraria"}'
+        values: '0x20'
+      - series: 'kube_statefulset_status_replicas_ready{namespace="terraria",statefulset="terraria"}'
+        values: '0x20'
+      - series: 'kube_statefulset_replicas{namespace="zomboid",statefulset="zomboid"}'
+        values: '1x20'
+      - series: 'kube_statefulset_status_replicas_ready{namespace="zomboid",statefulset="zomboid"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: GameDown
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: GameDown
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: minecraft, statefulset: minecraft}
+            exp_annotations:
+              summary: "Servidor de minecraft fora do ar"
+              description: "minecraft é o jogo ativo, mas o pod não está pronto há mais de 10 minutos."
+              action: "kubectl -n minecraft get pods e kubectl -n minecraft logs minecraft-0 -c server --tail=30"
+  - name: jogo ativo e pronto nao dispara
+    interval: 1m
+    input_series:
+      - series: 'kube_statefulset_replicas{namespace="minecraft",statefulset="minecraft"}'
+        values: '1x20'
+      - series: 'kube_statefulset_status_replicas_ready{namespace="minecraft",statefulset="minecraft"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: GameDown
+        exp_alerts: []
+  - name: memoria acima de 90 por cento por 10 min dispara; 69 por cento nao
+    interval: 1m
+    input_series:
+      - series: 'container_memory_working_set_bytes{namespace="minecraft",pod="minecraft-0",container="server"}'
+        values: '9900x20'
+      - series: 'kube_pod_container_resource_limits{namespace="minecraft",pod="minecraft-0",container="server",resource="memory"}'
+        values: '10240x20'
+      - series: 'container_memory_working_set_bytes{namespace="terraria",pod="terraria-0",container="server"}'
+        values: '1766x20'
+      - series: 'kube_pod_container_resource_limits{namespace="terraria",pod="terraria-0",container="server",resource="memory"}'
+        values: '2560x20'
+      - series: 'container_memory_working_set_bytes{namespace="minecraft",pod="minecraft-0",container="exporter"}'
+        values: '95x20'
+      - series: 'kube_pod_container_resource_limits{namespace="minecraft",pod="minecraft-0",container="exporter",resource="memory"}'
+        values: '96x20'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: GameMemoryHigh
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: minecraft, pod: minecraft-0}
+            exp_annotations:
+              summary: "Servidor de minecraft perto do limite de memória"
+              description: "Uso de 96.68% do limite. Risco de OOMKilled."
+              action: "Comparar o pico no dashboard e avaliar subir o limite de memória no StatefulSet de minecraft."
+  - name: restart do container do jogo dispara GameRestarted
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_restarts_total{namespace="terraria",pod="terraria-0",container="server"}'
+        values: '0x5 1x20'
+      - series: 'kube_pod_container_status_restarts_total{namespace="minecraft",pod="minecraft-0",container="server"}'
+        values: '0x25'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: GameRestarted
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: GameRestarted
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: terraria, pod: terraria-0, container: server}
+            exp_annotations:
+              summary: "Servidor de terraria reiniciou sozinho"
+              description: "O processo do jogo caiu e o Kubernetes o reiniciou. Trocas de jogo e deploys não disparam este alerta."
+              action: "kubectl -n terraria logs terraria-0 -c server --previous --tail=40"
