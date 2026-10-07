@@ -184,30 +184,31 @@ spec:
             description: "O container foi OOMKilled nos últimos 15 minutos."
             action: "Comparar o uso com o limite e ajustar os resources no values ou no manifest."
 
-    - name: terraria
+    - name: games
       rules:
-        - alert: TerrariaPlayerOnline
-          expr: max by (player) (game_player_online{game="terraria"}) == 1
-          labels:
-            severity: info
-            notify: players
-          annotations:
-            summary: "{{ $labels.player }} está online no Terraria"
-            description: >-
-              {{ with query "max(game_players_online{game='terraria'})" }}{{ . | first | value | printf "%.0f" }}{{ end }}/6 no Terraria:
-              {{ range $i, $s := query "max by (player) (game_player_online{game='terraria'})" }}{{ if $i }}, {{ end }}{{ $s.Labels.player }}{{ end }}
-        - alert: TerrariaDown
+        # Genéricas: valem para todo jogo no contrato game_* (Terraria, Minecraft e os próximos)
+        - alert: GameDown
           expr: |
-            kube_statefulset_replicas{namespace="terraria",statefulset="terraria"} > 0
+            kube_statefulset_replicas{namespace=~"terraria|minecraft"} > 0
             unless on (namespace, statefulset)
-            kube_statefulset_status_replicas_ready{namespace="terraria",statefulset="terraria"} > 0
+            kube_statefulset_status_replicas_ready{namespace=~"terraria|minecraft"} > 0
           for: 10m
           labels:
             severity: critical
           annotations:
-            summary: "Servidor do Terraria fora do ar"
-            description: "O Terraria é o jogo ativo, mas o pod não está pronto há mais de 10 minutos."
-            action: "kubectl -n terraria get pods e kubectl -n terraria logs terraria-0 -c server --tail=30"
+            summary: "Servidor de {{ $labels.namespace }} fora do ar"
+            description: "{{ $labels.namespace }} é o jogo ativo, mas o pod não está pronto há mais de 10 minutos."
+            action: "kubectl -n {{ $labels.namespace }} get pods e kubectl -n {{ $labels.namespace }} logs {{ $labels.statefulset }}-0 -c server --tail=30"
+        - alert: GamePlayerOnline
+          expr: max by (game, player) (game_player_online) == 1
+          labels:
+            severity: info
+            notify: players
+          annotations:
+            summary: "{{ $labels.player }} está online em {{ $labels.game }}"
+            description: >-
+              {{ with query (printf "max(game_players_online{game='%s'})" $labels.game) }}{{ . | first | value | printf "%.0f" }}{{ end }}/6 em {{ $labels.game }}:
+              {{ range $i, $s := query (printf "max by (player) (game_player_online{game='%s'})" $labels.game) }}{{ if $i }}, {{ end }}{{ $s.Labels.player }}{{ end }}
 
     - name: players
       rules:

@@ -75,6 +75,11 @@ jobs:
           kubectl kustomize k8s/games/terraria | kubeconform -strict -summary \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+      - name: Validate minecraft (kustomize)
+        run: |
+          kubectl kustomize k8s/games/minecraft | kubeconform -strict -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
       - name: Validate monitoring manifests
         run: |
           kubeconform -strict -summary \
@@ -108,7 +113,7 @@ jobs:
         run: shellcheck scripts/*.sh k8s/monitoring/deploy.sh
 
       - name: Python syntax
-        run: python3 -m py_compile k8s/zomboid/exporter/*.py k8s/games/terraria/scripts/*.py scripts/*.py
+        run: python3 -m py_compile k8s/zomboid/exporter/*.py k8s/games/terraria/scripts/*.py k8s/games/minecraft/scripts/*.py scripts/*.py
 
   security:
     name: Security scan (Trivy)

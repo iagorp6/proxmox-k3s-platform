@@ -1,0 +1,15 @@
+# Catálogo da plataforma: o render-games.py gera Service, métricas, backup e o App do Argo CD.
+name: minecraft
+displayName: Minecraft (COBBLEVERSE)
+status: active
+memory: 8Gi
+monitoring: rcon
+namespace: minecraft
+runAsUser: 1000
+ports:
+  - { name: game, port: 16262, protocol: TCP }
+backup:
+  schedule: "15 5 * * *"
+  pvc: data-minecraft-0
+  paths: [/data/world]
+metrics: true
