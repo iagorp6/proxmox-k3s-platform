@@ -11,23 +11,11 @@ CRD_CATALOG='https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Gro
 
 # ---------- ferramentas (instala em ~/.local/bin se faltar) ----------
 ensure_tools() {
-  if ! command -v tflint >/dev/null; then
-    echo ">> instalando tflint"
-    curl -fsSL -o /tmp/tflint.zip https://github.com/terraform-linters/tflint/releases/latest/download/tflint_linux_amd64.zip
-    python3 -c "import zipfile,sys; zipfile.ZipFile('/tmp/tflint.zip').extract('tflint', sys.argv[1])" "$BIN"
-    chmod +x "$BIN/tflint"
-  fi
-  if ! command -v kubeconform >/dev/null; then
-    echo ">> instalando kubeconform"
-    curl -fsSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz -C "$BIN" kubeconform
-  fi
-  if ! command -v trivy >/dev/null; then
-    echo ">> instalando trivy"
-    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "$BIN" >/dev/null
-  fi
+  # tflint, kubeconform e trivy: mesmas versões e hashes do CI (reinstala se a versão local for outra)
+  "$ROOT/scripts/install-ci-tools.sh" "$BIN" || { echo "ERRO: falha ao instalar as ferramentas do CI"; exit 2; }
   if ! command -v ansible-lint >/dev/null; then
     echo ">> instalando ansible-lint"
-    pipx install --include-deps ansible-lint >/dev/null
+    pipx install --include-deps "ansible-lint==26.9.0" >/dev/null   # mesma versão do ci.yml
   fi
   command -v shellcheck >/dev/null || { echo "ERRO: instale o shellcheck (sudo apt-get install -y shellcheck)"; exit 2; }
   local out tool

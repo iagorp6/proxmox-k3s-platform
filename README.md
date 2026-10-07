@@ -21,7 +21,7 @@ The workload is a **Project Zomboid (Build 42) dedicated server** for a small gr
 - **Alerting designed to be trusted:** severities mapped to response time, a first-step action in every message, a mute window for the daily restart, inhibition of cascading alerts, and an external dead man's switch.
 - **Secrets never in Git:** Bitwarden (humans) → AWS SSM (machines) → External Secrets (cluster), with self-healing Secrets.
 - **Backups you can restore:** daily encrypted restic snapshots to S3, restore tested.
-- **Reproducible CI:** pinned tool versions, actions and runner image; Dependabot; a local runner that mirrors CI and verifies the tools themselves.
+- **Reproducible CI:** tool versions pinned and checksum-verified, actions pinned by commit SHA, pinned runner image; Dependabot; a local runner that mirrors CI and verifies the tools themselves.
 - **Near-zero cost:** S3 and SSM usage is measured in cents per month.
 
 ---
@@ -98,7 +98,7 @@ k8s/zomboid/ Game server, exporter source, backup/restart/summary CronJobs
 k8s/monitoring/ Helm values, alert rules, generated Grafana dashboard
 k8s/external-secrets/ External Secrets Operator + ClusterSecretStore (AWS SSM)
 scripts/ Dashboard generator, local CI runner, secret publishing, image pinning
-docs/ Runbooks
+docs/ Architecture decision records, client installer for the Minecraft modpack
 
 ---
 
@@ -176,7 +176,7 @@ The dashboard JSON is **generated** by `scripts/build-dashboard.py`, so it is re
 | Built-in game backups | On start and on version change | Corrupted save, bad update |
 | restic → S3 | Daily, 7 daily + 4 weekly | Disk, VM or host loss |
 
-A restore of the latest snapshot completes in about **2 seconds** for the current world size. A full rebuild drill (VM from Terraform, cluster from Ansible, workloads from Argo CD, Secrets from SSM, world from S3) is documented in the runbook; the measured RTO will be published here.
+A restore of the latest snapshot completes in about **2 seconds** for the current world size. A full rebuild drill (VM from Terraform, cluster from Ansible, workloads from Argo CD, Secrets from SSM, world from S3) is on the roadmap; the measured RTO will be published here.
 
 ---
 
@@ -196,7 +196,7 @@ A restore of the latest snapshot completes in about **2 seconds** for the curren
 
 Every push runs Terraform `fmt`/`validate`/`tflint` for both stacks, `ansible-lint`, `kubeconform` (including CRDs), the dashboard drift check, `shellcheck`, Python syntax and a Trivy secret scan.
 
-- **Reproducible:** tool versions, GitHub Actions versions and the runner image are pinned; Dependabot proposes upgrades weekly, and they merge only on a green build.
+- **Reproducible:** the runner image and the versions of Terraform, tflint, kubeconform, Trivy and ansible-lint are pinned; downloaded binaries are verified by SHA-256 (`scripts/install-ci-tools.sh`, shared by CI and the local runner) and GitHub Actions are pinned by commit SHA. Dependabot proposes upgrades weekly, and they merge only on a green build.
 - **Same checks locally:** `scripts/ci-local.sh` runs the identical checks on a clean copy of the tracked files (so local secrets cannot leak into the scan) and refuses to run if any tool fails a version smoke test.
 
 ---
