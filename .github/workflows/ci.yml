@@ -65,9 +65,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install kubeconform (versão fixa, SHA-256 conferido)
+      - name: Install kubeconform e promtool (versão fixa, SHA-256 conferido)
         run: |
-          bash scripts/install-ci-tools.sh "$HOME/bin" kubeconform
+          bash scripts/install-ci-tools.sh "$HOME/bin" kubeconform promtool
           echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: Install PyYAML (leitura do catálogo de jogos)
         run: sudo apt-get install -y -qq python3-yaml >/dev/null
@@ -86,6 +86,8 @@ jobs:
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             k8s/monitoring/alerts-homelab.yaml k8s/monitoring/alerts-games.generated.yaml k8s/monitoring/dashboard-asunboid.yaml
+      - name: Alert rules (anotações obrigatórias, promtool check e testes unitários)
+        run: python3 scripts/test-alerts.py
       - name: Dashboard YAML in sync with generator
         run: |
           python3 scripts/build-dashboard.py

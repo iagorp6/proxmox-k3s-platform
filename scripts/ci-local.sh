@@ -11,7 +11,7 @@ CRD_CATALOG='https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Gro
 
 # ---------- ferramentas (instala em ~/.local/bin se faltar) ----------
 ensure_tools() {
-  # tflint, kubeconform e trivy: mesmas versões e hashes do CI (reinstala se a versão local for outra)
+  # tflint, kubeconform, trivy e promtool: mesmas versões e hashes do CI (reinstala se a versão local for outra)
   "$ROOT/scripts/install-ci-tools.sh" "$BIN" || { echo "ERRO: falha ao instalar as ferramentas do CI"; exit 2; }
   if ! command -v ansible-lint >/dev/null; then
     echo ">> instalando ansible-lint"
@@ -19,7 +19,7 @@ ensure_tools() {
   fi
   command -v shellcheck >/dev/null || { echo "ERRO: instale o shellcheck (sudo apt-get install -y shellcheck)"; exit 2; }
   local out tool
-  for tool in terraform tflint kubeconform trivy ansible-lint shellcheck; do
+  for tool in terraform tflint kubeconform trivy promtool ansible-lint shellcheck; do
     out="$(tool_version "$tool" 2>&1 || true)"
     [[ "$out" =~ [0-9]+\.[0-9]+ ]] || { echo "ERRO: $tool não responde com a versão (instalação corrompida?)"; exit 2; }
   done
@@ -64,6 +64,7 @@ k8s_check() {
   kubeconform -strict -summary -schema-location default -schema-location "$CRD_CATALOG" \
     k8s/monitoring/alerts-homelab.yaml k8s/monitoring/alerts-games.generated.yaml k8s/monitoring/dashboard-asunboid.yaml k8s/monitoring/externalsecrets.yaml \
     k8s/argocd/root.yaml k8s/argocd/apps/*.yaml k8s/external-secrets/cluster-secret-store.yaml || return 1
+  python3 scripts/test-alerts.py || return 1
   cp k8s/monitoring/dashboard-asunboid.yaml /tmp/dashboard-committed.yaml
   python3 scripts/build-dashboard.py >/dev/null || return 1
   if ! cmp -s /tmp/dashboard-committed.yaml k8s/monitoring/dashboard-asunboid.yaml; then

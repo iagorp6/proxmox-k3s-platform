@@ -1,0 +1,111 @@
+rule_files: [alerts-homelab.yaml]
+evaluation_interval: 1m
+tests:
+  - name: Zomboid ativo e sem metricas dispara ZomboidExporterMissing
+    interval: 1m
+    input_series:
+      - series: 'kube_statefulset_replicas{namespace="zomboid",statefulset="zomboid"}'
+        values: '1x15'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: ZomboidExporterMissing
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: ZomboidExporterMissing
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "Sem métricas do servidor do jogo"
+              description: "O pod do jogo não está sendo coletado: parado, Pending ou em crash."
+              action: "kubectl -n zomboid describe pod zomboid-0 | tail -15"
+  - name: Zomboid parado (outro jogo ativo) nao dispara alerta nenhum do Zomboid
+    interval: 1m
+    input_series:
+      - series: 'kube_statefulset_replicas{namespace="zomboid",statefulset="zomboid"}'
+        values: '0x15'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: ZomboidExporterMissing
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: ZomboidDown
+        exp_alerts: []
+  - name: Zomboid sem responder ao RCON por 5 min dispara ZomboidDown
+    interval: 1m
+    input_series:
+      - series: 'zomboid_up'
+        values: '1x3 0x15'
+      - series: 'kube_statefulset_replicas{namespace="zomboid",statefulset="zomboid"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: ZomboidDown
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: ZomboidDown
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "Servidor do jogo fora do ar"
+              description: "O servidor não responde ao RCON há mais de 5 minutos. Os jogadores não conseguem entrar."
+              action: "kubectl -n zomboid get pods e kubectl -n zomboid logs zomboid-0 -c server --tail=30"
+  - name: backup sem sucesso ha mais de 26h dispara BackupStale; backup em dia e outros CronJobs nao
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_status_last_successful_time{namespace="minecraft",cronjob="minecraft-backup"}'
+        values: '0x1700'            # último sucesso no instante zero: fica velho com o tempo
+      - series: 'kube_cronjob_status_last_successful_time{namespace="terraria",cronjob="terraria-backup"}'
+        values: '0+60x1700'         # sucesso sempre recente
+      - series: 'kube_cronjob_status_last_successful_time{namespace="zomboid",cronjob="zomboid-daily-restart"}'
+        values: '0x1700'            # não é backup: fora do alerta
+    alert_rule_test:
+      - eval_time: 25h
+        alertname: BackupStale
+        exp_alerts: []
+      - eval_time: 27h
+        alertname: BackupStale
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: minecraft, cronjob: minecraft-backup}
+            exp_annotations:
+              summary: "Sem backup bem-sucedido de minecraft há mais de 26h"
+              description: "O CronJob minecraft-backup não tem sucesso registrado nas últimas 26 horas."
+              action: "kubectl -n minecraft create job --from=cronjob/minecraft-backup backup-manual"
+  - name: backup agendado que nunca teve sucesso dispara BackupLastRunFailed
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_status_last_schedule_time{namespace="minecraft",cronjob="minecraft-backup"}'
+        values: '100x60'
+      - series: 'kube_cronjob_status_last_schedule_time{namespace="terraria",cronjob="terraria-backup"}'
+        values: '100x60'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="terraria",cronjob="terraria-backup"}'
+        values: '130x60'            # terminou com sucesso depois do agendamento
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: BackupLastRunFailed
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: BackupLastRunFailed
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: minecraft, cronjob: minecraft-backup}
+            exp_annotations:
+              summary: "Backup de minecraft falhou na última execução"
+              description: "A execução mais recente do CronJob minecraft-backup não terminou com sucesso."
+              action: "kubectl -n minecraft logs $(kubectl -n minecraft get jobs -o name --sort-by=.metadata.creationTimestamp | tail -1) --tail=30"
+  - name: restart por falta de memoria dispara ContainerOOMKilled em qualquer namespace
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_restarts_total{namespace="monitoring",pod="grafana-0",container="grafana"}'
+        values: '0x5 1x20'
+      - series: 'kube_pod_container_status_last_terminated_reason{namespace="monitoring",pod="grafana-0",container="grafana",reason="OOMKilled"}'
+        values: '0x5 1x20'
+      - series: 'kube_pod_container_status_restarts_total{namespace="argocd",pod="repo-0",container="repo"}'
+        values: '0x5 1x20'          # reiniciou, mas não por memória
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: ContainerOOMKilled
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: monitoring, pod: grafana-0, container: grafana}
+            exp_annotations:
+              summary: "grafana (monitoring) morto por falta de memória"
+              description: "O container foi OOMKilled nos últimos 15 minutos."
+              action: "Comparar o uso com o limite e ajustar os resources no values ou no manifest."
