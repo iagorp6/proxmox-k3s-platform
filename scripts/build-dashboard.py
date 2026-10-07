@@ -12,8 +12,8 @@ import pathlib
 DS = {"type": "prometheus", "uid": "${datasource}"}
 LOKI = {"type": "loki", "uid": "loki"}
 GREEN, ORANGE, RED = "green", "orange", "red"
-NS = "zomboid|terraria"
-TITLES = [("zomboid", "Project Zomboid"), ("terraria", "Terraria")]
+NS = "zomboid|terraria|minecraft"
+TITLES = [("zomboid", "Project Zomboid"), ("terraria", "Terraria"), ("minecraft", "Minecraft")]
 
 # ---------- PromQL: unificação zomboid_* + game_* ----------
 ACTIVE = (f'label_replace(max by (namespace) (kube_statefulset_replicas{{namespace=~"{NS}"}}) > 0, '
@@ -116,7 +116,7 @@ P.append({"type": "state-timeline", "title": "Jogo ativo e disponibilidade",
                           "overrides": [
                               {"matcher": {"id": "byName", "options": "Servidor no ar"},
                                "properties": [{"id": "mappings", "value": ONLINE}]},
-                              {"matcher": {"id": "byRegexp", "options": "^(zomboid|terraria)$"},
+                              {"matcher": {"id": "byRegexp", "options": "^(zomboid|terraria|minecraft)$"},
                                "properties": [{"id": "mappings", "value": vmap([("1", "ativo", "blue")])},
                                               {"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}]}]},
           "options": {"showValue": "never", "mergeValues": True, "rowHeight": 0.8,

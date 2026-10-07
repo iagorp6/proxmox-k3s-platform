@@ -3,7 +3,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 echo "== jogo ativo (Git): $(grep -oP '^active:\s*\K\S+' "$ROOT/platform/active-game.yaml")"
-for g in "zomboid zomboid" "terraria terraria"; do
+for g in "zomboid zomboid" "terraria terraria" "minecraft minecraft"; do
   # shellcheck disable=SC2086  # separar "namespace statefulset" em dois argumentos é intencional
   set -- $g
   kubectl -n "$1" get sts "$2" -o jsonpath="   $2: réplicas={.spec.replicas} prontas={.status.readyReplicas}{'\n'}"
