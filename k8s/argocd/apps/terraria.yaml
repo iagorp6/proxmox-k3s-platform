@@ -1,3 +1,4 @@
+# Gerado por scripts/render-games.py a partir de game.yaml: não edite à mão.
 # Sync MANUAL: quem liga e desliga é o scripts/switch-game.py
 apiVersion: argoproj.io/v1alpha1
 kind: Application

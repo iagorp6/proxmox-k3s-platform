@@ -100,6 +100,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      - name: Game platform
+        run: |
+          sudo apt-get install -y -qq python3-yaml >/dev/null
+          python3 scripts/render-games.py --check
       - name: shellcheck
         run: shellcheck scripts/*.sh k8s/monitoring/deploy.sh
 

@@ -1,0 +1,17 @@
+# Catálogo da plataforma: o render-games.py gera Service, métricas, backup e o App do Argo CD.
+# O StatefulSet (statefulset.yaml) e os Secrets próprios continuam escritos à mão.
+name: terraria
+displayName: Terraria (TShock)
+status: active
+memory: 2560Mi
+monitoring: tshock-rest
+namespace: terraria
+runAsUser: 1654
+ports:
+  - { name: game, port: 16261, protocol: TCP }
+backup:
+  schedule: "45 5 * * *"
+  pvc: data-terraria-0
+  paths: [/data/worlds, /data/tshock]
+  exclude: [/data/tshock/logs]
+metrics: true
