@@ -2,7 +2,7 @@
 name: minecraft
 displayName: Minecraft (COBBLEVERSE)
 status: active
-memory: 8Gi
+memory: 10Gi
 monitoring: rcon
 namespace: minecraft
 runAsUser: 1000
