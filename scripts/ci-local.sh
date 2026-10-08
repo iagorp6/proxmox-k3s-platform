@@ -7,7 +7,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$HOME/.local/bin"
 mkdir -p "$BIN"
 export PATH="$BIN:$PATH"
-CRD_CATALOG='https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+# Catálogo de schemas de CRD fixado num commit (o branch main muda sem aviso e já quebrou a validação).
+# Mesmo commit do ci.yml; para atualizar, troque nos dois arquivos.
+CRD_CATALOG='https://raw.githubusercontent.com/datreeio/CRDs-catalog/f1e7f6bc0537bf0622ffe6e47dbaa85914fabbec/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
 
 # ---------- ferramentas (instala em ~/.local/bin se faltar) ----------
 ensure_tools() {
