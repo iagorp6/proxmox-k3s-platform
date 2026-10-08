@@ -33,7 +33,7 @@ spec:
           command: ["python", "/scripts/users.py"]
           env:
             - name: PLAYERS
-              value: "IguinhoGamerPvP,anaodemaleta,vitinho,matarindo,churrasco,cabecudo,plucas,Leomaeski"
+              value: "IguinhoGamerPvP,anaodemaleta,vitinho,matarindo,churrasco,cabecudo,plucas,Leomaeski,Churrasco007,ThgMataRindo"
             - name: OPERATORS
               value: "IguinhoGamerPvP"
           securityContext:
