@@ -1,0 +1,19 @@
+# Gerenciado pelo Ansible (role pve_host). Mudanças feitas pela GUI são sobrescritas.
+# O ipset "management" libera GUI (8006), SSH (22) e console (5900-5999, 3128) para essas redes.
+
+[OPTIONS]
+enable: 1
+policy_in: DROP
+policy_out: ACCEPT
+
+[IPSET management]
+{% for net in pve_host_firewall_management %}
+{{ net }}
+{% endfor %}
+
+[RULES]
+IN Ping(ACCEPT) -log nolog
+{% for src in pve_host_firewall_scrape_sources %}
+IN ACCEPT -source {{ src }} -p tcp -dport 9100 -log nolog
+IN ACCEPT -source {{ src }} -p tcp -dport 9633 -log nolog
+{% endfor %}

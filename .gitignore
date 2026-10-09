@@ -43,3 +43,6 @@ ansible/inventory/hosts.yml
 # Python
 __pycache__/
 *.pyc
+
+# backups locais (cópias de arquivos de ambiente)
+*.bak

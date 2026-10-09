@@ -135,6 +135,15 @@ spec:
             summary: "Muitos erros de memória corrigidos (ECC)"
             description: "{{ $value }} erros corrigidos em 24h. Um pente pode estar com defeito."
             action: "Identificar o pente com edac-util -v e acompanhar."
+        - alert: HostMemoryLow
+          expr: node_memory_MemAvailable_bytes{job="proxmox-node"} < 1073741824
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Menos de 1 GiB de RAM disponível no host"
+            description: "O host não tem swap. Se a memória acabar, o OOM killer do host derruba o processo da VM inteira."
+            action: "ssh no host e rodar free -m; conferir o ARC (arc_summary -s arc) e o KSM (cat /sys/kernel/mm/ksm/pages_sharing)"
         - alert: HostDiskSpaceLow
           expr: |
             (node_filesystem_avail_bytes{job="proxmox-node",fstype=~"zfs|ext4|vfat"}

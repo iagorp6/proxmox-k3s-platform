@@ -1,0 +1,5 @@
+- name: Proxmox host baseline (SSH, ZFS ARC, datacenter firewall)
+  hosts: proxmox
+  become: true
+  roles:
+    - pve_host

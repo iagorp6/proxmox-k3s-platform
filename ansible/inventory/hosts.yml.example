@@ -5,6 +5,9 @@ all:
         pve-01:
           ansible_host: 192.168.10.10
           ansible_user: root
+          # role pve_host: redes que acessam GUI/SSH e quem coleta os exporters (a VM do K3s)
+          pve_host_firewall_management: ["192.168.10.0/24"]
+          pve_host_firewall_scrape_sources: ["192.168.10.20"]
     k3s:
       hosts:
         k3s-01:
