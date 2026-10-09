@@ -202,6 +202,8 @@ The dashboard JSON is **generated** by `scripts/build-dashboard.py`, so it is re
 | Built-in game backups | On start and on version change | Corrupted save, bad update |
 | restic → S3 | Daily, 7 daily + 4 weekly | Disk, VM or host loss |
 
+Before each snapshot, an init container runs the game's `saveCommand` from the catalog (`save-all flush` for Minecraft) through a ServiceAccount that may only `exec` into that one pod, so the world on disk is consistent when restic reads it. The `kubectl` binary it uses is verified against a SHA-256 pinned in `platform/defaults.yaml`. If the server is stopped, the backup takes the last save on disk.
+
 A restore of the latest snapshot completes in about **2 seconds** for the current world size. A full rebuild drill (VM from Terraform, cluster from Ansible, workloads from Argo CD, Secrets from SSM, world from S3) is on the roadmap; the measured RTO will be published here.
 
 ---
