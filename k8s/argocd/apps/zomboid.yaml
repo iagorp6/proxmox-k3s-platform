@@ -1,4 +1,5 @@
-# Sync MANUAL: mudanças no StatefulSet reiniciam o servidor do jogo; o operador escolhe a hora
+# Gerado por scripts/render-games.py a partir de game.yaml: não edite à mão.
+# Sync MANUAL: quem liga e desliga é o scripts/switch-game.py
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -9,7 +10,7 @@ spec:
   source:
     repoURL: git@github.com:iagorp6/proxmox-k3s-platform.git
     targetRevision: main
-    path: k8s/zomboid
+    path: k8s/games/zomboid
   destination:
     server: https://kubernetes.default.svc
     namespace: zomboid

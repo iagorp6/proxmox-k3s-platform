@@ -1,5 +1,5 @@
 # Gerado por scripts/render-games.py a partir de game.yaml: não edite à mão.
-# Jogos cobertos (status active no catálogo): minecraft, terraria
+# Jogos cobertos (status active no catálogo): minecraft, terraria, zomboid
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -11,9 +11,9 @@ spec:
     rules:
     - alert: GameDown
       expr: |
-        kube_statefulset_replicas{namespace=~"minecraft|terraria"} > 0
+        kube_statefulset_replicas{namespace=~"minecraft|terraria|zomboid"} > 0
         unless on (namespace, statefulset)
-        kube_statefulset_status_replicas_ready{namespace=~"minecraft|terraria"} > 0
+        kube_statefulset_status_replicas_ready{namespace=~"minecraft|terraria|zomboid"} > 0
       for: 10m
       labels:
         severity: critical
@@ -22,7 +22,7 @@ spec:
         description: '{{ $labels.namespace }} é o jogo ativo, mas o pod não está pronto há mais de 10 minutos.'
         action: kubectl -n {{ $labels.namespace }} get pods e kubectl -n {{ $labels.namespace }} logs {{ $labels.statefulset }}-0 -c server --tail=30
     - alert: GameRestarted
-      expr: increase(kube_pod_container_status_restarts_total{namespace=~"minecraft|terraria",container="server"}[15m]) > 0
+      expr: increase(kube_pod_container_status_restarts_total{namespace=~"minecraft|terraria|zomboid",container="server"}[15m]) > 0
       labels:
         severity: warning
       annotations:
@@ -31,8 +31,8 @@ spec:
         action: kubectl -n {{ $labels.namespace }} logs {{ $labels.pod }} -c server --previous --tail=40
     - alert: GameMemoryHigh
       expr: |
-        max by (namespace, pod) (container_memory_working_set_bytes{namespace=~"minecraft|terraria",container="server"})
-        / max by (namespace, pod) (kube_pod_container_resource_limits{namespace=~"minecraft|terraria",container="server",resource="memory"})
+        max by (namespace, pod) (container_memory_working_set_bytes{namespace=~"minecraft|terraria|zomboid",container="server"})
+        / max by (namespace, pod) (kube_pod_container_resource_limits{namespace=~"minecraft|terraria|zomboid",container="server",resource="memory"})
         > 0.9
       for: 10m
       labels:

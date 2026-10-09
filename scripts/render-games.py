@@ -51,7 +51,7 @@ def save_hook(g):
     """
     name, ns, pod = g["name"], g["namespace"], f"{g['name']}-0"
     k = DEFAULTS["kubectl"]
-    cmd = " ".join(shlex.quote(a) for a in shlex.split(g["switch"]["saveCommand"]))
+    cmd = shlex.quote(g["switch"]["saveCommand"])   # roda com sh -c, como no switch-game.py
     script = (
         "set -eu\n"
         "cd /tmp\n"
@@ -60,7 +60,7 @@ def save_hook(g):
         "chmod +x kubectl\n"
         f"phase=$(./kubectl -n {ns} get pod {pod} -o jsonpath='{{.status.phase}}' 2>/dev/null || true)\n"
         'if [ "$phase" = Running ]; then\n'
-        f"  ./kubectl -n {ns} exec {pod} -c server -- {cmd} || echo 'AVISO: save falhou; o backup usa o último autosave'\n"
+        f"  ./kubectl -n {ns} exec {pod} -c server -- sh -c {cmd} || echo 'AVISO: save falhou; o backup usa o último autosave'\n"
         "else\n"
         f"  echo \"{pod} não está rodando (${{phase:-ausente}}): backup do último save em disco\"\n"
         "fi\n"
@@ -99,7 +99,7 @@ def render_game(g):
     docs = [{
         "apiVersion": "v1", "kind": "Service",
         "metadata": {"name": name, "namespace": ns, "labels": labels},
-        "spec": {"type": "LoadBalancer", "selector": {"app.kubernetes.io/name": name},
+        "spec": {"type": "LoadBalancer", **g.get("service", {}), "selector": {"app.kubernetes.io/name": name},
                  "ports": [{"name": p["name"], "port": p["port"], "targetPort": p.get("targetPort", p["name"]),
                             "protocol": p["protocol"]} for p in g["ports"]]},
     }]
@@ -230,6 +230,12 @@ def main():
     errors = catalog.problems()
     if not re.fullmatch(r"[0-9a-f]{64}", str(DEFAULTS["kubectl"]["sha256"])):
         errors.append("platform/defaults.yaml: kubectl.sha256 precisa ser o SHA-256 do binário (64 hex)")
+    # Manifests escritos à mão que baixam o kubectl precisam usar a mesma versão e o mesmo hash
+    for f in sorted((ROOT / "k8s").rglob("*.yaml")):
+        text = f.read_text(encoding="utf-8")
+        if "dl.k8s.io/release/" in text and "generated" not in f.name:
+            if f"/release/{DEFAULTS['kubectl']['version']}/" not in text or DEFAULTS["kubectl"]["sha256"] not in text:
+                errors.append(f"{f.relative_to(ROOT)}: kubectl com versão ou SHA-256 diferente de platform/defaults.yaml")
     if errors:
         print("ERRO: catálogo de jogos inválido:\n" + "\n".join(f"  {e}" for e in errors))
         return 1

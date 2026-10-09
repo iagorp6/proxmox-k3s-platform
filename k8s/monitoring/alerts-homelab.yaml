@@ -28,26 +28,6 @@ spec:
             summary: "Sem métricas do servidor do jogo"
             description: "O pod do jogo não está sendo coletado: parado, Pending ou em crash."
             action: "kubectl -n zomboid describe pod zomboid-0 | tail -15"
-        - alert: ZomboidRestarted
-          expr: increase(kube_pod_container_status_restarts_total{namespace="zomboid",container="server"}[15m]) > 0
-          labels:
-            severity: warning
-          annotations:
-            summary: "Servidor do jogo reiniciou sozinho"
-            description: "O processo do jogo caiu e o Kubernetes o reiniciou. Restarts planejados não disparam este alerta."
-            action: "kubectl -n zomboid logs zomboid-0 -c server --previous --tail=40"
-        - alert: ZomboidMemoryHigh
-          expr: |
-            max by (pod) (container_memory_working_set_bytes{namespace="zomboid",container="server"})
-            / max by (pod) (kube_pod_container_resource_limits{namespace="zomboid",container="server",resource="memory"})
-            > 0.9
-          for: 10m
-          labels:
-            severity: warning
-          annotations:
-            summary: "Servidor do jogo perto do limite de memória"
-            description: "Uso de {{ $value | humanizePercentage }} do limite. Risco de OOMKilled."
-            action: "Comparar o pico no dashboard e avaliar subir PZ_XMX e o limite do StatefulSet."
 
     - name: backup
       rules:
@@ -195,7 +175,7 @@ spec:
 
     - name: games
       rules:
-        # GameDown, GameRestarted e GameMemoryHigh são gerados do catálogo: alerts-games.generated.yaml
+        # GameDown, GameRestarted e GameMemoryHigh (Zomboid incluso) são gerados do catálogo: alerts-games.generated.yaml
         # Genérica: vale para todo jogo no contrato game_*
         - alert: GamePlayerOnline
           expr: max by (game, player) (game_player_online) == 1

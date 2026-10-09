@@ -61,6 +61,8 @@ spec:
                 - |
                   set -e
                   curl -fsSLo /tmp/kubectl https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl
+                  # mesmo SHA-256 de platform/defaults.yaml (o render-games.py --check confere que os dois batem)
+                  echo '6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  /tmp/kubectl' | sha256sum -c -
                   chmod +x /tmp/kubectl
                   K=/tmp/kubectl
                   say() { $K -n zomboid exec zomboid-0 -c server -- sh -c "echo 'servermsg \"$1\"' > /tmp/console" || true; }

@@ -13,6 +13,7 @@ spec:
     metadata:
       labels:
         app: zomboid
+        app.kubernetes.io/name: zomboid   # usado pelos Services gerados; o selector do StatefulSet é imutável
     spec:
       terminationGracePeriodSeconds: 90
       initContainers:
