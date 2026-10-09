@@ -95,6 +95,44 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          serviceAccountName: minecraft-backup
+          initContainers:
+          - name: save-world
+            image: curlimages/curl:latest@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+            command:
+            - /bin/sh
+            - -c
+            args:
+            - |
+              set -eu
+              cd /tmp
+              curl -fsSLo kubectl https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl
+              echo '6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  kubectl' | sha256sum -c -
+              chmod +x kubectl
+              phase=$(./kubectl -n minecraft get pod minecraft-0 -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              if [ "$phase" = Running ]; then
+                ./kubectl -n minecraft exec minecraft-0 -c server -- rcon-cli save-all flush || echo 'AVISO: save falhou; o backup usa o último autosave'
+              else
+                echo "minecraft-0 não está rodando (${phase:-ausente}): backup do último save em disco"
+              fi
+            env:
+            - name: HOME
+              value: /tmp
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                memory: 256Mi
+            volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
@@ -151,3 +189,47 @@ spec:
           - name: tmp
             emptyDir:
               sizeLimit: 1Gi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: minecraft-backup
+  namespace: minecraft
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: minecraft-backup
+  namespace: minecraft
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  resourceNames:
+  - minecraft-0
+  verbs:
+  - get
+- apiGroups:
+  - ''
+  resources:
+  - pods/exec
+  resourceNames:
+  - minecraft-0
+  verbs:
+  - get
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: minecraft-backup
+  namespace: minecraft
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: minecraft-backup
+subjects:
+- kind: ServiceAccount
+  name: minecraft-backup
+  namespace: minecraft

@@ -11,6 +11,8 @@ O StatefulSet continua escrito à mão em cada jogo (é a parte realmente espec�
 Uso: python3 scripts/render-games.py [--check]   (--check falha se algo gerado estiver desatualizado)
 """
 import pathlib
+import re
+import shlex
 import sys
 
 import yaml
@@ -39,6 +41,55 @@ BACKUP_KEYS = [
 
 def dump(docs):
     return HEADER + "---\n".join(yaml.safe_dump(d, sort_keys=False, allow_unicode=True, width=1000) for d in docs)
+
+
+def save_hook(g):
+    """initContainer que roda o switch.saveCommand no servidor antes do restic (mundo consistente no disco).
+
+    Servidor parado: pula, o backup leva o último save. Save falhou com o servidor rodando: avisa e segue,
+    porque um backup do último autosave vale mais do que nenhum backup.
+    """
+    name, ns, pod = g["name"], g["namespace"], f"{g['name']}-0"
+    k = DEFAULTS["kubectl"]
+    cmd = " ".join(shlex.quote(a) for a in shlex.split(g["switch"]["saveCommand"]))
+    script = (
+        "set -eu\n"
+        "cd /tmp\n"
+        f"curl -fsSLo kubectl https://dl.k8s.io/release/{k['version']}/bin/linux/amd64/kubectl\n"
+        f"echo '{k['sha256']}  kubectl' | sha256sum -c -\n"
+        "chmod +x kubectl\n"
+        f"phase=$(./kubectl -n {ns} get pod {pod} -o jsonpath='{{.status.phase}}' 2>/dev/null || true)\n"
+        'if [ "$phase" = Running ]; then\n'
+        f"  ./kubectl -n {ns} exec {pod} -c server -- {cmd} || echo 'AVISO: save falhou; o backup usa o último autosave'\n"
+        "else\n"
+        f"  echo \"{pod} não está rodando (${{phase:-ausente}}): backup do último save em disco\"\n"
+        "fi\n"
+    )
+    container = {
+        "name": "save-world", "image": DEFAULTS["curlImage"],
+        "command": ["/bin/sh", "-c"], "args": [script],
+        "env": [{"name": "HOME", "value": "/tmp"}],  # cache do kubectl; o root FS é read-only
+        "securityContext": {"allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True,
+                            "capabilities": {"drop": ["ALL"]}},
+        "resources": {"requests": {"cpu": "50m", "memory": "64Mi"}, "limits": {"memory": "256Mi"}},
+        "volumeMounts": [{"name": "tmp", "mountPath": "/tmp"}],
+    }
+    sa = f"{name}-backup"
+    rbac = [{
+        "apiVersion": "v1", "kind": "ServiceAccount", "metadata": {"name": sa, "namespace": ns},
+    }, {
+        "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
+        "metadata": {"name": sa, "namespace": ns},
+        "rules": [{"apiGroups": [""], "resources": ["pods"], "resourceNames": [pod], "verbs": ["get"]},
+                  # exec via WebSocket (kubectl recente) pede get, além do create do SPDY
+                  {"apiGroups": [""], "resources": ["pods/exec"], "resourceNames": [pod], "verbs": ["get", "create"]}],
+    }, {
+        "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
+        "metadata": {"name": sa, "namespace": ns},
+        "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": sa},
+        "subjects": [{"kind": "ServiceAccount", "name": sa, "namespace": ns}],
+    }]
+    return container, sa, rbac
 
 
 def render_game(g):
@@ -75,6 +126,7 @@ def render_game(g):
             f"restic forget --tag {name} --host {name} --keep-daily {keep['daily']} --keep-weekly {keep['weekly']} --prune --retry-lock 10m\n"
             f"restic snapshots --tag {name} --latest 1\n"
         )
+        hook = save_hook(g) if g.get("switch", {}).get("saveCommand") else None
         docs += [{
             "apiVersion": "external-secrets.io/v1", "kind": "ExternalSecret",
             "metadata": {"name": f"{name}-backup", "namespace": ns},
@@ -90,6 +142,8 @@ def render_game(g):
                 "successfulJobsHistoryLimit": 1, "failedJobsHistoryLimit": 2,
                 "jobTemplate": {"spec": {"backoffLimit": 2, "template": {"spec": {
                     "restartPolicy": "Never",
+                    **({"serviceAccountName": hook[1], "initContainers": [hook[0]]} if hook else
+                       {"automountServiceAccountToken": False}),
                     "securityContext": {"runAsNonRoot": True, "runAsUser": uid, "runAsGroup": uid,
                                         "seccompProfile": {"type": "RuntimeDefault"}},
                     "containers": [{
@@ -110,7 +164,7 @@ def render_game(g):
                                 {"name": "tmp", "emptyDir": {"sizeLimit": "1Gi"}}],
                 }}}},
             },
-        }]
+        }] + (hook[2] if hook else [])
     app = {
         "apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
         "metadata": {"name": name, "namespace": "argocd"},
@@ -174,6 +228,8 @@ def render_alerts(games):
 def main():
     check = "--check" in sys.argv
     errors = catalog.problems()
+    if not re.fullmatch(r"[0-9a-f]{64}", str(DEFAULTS["kubectl"]["sha256"])):
+        errors.append("platform/defaults.yaml: kubectl.sha256 precisa ser o SHA-256 do binário (64 hex)")
     if errors:
         print("ERRO: catálogo de jogos inválido:\n" + "\n".join(f"  {e}" for e in errors))
         return 1

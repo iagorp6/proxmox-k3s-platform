@@ -3,3 +3,7 @@ repoURL: git@github.com:iagorp6/proxmox-k3s-platform.git
 resticImage: restic/restic:latest@sha256:9940e6c7421ab3a21ee9fdc4e91596d04c792b600d31b102696c75cbf3ac4481
 backupRetention: { daily: 7, weekly: 4 }
 metricsPort: 9105
+# Hook de save antes do backup: o initContainer baixa o kubectl e confere o SHA-256 fixado aqui.
+# Atualize os dois juntos: curl -sL https://dl.k8s.io/release/<versão>/bin/linux/amd64/kubectl.sha256
+curlImage: curlimages/curl:latest@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+kubectl: { version: v1.37.0, sha256: "6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f" }
