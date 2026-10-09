@@ -46,9 +46,10 @@ resource "proxmox_virtual_environment_vm" "k3s" {
   description = "K3s single-node. Managed by Terraform."
   tags        = ["k3s", "terraform"]
 
-  on_boot = true
-  started = true
-  machine = "q35"
+  on_boot    = true
+  started    = true
+  protection = true # bloqueia remoção e edição de disco pela GUI/API; desligue antes de um destroy
+  machine    = "q35"
 
   operating_system {
     type = "l26"

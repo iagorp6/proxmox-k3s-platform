@@ -1,0 +1,11 @@
+# Teto do ARC do ZFS. Host sem swap e VM com 18 GiB dedicados: o ARC não pode crescer por cima.
+pve_host_zfs_arc_max_bytes: 2147483648
+
+# Firewall do datacenter (só o host; VMs não são filtradas enquanto a NIC não tiver firewall=1).
+pve_host_firewall_enabled: true
+# Redes que acessam GUI (8006), SSH (22) e console. Defina no hosts.yml, fora do Git.
+pve_host_firewall_management: []
+# IPs que coletam os exporters do host (a VM do K3s, por onde sai o tráfego do Prometheus).
+pve_host_firewall_scrape_sources: []
+# Se o acesso não for confirmado nesse prazo, o firewall é desligado sozinho.
+pve_host_firewall_rollback_minutes: 5

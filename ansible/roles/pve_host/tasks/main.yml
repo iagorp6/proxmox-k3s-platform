@@ -1,0 +1,161 @@
+# --- SSH: root só com chave -------------------------------------------------
+- name: Read root authorized_keys
+  ansible.builtin.slurp:
+    src: /root/.ssh/authorized_keys
+  register: pve_host_root_keys
+
+- name: Refuse to disable password login without a key for root
+  ansible.builtin.assert:
+    that: (pve_host_root_keys.content | b64decode) is search('ssh-(ed25519|rsa)|ecdsa-sha2')
+    fail_msg: "Nenhuma chave em /root/.ssh/authorized_keys; desligar senha trancaria o acesso."
+
+- name: SSH hardening drop-in
+  block:
+    - name: Install sshd drop-in
+      ansible.builtin.template:
+        src: 10-hardening.conf.j2
+        dest: /etc/ssh/sshd_config.d/10-hardening.conf
+        mode: "0644"
+      register: pve_host_sshd_dropin
+
+    - name: Validate sshd configuration
+      ansible.builtin.command: sshd -t
+      changed_when: false
+      check_mode: false
+  rescue:
+    - name: Remove invalid drop-in
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d/10-hardening.conf
+        state: absent
+
+    - name: Abort after invalid sshd configuration
+      ansible.builtin.fail:
+        msg: "sshd -t falhou; o drop-in foi removido e o sshd não foi recarregado."
+
+- name: Reload sshd when the drop-in changed
+  ansible.builtin.systemd:
+    name: ssh
+    state: reloaded
+  when: pve_host_sshd_dropin is changed
+
+- name: Read effective sshd settings
+  ansible.builtin.command: sshd -T
+  register: pve_host_sshd_effective
+  changed_when: false
+  check_mode: false
+
+- name: Check effective sshd settings
+  when: not ansible_check_mode   # em check o drop-in não foi gravado ainda
+  ansible.builtin.assert:
+    that:
+      - pve_host_sshd_effective.stdout is search('(?m)^permitrootlogin (without|prohibit)-password$')
+      - pve_host_sshd_effective.stdout is search('(?m)^passwordauthentication no$')
+    fail_msg: "Outro arquivo em sshd_config.d está sobrepondo o drop-in (vale o primeiro valor lido)."
+
+# --- ZFS ARC -----------------------------------------------------------------
+- name: Persist ZFS ARC limit
+  ansible.builtin.lineinfile:
+    path: /etc/modprobe.d/zfs.conf
+    regexp: '^options zfs zfs_arc_max='
+    line: "options zfs zfs_arc_max={{ pve_host_zfs_arc_max_bytes }}"
+    create: true
+    mode: "0644"
+  notify: Refresh initramfs
+
+- name: Read runtime ZFS ARC limit
+  ansible.builtin.slurp:
+    src: /sys/module/zfs/parameters/zfs_arc_max
+  register: pve_host_arc_runtime
+
+- name: Apply ZFS ARC limit at runtime
+  ansible.builtin.shell: "echo {{ pve_host_zfs_arc_max_bytes }} > /sys/module/zfs/parameters/zfs_arc_max"
+  when: (pve_host_arc_runtime.content | b64decode | trim) != (pve_host_zfs_arc_max_bytes | string)
+  changed_when: true
+
+# --- Firewall do datacenter, com rollback automático ------------------------
+# /etc/pve é o pmxcfs: não aceita chmod/utime, então o módulo template falha ao gravar lá.
+# O arquivo é comparado com diff e gravado com redirecionamento simples (open + write).
+- name: Compare datacenter firewall config
+  when: pve_host_firewall_enabled | bool
+  ansible.builtin.command: diff -uN /etc/pve/firewall/cluster.fw -
+  args:
+    stdin: "{{ lookup('ansible.builtin.template', 'cluster.fw.j2') }}"
+  register: pve_host_fw_diff
+  check_mode: false
+  changed_when: pve_host_fw_diff.rc == 1
+  failed_when: pve_host_fw_diff.rc > 1
+
+- name: Show datacenter firewall diff
+  when: pve_host_firewall_enabled | bool and pve_host_fw_diff is changed
+  ansible.builtin.debug:
+    var: pve_host_fw_diff.stdout_lines
+
+- name: Datacenter firewall
+  when: pve_host_firewall_enabled | bool and not ansible_check_mode
+  block:
+    - name: Require management networks and scrape sources
+      ansible.builtin.assert:
+        that:
+          - pve_host_firewall_management | length > 0
+          - pve_host_firewall_scrape_sources | length > 0
+        fail_msg: "Defina pve_host_firewall_management e pve_host_firewall_scrape_sources no hosts.yml."
+
+    - name: Clear a leftover rollback timer
+      ansible.builtin.systemd:
+        name: pve-fw-rollback.timer
+        state: stopped
+      failed_when: false
+      changed_when: false
+
+    - name: Arm rollback (firewall stops unless access is confirmed)
+      ansible.builtin.command: >-
+        systemd-run --unit=pve-fw-rollback --collect
+        --on-active={{ pve_host_firewall_rollback_minutes }}min
+        /usr/sbin/pve-firewall stop
+      changed_when: false
+
+    - name: Write datacenter firewall config
+      ansible.builtin.shell: cat > /etc/pve/firewall/cluster.fw
+      args:
+        stdin: "{{ lookup('ansible.builtin.template', 'cluster.fw.j2') }}"
+      when: pve_host_fw_diff is changed
+      register: pve_host_fw_config
+      changed_when: true
+
+    - name: Make sure pve-firewall is running
+      ansible.builtin.systemd:
+        name: pve-firewall
+        state: started
+        enabled: true
+
+    - name: Wait for the ruleset to be compiled
+      ansible.builtin.pause:
+        seconds: 15
+      when: pve_host_fw_config is changed
+
+    - name: Drop the existing SSH connection
+      ansible.builtin.meta: reset_connection
+
+    - name: Confirm SSH still works through the firewall
+      ansible.builtin.wait_for_connection:
+        timeout: 60
+
+    - name: Confirm the web UI still answers from the control node
+      ansible.builtin.uri:
+        url: "https://{{ ansible_host }}:8006/"
+        validate_certs: false
+        timeout: 10
+      delegate_to: localhost
+      become: false
+
+    - name: Disarm rollback
+      ansible.builtin.systemd:
+        name: pve-fw-rollback.timer
+        state: stopped
+      changed_when: false
+
+    - name: Show firewall status
+      ansible.builtin.command: pve-firewall status
+      register: pve_host_fw_status
+      changed_when: false
+      failed_when: "'enabled/running' not in pve_host_fw_status.stdout"

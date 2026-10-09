@@ -79,7 +79,7 @@ flowchart TB
 | Hardware | HPE ProLiant DL20 Gen9, Xeon E3-1220 v5, 24 GB ECC, 2x HDD (ZFS) |
 | Virtualization | Proxmox VE |
 | Provisioning | Terraform (`bpg/proxmox`, `hashicorp/aws`), cloud-init, remote state on S3 |
-| Configuration | Ansible (roles: `k3s`, `gameserver_net`, `host_exporters`) |
+| Configuration | Ansible (roles: `k3s`, `gameserver_net`, `host_exporters`, `pve_host`) |
 | Orchestration | K3s (pinned version, secrets encrypted at rest) |
 | GitOps | Argo CD (app of apps) |
 | Workloads | Project Zomboid (Build 42), Terraria (TShock), Minecraft (Fabric modpack) |
@@ -271,7 +271,8 @@ A Budgets alarm fires above USD 1/month, and a CloudWatch alarm watches the size
 
 ## Roadmap
 
-- [ ] Timed full DR drill and published RTO
+- [ ] Timed full DR drill and published RTO (rebuild strategy in [ADR 0005](docs/adr/0005-host-recovery-by-rebuild.md))
+- [ ] Reinstall the host on a ZFS mirror during the DR drill
 - [ ] Migrate Project Zomboid to the catalog and the `game_*` metric contract
 - [ ] Manage the Helm releases (monitoring, External Secrets, Argo CD) through Argo CD
 - [ ] Renovate for image digests and chart versions
