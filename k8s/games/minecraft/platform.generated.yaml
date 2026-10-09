@@ -119,6 +119,8 @@ spec:
             env:
             - name: RESTIC_CACHE_DIR
               value: /cache
+            - name: TMPDIR
+              value: /tmp
             securityContext:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: true
@@ -137,6 +139,8 @@ spec:
               readOnly: true
             - name: cache
               mountPath: /cache
+            - name: tmp
+              mountPath: /tmp
           volumes:
           - name: data
             persistentVolumeClaim:
@@ -144,3 +148,6 @@ spec:
               readOnly: true
           - name: cache
             emptyDir: {}
+          - name: tmp
+            emptyDir:
+              sizeLimit: 1Gi
