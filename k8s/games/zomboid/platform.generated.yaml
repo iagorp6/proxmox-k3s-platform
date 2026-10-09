@@ -2,32 +2,37 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: minecraft
-  namespace: minecraft
+  name: zomboid
+  namespace: zomboid
   labels:
-    app.kubernetes.io/name: minecraft
-    platform.homelab/game: minecraft
+    app.kubernetes.io/name: zomboid
+    platform.homelab/game: zomboid
 spec:
   type: LoadBalancer
+  externalTrafficPolicy: Local
   selector:
-    app.kubernetes.io/name: minecraft
+    app.kubernetes.io/name: zomboid
   ports:
   - name: game
-    port: 16262
+    port: 16261
     targetPort: game
-    protocol: TCP
+    protocol: UDP
+  - name: direct
+    port: 16262
+    targetPort: direct
+    protocol: UDP
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: minecraft-metrics
-  namespace: minecraft
+  name: zomboid-metrics
+  namespace: zomboid
   labels:
-    app.kubernetes.io/name: minecraft-metrics
+    app.kubernetes.io/name: zomboid-metrics
 spec:
   clusterIP: None
   selector:
-    app.kubernetes.io/name: minecraft
+    app.kubernetes.io/name: zomboid
   ports:
   - name: metrics
     port: 9105
@@ -36,14 +41,14 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: minecraft
-  namespace: minecraft
+  name: zomboid
+  namespace: zomboid
   labels:
     release: kps
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: minecraft-metrics
+      app.kubernetes.io/name: zomboid-metrics
   endpoints:
   - port: metrics
     interval: 30s
@@ -51,15 +56,15 @@ spec:
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
-  name: minecraft-backup
-  namespace: minecraft
+  name: zomboid-backup
+  namespace: zomboid
 spec:
   refreshInterval: 1h
   secretStoreRef:
     kind: ClusterSecretStore
     name: aws-ssm
   target:
-    name: minecraft-backup
+    name: zomboid-backup
     creationPolicy: Owner
   data:
   - secretKey: RESTIC_REPOSITORY
@@ -81,10 +86,10 @@ spec:
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: minecraft-backup
-  namespace: minecraft
+  name: zomboid-backup
+  namespace: zomboid
 spec:
-  schedule: 15 5 * * *
+  schedule: 30 5 * * *
   timeZone: America/Sao_Paulo
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
@@ -95,7 +100,7 @@ spec:
       template:
         spec:
           restartPolicy: Never
-          serviceAccountName: minecraft-backup
+          serviceAccountName: zomboid-backup
           initContainers:
           - name: save-world
             image: curlimages/curl:latest@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
@@ -109,11 +114,11 @@ spec:
               curl -fsSLo kubectl https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl
               echo '6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  kubectl' | sha256sum -c -
               chmod +x kubectl
-              phase=$(./kubectl -n minecraft get pod minecraft-0 -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              phase=$(./kubectl -n zomboid get pod zomboid-0 -o jsonpath='{.status.phase}' 2>/dev/null || true)
               if [ "$phase" = Running ]; then
-                ./kubectl -n minecraft exec minecraft-0 -c server -- sh -c 'rcon-cli save-all flush' || echo 'AVISO: save falhou; o backup usa o último autosave'
+                ./kubectl -n zomboid exec zomboid-0 -c server -- sh -c 'echo save > /tmp/console; sleep 30' || echo 'AVISO: save falhou; o backup usa o último autosave'
               else
-                echo "minecraft-0 não está rodando (${phase:-ausente}): backup do último save em disco"
+                echo "zomboid-0 não está rodando (${phase:-ausente}): backup do último save em disco"
               fi
             env:
             - name: HOME
@@ -148,12 +153,12 @@ spec:
             args:
             - |
               set -e
-              restic backup /data/world --tag minecraft --host minecraft --retry-lock 10m
-              restic forget --tag minecraft --host minecraft --keep-daily 7 --keep-weekly 4 --prune --retry-lock 10m
-              restic snapshots --tag minecraft --latest 1
+              restic backup /data/data/Saves /data/data/db /data/data/Server --tag zomboid --host zomboid --retry-lock 10m
+              restic forget --tag zomboid --host zomboid --keep-daily 7 --keep-weekly 4 --prune --retry-lock 10m
+              restic snapshots --tag zomboid --latest 1
             envFrom:
             - secretRef:
-                name: minecraft-backup
+                name: zomboid-backup
             env:
             - name: RESTIC_CACHE_DIR
               value: /cache
@@ -182,7 +187,7 @@ spec:
           volumes:
           - name: data
             persistentVolumeClaim:
-              claimName: data-minecraft-0
+              claimName: data-zomboid-0
               readOnly: true
           - name: cache
             emptyDir: {}
@@ -193,21 +198,21 @@ spec:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: minecraft-backup
-  namespace: minecraft
+  name: zomboid-backup
+  namespace: zomboid
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: minecraft-backup
-  namespace: minecraft
+  name: zomboid-backup
+  namespace: zomboid
 rules:
 - apiGroups:
   - ''
   resources:
   - pods
   resourceNames:
-  - minecraft-0
+  - zomboid-0
   verbs:
   - get
 - apiGroups:
@@ -215,7 +220,7 @@ rules:
   resources:
   - pods/exec
   resourceNames:
-  - minecraft-0
+  - zomboid-0
   verbs:
   - get
   - create
@@ -223,13 +228,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: minecraft-backup
-  namespace: minecraft
+  name: zomboid-backup
+  namespace: zomboid
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: minecraft-backup
+  name: zomboid-backup
 subjects:
 - kind: ServiceAccount
-  name: minecraft-backup
-  namespace: minecraft
+  name: zomboid-backup
+  namespace: zomboid

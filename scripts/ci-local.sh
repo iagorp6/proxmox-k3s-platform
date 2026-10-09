@@ -76,7 +76,7 @@ k8s_check() {
 }
 
 scripts_check() {
-  shellcheck scripts/*.sh k8s/*/deploy.sh && python3 scripts/render-games.py --check && bash scripts/check-minecraft-pin.sh && python3 -m py_compile k8s/zomboid/exporter/*.py k8s/platform/*.py k8s/games/*/scripts/*.py scripts/*.py
+  shellcheck scripts/*.sh k8s/*/deploy.sh && python3 scripts/render-games.py --check && bash scripts/check-minecraft-pin.sh && python3 -m py_compile k8s/platform/*.py k8s/games/*/scripts/*.py scripts/*.py
 }
 
 security_check() {

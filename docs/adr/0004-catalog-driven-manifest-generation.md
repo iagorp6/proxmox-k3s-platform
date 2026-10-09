@@ -22,4 +22,5 @@ generated Grafana dashboard.
 - Generated files are plain YAML in the repository, so reviews and Argo CD diffs stay readable.
 - Migrations are verified with `scripts/manifest-diff.py`, a semantic comparison of `kustomize`
   output before and after (Terraria migrated with no effective change).
-- Project Zomboid keeps its hand-written manifests until it is migrated with the same check.
+- Project Zomboid was migrated the same way (2026-10): the only effective changes were the backup
+  (now generated, with the pre-backup save hook) and an extra pod label for the generated Services.

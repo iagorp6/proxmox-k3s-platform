@@ -1,0 +1,24 @@
+# Catálogo da plataforma: o render-games.py gera Service, métricas, backup e o App do Argo CD.
+# O StatefulSet, o ConfigMap de config, o restart diário e os Secrets próprios continuam escritos à mão.
+name: zomboid
+displayName: Project Zomboid
+status: active
+memory: 10Gi
+monitoring: rcon
+namespace: zomboid
+runAsUser: 1000
+ports:
+  - { name: game, port: 16261, protocol: UDP }
+  - { name: direct, port: 16262, protocol: UDP }
+service:
+  externalTrafficPolicy: Local   # preserva o IP do jogador (logs e ban por IP no servidor)
+backup:
+  schedule: "30 5 * * *"
+  pvc: data-zomboid-0
+  paths: [/data/data/Saves, /data/data/db, /data/data/Server]   # PVC montado em /data no job de backup
+metrics: true
+switch:
+  # O save do Zomboid é assíncrono: o sleep dá tempo de terminar antes do backup ou da troca de jogo
+  saveCommand: echo save > /tmp/console; sleep 30
+  playersMetric: zomboid_players_online   # ainda fora do contrato game_*
+  suspendWhenIdle: [zomboid-daily-restart]

@@ -117,7 +117,7 @@ jobs:
         run: shellcheck scripts/*.sh k8s/monitoring/deploy.sh
 
       - name: Python syntax
-        run: python3 -m py_compile k8s/zomboid/exporter/*.py k8s/platform/*.py k8s/games/*/scripts/*.py scripts/*.py
+        run: python3 -m py_compile k8s/platform/*.py k8s/games/*/scripts/*.py scripts/*.py
 
   security:
     name: Security scan (Trivy)
