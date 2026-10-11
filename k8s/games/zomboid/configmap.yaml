@@ -31,6 +31,29 @@ data:
   PZ_MODS: "PROJECTRVInterior42;NeatUI_Framework;Neat_Crafting;ProximityInventory;shaderz;twistonfirestatsmpstable;AutoCook;AutoMechanics;AutoTailoring;AutoReload;VanillaVehiclesAnimated"
   # Pastas de mapa: as de mods primeiro, o mapa base por último
   PZ_MAP: "map_distanciado;Muldraugh, KY"
+  # Sandbox (base: preset Apocalypse). "Caminho = valor"; o caminho segue as tabelas do
+  # <servidor>_SandboxVars.lua (ZombieLore.Speed etc.). Aplicado a cada start; chave inexistente vira aviso no log.
+  # Objetivo: um pouco mais difícil que o Apocalypse e bem mais dinâmico para sessões curtas.
+  PZ_SANDBOX: |
+    # --- dificuldade: um degrau acima ---
+    ZombieLore.SprinterPercentage = 5            # 0 -> 5% de corredores (Speed segue aleatório)
+    ZombieConfig.RespawnHours = 96.0             # 0 (desligado) -> respawn a cada 96 h de jogo
+    ZombieConfig.RespawnUnseenHours = 24.0       # só em células sem jogador por perto há 24 h
+    ZombieConfig.RespawnMultiplier = 0.05        # até 5% da população desejada por ciclo
+    MultiHitZombies = true                       # um golpe acerta vários (compensa os sprinters)
+    # --- ritmo: sessões curtas ---
+    DayLength = 3                                # 2 h -> 1 h real por dia de jogo
+    MultiplierConfig.GlobalToggle = true         # usa o multiplicador global de XP
+    MultiplierConfig.Global = 2.5                # 1x -> 2,5x de XP em todas as skills
+    MinutesPerPage = 1.0                         # 2.0 -> leitura de livros 2x mais rápida
+    StatsDecrease = 4                            # normal -> fome, sede e cansaço mais lentos
+    FarmingSpeedNew = 1.5                        # plantas crescem 50% mais rápido
+    # --- eventos e mundo vivo ---
+    Helicopter = 3                               # uma vez -> às vezes (repete)
+    Alarm = 5                                    # às vezes -> frequentes (alarmes de casa)
+    HoursForLootRespawn = 168.0                  # loot volta toda semana de jogo (raridade igual)
+    SeenHoursPreventLootRespawn = 24.0           # ...em lugares sem jogador há 24 h
+    CarSpawnRate = 4                             # poucos -> normal
   install.sh: |
     #!/bin/bash
     set -euo pipefail
@@ -100,6 +123,44 @@ data:
     # velocidade lê o salto como speed hack (speed=9000+ > limit=20) e kicka. Fica só no log; as demais
     # checagens continuam como o servidor define.
     set_key AntiCheatSpeed 3
+
+    # --- Sandbox: aplica PZ_SANDBOX no <servidor>_SandboxVars.lua, pelo caminho completo da chave ---
+    # (o arquivo nasce no primeiro start do servidor; até lá não há o que ajustar)
+    sandbox="/pz/data/Server/${PZ_SERVER_NAME}_SandboxVars.lua"
+    if [ -n "${PZ_SANDBOX:-}" ] && [ -f "$sandbox" ]; then
+      OVR="${PZ_SANDBOX}" awk '
+        BEGIN {
+          n = split(ENVIRON["OVR"], L, "\n")
+          for (i = 1; i <= n; i++) {
+            s = L[i]; sub(/#.*/, "", s); gsub(/[ \t\r]/, "", s)
+            if (s == "") continue
+            p = index(s, "="); k = substr(s, 1, p - 1); v = substr(s, p + 1)
+            if (p == 0 || v !~ /^(-?[0-9]+(\.[0-9]+)?|true|false)$/) { print "ERRO: linha inválida em PZ_SANDBOX: " L[i] > "/dev/stderr"; bad = 1; continue }
+            want[k] = v
+          }
+          if (bad) exit 1
+        }
+        /^[ \t\r]*--/ { print; next }
+        /^[ \t\r]*[A-Za-z0-9_]+[ \t\r]*=[ \t\r]*\{/ { match($0, /[A-Za-z0-9_]+/); stack[++d] = substr($0, RSTART, RLENGTH); print; next }
+        /^[ \t\r]*\},?[ \t\r]*$/ { d--; print; next }
+        /^[ \t\r]*[A-Za-z0-9_]+[ \t\r]*=/ {
+          match($0, /^[ \t\r]*/); indent = substr($0, 1, RLENGTH)
+          key = substr($0, RLENGTH + 1); sub(/[ \t\r]*=.*/, "", key)
+          path = ""; for (i = 2; i <= d; i++) path = path stack[i] "."
+          path = path key
+          if (path in want) {
+            comma = ($0 ~ /,[ \t\r]*$/) ? "," : ""
+            $0 = indent key " = " want[path] comma; done[path] = 1
+          }
+        }
+        { print }
+        END {
+          if (bad) exit 1
+          for (k in want) if (!(k in done)) print "AVISO: chave de sandbox não encontrada (versão do jogo?): " k > "/dev/stderr"
+        }' "$sandbox" > "$sandbox.tmp" || { rm -f "$sandbox.tmp"; echo "ERRO: PZ_SANDBOX inválido; o sandbox não foi alterado"; exit 1; }
+      mv "$sandbox.tmp" "$sandbox"
+      echo "Sandbox aplicado: ${sandbox}"
+    fi
     chown -R 1000:1000 /pz
     echo "Config applied: ${ini}"
   start.sh: |
