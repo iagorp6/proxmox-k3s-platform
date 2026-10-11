@@ -233,6 +233,8 @@ def main():
     # Manifests escritos à mão que baixam o kubectl precisam usar a mesma versão e o mesmo hash
     for f in sorted((ROOT / "k8s").rglob("*.yaml")):
         text = f.read_text(encoding="utf-8")
+        if not text.strip():
+            errors.append(f"{f.relative_to(ROOT)}: arquivo vazio (truncado?); o Argo CD apagaria os recursos dele")
         if "dl.k8s.io/release/" in text and "generated" not in f.name:
             if f"/release/{DEFAULTS['kubectl']['version']}/" not in text or DEFAULTS["kubectl"]["sha256"] not in text:
                 errors.append(f"{f.relative_to(ROOT)}: kubectl com versão ou SHA-256 diferente de platform/defaults.yaml")
