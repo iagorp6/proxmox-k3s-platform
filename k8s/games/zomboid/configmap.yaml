@@ -45,7 +45,7 @@ data:
     DayLength = 3                                # 2 h -> 1 h real por dia de jogo
     MultiplierConfig.GlobalToggle = true         # usa o multiplicador global de XP
     MultiplierConfig.Global = 2.5                # 1x -> 2,5x de XP em todas as skills
-    MinutesPerPage = 1.0                         # 2.0 -> leitura de livros 2x mais rápida
+    MinutesPerPage = 0.5                         # 2.0 -> 0.5: livro de 200 págs em ~4 min reais (dia de 1 h)
     StatsDecrease = 4                            # normal -> fome, sede e cansaço mais lentos
     FarmingSpeedNew = 1.5                        # plantas crescem 50% mais rápido
     # --- eventos e mundo vivo ---
