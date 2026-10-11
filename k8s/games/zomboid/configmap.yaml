@@ -95,6 +95,11 @@ data:
     set_key Map "${PZ_MAP}"
     # Exigido pelo Project RV Interior (o checksum de Lua barra o mod no MP); servidor fechado por senha
     set_key DoLuaChecksum false
+    # Anti-cheat do B42: 1 = ban, 2 = kick, 3 = só registra no log, 4 = desligado.
+    # O Project RV Interior teleporta o jogador para o interior (map_distanciado), e a checagem de
+    # velocidade lê o salto como speed hack (speed=9000+ > limit=20) e kicka. Fica só no log; as demais
+    # checagens continuam como o servidor define.
+    set_key AntiCheatSpeed 3
     chown -R 1000:1000 /pz
     echo "Config applied: ${ini}"
   start.sh: |
