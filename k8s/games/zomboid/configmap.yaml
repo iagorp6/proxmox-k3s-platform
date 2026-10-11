@@ -1,0 +1,111 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zomboid-config
+  namespace: zomboid
+data:
+  # Nome interno do perfil de config (arquivo <nome>.ini)
+  PZ_SERVER_NAME: "k3s"
+  # Nome exibido no jogo
+  PZ_PUBLIC_NAME: "Zomboid B42 - k3s"
+  PZ_MAX_PLAYERS: "6"
+  PZ_XMX: "8g"
+  # "true" força o SteamCMD a atualizar o servidor no próximo start
+  PZ_UPDATE: "false"
+  # Mods da Steam Workshop. WorkshopItems = o que baixar (IDs numéricos da URL);
+  # Mods = o que carregar, na ordem (id= do mod.info de cada item; um item pode ter vários).
+  # O install.sh baixa os itens, confere cada Mod ID e falha listando os IDs disponíveis se algum não existir.
+  #   3543229299 [B42]Project RV Interior   -> PROJECTRVInterior42 (precisa ser o primeiro) + mapa map_distanciado
+  #   3508537032 NeatUI Framework [B42]     -> NeatUI_Framework (antes do Neat Crafting)
+  #   3502080466 Neat Crafting [B42]        -> Neat_Crafting
+  #   2847184718 Proximity Inventory B42.20+ (Mxswat) -> ProximityInventory
+  #   3419026942 ShaderZ                    -> shaderz
+  #   3480305133 TwisTonFire - Stats        -> twistonfirestatsmpstable (versão MP server-side)
+  #   3388721641 Auto Cook                  -> AutoCook
+  #   3387539308 Auto Mechanics             -> AutoMechanics
+  #   3388183573 Auto Tailoring             -> AutoTailoring
+  #   3389448389 Auto Reload                -> AutoReload
+  #   3281755175 Vanilla Vehicles Animated  -> VanillaVehiclesAnimated
+  #   3413150945 More Damaged Objects [42MP] -> (Mod ID confirmado pelo relatório do install.sh)
+  PZ_WORKSHOP_ITEMS: "3543229299;3508537032;3502080466;2847184718;3419026942;3480305133;3388721641;3387539308;3388183573;3389448389;3281755175;3413150945"
+  PZ_MODS: "PROJECTRVInterior42;NeatUI_Framework;Neat_Crafting;ProximityInventory;shaderz;twistonfirestatsmpstable;AutoCook;AutoMechanics;AutoTailoring;AutoReload;VanillaVehiclesAnimated"
+  # Pastas de mapa: as de mods primeiro, o mapa base por último
+  PZ_MAP: "map_distanciado;Muldraugh, KY"
+  install.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    if [ ! -x /pz/server/start-server.sh ] || [ "${PZ_UPDATE}" = "true" ]; then
+      echo "Installing/updating Project Zomboid dedicated server (app 380870)..."
+      steamcmd +force_install_dir /pz/server +login anonymous +app_update 380870 validate +quit
+    else
+      echo "Server files present, skipping SteamCMD (set PZ_UPDATE=true to update)."
+    fi
+    sed -i -E "s/-Xmx[0-9]+[mMgG]/-Xmx${PZ_XMX}/" /pz/server/ProjectZomboid64.json
+
+    # --- Workshop: baixa os itens e confere se cada Mod ID existe em algum mod.info ---
+    content=/pz/server/steamapps/workshop/content/108600
+    mods_line=""
+    if [ -n "${PZ_WORKSHOP_ITEMS}" ]; then
+      dl=()
+      IFS=';' read -ra items <<< "${PZ_WORKSHOP_ITEMS}"
+      for id in "${items[@]}"; do dl+=(+workshop_download_item 108600 "$id" validate); done
+      echo "Baixando ${#items[@]} itens da Workshop..."
+      steamcmd +force_install_dir /pz/server +login anonymous "${dl[@]}" +quit
+      echo "Mod IDs disponíveis por item:"
+      for id in "${items[@]}"; do
+        ids=$(grep -rhs --include=mod.info '^id=' "$content/$id" | tr -d '\r' | cut -d= -f2- | sort -u | paste -sd ';' -)
+        echo "  $id: ${ids:-NÃO BAIXADO}"
+      done
+      grep -rhs --include=mod.info '^id=' "$content" | tr -d '\r' | cut -d= -f2- | sort -u > /tmp/mod-ids
+      missing=0
+      IFS=';' read -ra mods <<< "${PZ_MODS}"
+      for m in "${mods[@]}"; do
+        if grep -qxF "$m" /tmp/mod-ids; then mods_line+="\\${m};"; else echo "ERRO: Mod ID '$m' não existe nos itens baixados"; missing=1; fi
+      done
+      [ "$missing" = 0 ] || { echo "Corrija PZ_MODS/PZ_WORKSHOP_ITEMS no ConfigMap (IDs disponíveis acima)."; exit 1; }
+    fi
+
+    ini="/pz/data/Server/${PZ_SERVER_NAME}.ini"
+    mkdir -p /pz/data/Server
+    touch "$ini"
+    # awk com ENVIRON: o valor entra literal (sem interpretar \, & ou |, que aparecem em Mods= e em senhas)
+    set_key() {
+      if grep -q "^$1=" "$ini"; then
+        K="$1" V="$2" awk 'BEGIN { k = ENVIRON["K"]; v = ENVIRON["V"] } index($0, k "=") == 1 { $0 = k "=" v } { print }' "$ini" > "$ini.tmp" && mv "$ini.tmp" "$ini"
+      else
+        printf '%s=%s\n' "$1" "$2" >> "$ini"
+      fi
+    }
+    set_key PublicName "${PZ_PUBLIC_NAME}"
+    set_key Public false
+    set_key Open true
+    set_key MaxPlayers "${PZ_MAX_PLAYERS}"
+    set_key DefaultPort 16261
+    set_key UDPPort 16262
+    set_key Password "${PZ_SERVER_PASSWORD}"
+    set_key RCONPort 27015
+    set_key RCONPassword "${PZ_RCON_PASSWORD}"
+    set_key SaveWorldEveryMinutes 10
+    set_key BackupsOnStart true
+    set_key BackupsOnVersionChange true
+    set_key BackupsCount 5
+    # Build 42: cada Mod ID com "\" na frente, separados por ";"
+    set_key WorkshopItems "${PZ_WORKSHOP_ITEMS}"
+    set_key Mods "${mods_line%;}"
+    set_key Map "${PZ_MAP}"
+    # Exigido pelo Project RV Interior (o checksum de Lua barra o mod no MP); servidor fechado por senha
+    set_key DoLuaChecksum false
+    chown -R 1000:1000 /pz
+    echo "Config applied: ${ini}"
+  start.sh: |
+    #!/bin/bash
+    set -uo pipefail
+    [ -p /tmp/console ] || mkfifo /tmp/console
+    # Mantém o console aberto (leitura e escrita): comandos via /tmp/console chegam ao servidor
+    # e, quando o servidor termina, o container termina junto (o Kubernetes reinicia o pod)
+    exec 3<>/tmp/console
+    cd /pz/server
+    # A senha de admin vai em todo start: sem ela, o servidor trava pedindo a senha no terminal
+    ARGS=(-servername "${PZ_SERVER_NAME}" -cachedir=/pz/data -adminusername admin -adminpassword "${PZ_ADMIN_PASSWORD}")
+    # O pzexe imprime os argumentos (inclusive a senha): essas linhas são filtradas da saída
+    ./start-server.sh "${ARGS[@]}" <&3 2>&1 | grep --line-buffered -v '^pzexe: arg: '
