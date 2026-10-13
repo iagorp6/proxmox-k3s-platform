@@ -26,7 +26,7 @@ data:
   #   3388183573 Auto Tailoring             -> AutoTailoring
   #   3389448389 Auto Reload                -> AutoReload
   #   3281755175 Vanilla Vehicles Animated  -> VanillaVehiclesAnimated
-  #   3413150945 More Damaged Objects [42MP] -> (Mod ID confirmado pelo relatório do install.sh)
+  #   3413150945 More Damaged Objects [42MP] -> MoreDamagedObjects (mais destruição e sujeira no mapa)
   #   3171167894 that DAMN Library (KI5)     -> damnlib (base dos carros KI5; antes deles)
   #   2962175696 '92 Ford Crown Victoria (KI5) -> 92fordCVPI (civil, polícia e táxi de 1992)
   #   2886832936 '88 Chevrolet S10 (KI5)    -> 88chevyS10 (picape compacta)
@@ -40,7 +40,7 @@ data:
   #   3716405632 Dynamic Horde Events B42    -> DynamicHordeEventsB42 (hordas com aviso de direção)
   #   2757712197 Vehicle Repair Overhaul     -> VehicleRepairOverhaul (por último: sobrescreve as ações de reparo)
   PZ_WORKSHOP_ITEMS: "3543229299;3171167894;3508537032;3502080466;2847184718;3419026942;3480305133;3388721641;3387539308;3388183573;3389448389;3281755175;3413150945;2962175696;2886832936;2870394916;3088951320;3287727378;3761077099;3780639614;3268487204;3778817690;3716405632;2757712197"
-  PZ_MODS: "PROJECTRVInterior42;damnlib;NeatUI_Framework;Neat_Crafting;ProximityInventory;shaderz;twistonfirestatsmpstable;AutoCook;AutoMechanics;AutoTailoring;AutoReload;VanillaVehiclesAnimated;92fordCVPI;88chevyS10;86fordE150;93fordTaurus;92jeepYJ;VFExpansion1;PushVehicle;Bandits2;KnoxAirdrops;DynamicHordeEventsB42;VehicleRepairOverhaul"
+  PZ_MODS: "PROJECTRVInterior42;damnlib;NeatUI_Framework;Neat_Crafting;ProximityInventory;shaderz;twistonfirestatsmpstable;AutoCook;AutoMechanics;AutoTailoring;AutoReload;VanillaVehiclesAnimated;MoreDamagedObjects;92fordCVPI;88chevyS10;86fordE150;93fordTaurus;92jeepYJ;VFExpansion1;PushVehicle;Bandits2;KnoxAirdrops;DynamicHordeEventsB42;VehicleRepairOverhaul"
   # Pastas de mapa: as de mods primeiro, o mapa base por último
   PZ_MAP: "map_distanciado;Muldraugh, KY"
   # Sandbox (base: preset Apocalypse). "Caminho = valor"; o caminho segue as tabelas do
@@ -102,6 +102,29 @@ data:
     HoursForLootRespawn = 168.0                  # loot volta toda semana de jogo (raridade igual)
     SeenHoursPreventLootRespawn = 24.0           # ...em lugares sem jogador há 24 h
     CarSpawnRate = 4                             # poucos -> normal
+    # --- mods (valores padrão lidos do sandbox-options.txt de cada mod no 1º boot) ---
+    # Bandits: presença sentida, sem virar guerra a cada sessão
+    Bandits.General_SpawnMultiplier = 0.5        # 1.0 -> 0.5: metade dos bandidos
+    Bandits.General_OverallAccuracy = 2          # 3 -> 2 (escala 1-5): erram mais; armas do VFE já pesam
+    Bandits.General_GeneratorCutoff = false      # true -> false: não desligam o gerador da base
+    Bandits.General_SabotageCrops = false        # true -> false: não destroem a plantação
+    # Airdrops: objetivo curto e frequente, sem incêndio
+    KnoxAirdrops.MinHoursBetween = 18            # 24 -> 18 h de jogo (~45 min reais com dia de 1 h)
+    KnoxAirdrops.ChancePerHour = 8.0             # 5% -> 8% por hora depois do intervalo mínimo
+    KnoxAirdrops.MapMarkerMinutes = 10           # 3 -> 10 min de marcador no mapa (dá tempo de chegar)
+    KnoxAirdrops.ZombieCount = 20                # 15 -> 20 zumbis em volta da caixa
+    KnoxAirdrops.FireRingCount = 0               # 5 -> 0: sem anel de fogo (incêndio em Muldraugh é perda de mapa)
+    # Hordas: normais e errantes no padrão; o cataclismo (endgame) fica menos punitivo
+    DynamicHordeEvents.CataclysmMinZombies = 150 # 200 -> 150
+    DynamicHordeEvents.CataclysmMaxZombies = 300 # 500 -> 300
+    DynamicHordeEvents.CataclysmPursuitHours = 2.0 # 4 -> 2 h de perseguição
+    # VFE: armas raras; as pesadas continuam no loot, controladas pela raridade
+    VFE.GunLootMulti = 0.6                       # 1.0 -> 0.6
+    VFE.HouseWeaponsMulti = 0.6                  # 1.0 -> 0.6: menos armas em casas comuns
+    # Push Vehicle: empurrar cansa mais
+    PushVehicle.StaminaCostMultiplier = 1.5      # 1.0 -> 1.5
+    # Vehicle Repair Overhaul: liga a retífica de motor (mecânica com profundidade)
+    VRO_EnableEngineRebuild = true               # false -> true
   install.sh: |
     #!/bin/bash
     set -euo pipefail
