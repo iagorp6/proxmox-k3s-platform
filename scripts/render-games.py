@@ -7,6 +7,7 @@ Para cada jogo com status "active" e campo "namespace", grava:
   k8s/argocd/apps/<jogo>.yaml               Application do Argo CD (sync manual)
 E, para o conjunto desses jogos:
   k8s/monitoring/alerts-games.generated.yaml  alertas por jogo (fora do ar, restart, memória)
+  k8s/platform/games-bot-rbac.generated.yaml  RBAC do bot de troca de jogo em cada namespace (ADR 0006)
 O StatefulSet continua escrito à mão em cada jogo (é a parte realmente específica).
 Uso: python3 scripts/render-games.py [--check]   (--check falha se algo gerado estiver desatualizado)
 """
@@ -227,6 +228,46 @@ def render_alerts(games):
             HEADER + f"# Jogos cobertos (status active no catálogo): {', '.join(g['name'] for g in games)}\n" + dump([doc])[len(HEADER):]}
 
 
+def render_bot_rbac(games):
+    """RBAC do games-bot (ADR 0006): só o que o scripts/switch-game.py usa, por jogo do catálogo.
+
+    Fica no k8s/platform (sync automático), não nos jogos (sync manual): um jogo novo no catálogo
+    já ganha a permissão no próximo sync da plataforma.
+    """
+    sa = {"kind": "ServiceAccount", "name": "games-bot", "namespace": "platform"}
+    docs = [{
+        "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
+        "metadata": {"name": "games-bot", "namespace": "argocd"},
+        # Só as Applications dos jogos: patch numa Application qualquer daria deploy arbitrário
+        "rules": [{"apiGroups": ["argoproj.io"], "resources": ["applications"],
+                   "resourceNames": sorted(g["name"] for g in games), "verbs": ["get", "patch"]}],
+    }, {
+        "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
+        "metadata": {"name": "games-bot", "namespace": "argocd"},
+        "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": "games-bot"},
+        "subjects": [sa],
+    }]
+    for g in games:
+        ns, pod = g["namespace"], f'{g["name"]}-0'
+        docs += [{
+            "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
+            "metadata": {"name": "games-bot", "namespace": ns},
+            "rules": [
+                # leitura para rollout status / wait --for=delete (list e watch não filtram por nome)
+                {"apiGroups": [""], "resources": ["pods"], "verbs": ["get", "list", "watch"]},
+                {"apiGroups": ["apps"], "resources": ["statefulsets"], "verbs": ["get", "list", "watch"]},
+                # save do mundo e contagem de jogadores: exec só no pod do jogo
+                {"apiGroups": [""], "resources": ["pods/exec"], "resourceNames": [pod], "verbs": ["get", "create"]},
+            ],
+        }, {
+            "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
+            "metadata": {"name": "games-bot", "namespace": ns},
+            "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": "games-bot"},
+            "subjects": [sa],
+        }]
+    return {ROOT / "k8s" / "platform" / "games-bot-rbac.generated.yaml": dump(docs)}
+
+
 def main():
     check = "--check" in sys.argv
     errors = catalog.problems()
@@ -249,6 +290,7 @@ def main():
         outputs.update(render_game(g))
     if generated:
         outputs.update(render_alerts(generated))
+    outputs.update(render_bot_rbac(catalog.games()))
     stale = []
     for path, content in outputs.items():
         current = path.read_text(encoding="utf-8") if path.exists() else None

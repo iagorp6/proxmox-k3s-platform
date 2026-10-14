@@ -1,15 +1,19 @@
 # Peças da plataforma que não pertencem a um jogo: continuam no ar seja qual for o jogo ativo.
+# Sem "namespace:" aqui: o RBAC do games-bot cria Roles no argocd e nos namespaces dos jogos, e o
+# transformer do Kustomize moveria todos para platform. Cada recurso declara o próprio namespace.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: platform
 resources:
   - namespace.yaml
   - externalsecrets.yaml
   - weekly-summary.yaml
+  - games-bot.yaml
+  - games-bot-rbac.generated.yaml   # gerado por scripts/render-games.py
 
 # Código Python versionado como arquivo; o Kustomize gera o ConfigMap
 configMapGenerator:
   - name: weekly-summary
+    namespace: platform
     files:
       - summary.py=weekly_summary.py
 generatorOptions:

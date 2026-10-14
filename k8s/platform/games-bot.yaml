@@ -1,0 +1,84 @@
+# Bot do Discord com o painel de troca de jogo no #games (ADR 0006). Imagem construída pelo workflow
+# games-bot-image a partir de apps/games-bot; RBAC em games-bot-rbac.generated.yaml (render-games.py).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: games-bot
+  namespace: platform
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: games-bot
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: games-bot
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # nunca dois bots: seriam dois painéis e duas trocas concorrentes
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: games-bot
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: games-bot
+    spec:
+      serviceAccountName: games-bot
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bot
+          image: ghcr.io/iagorp6/games-bot:c13e74159665@sha256:93822d7682e105a7ce5158f32ba4b367db11be707c702afabd076f06bb9017a9
+          env:
+            - name: HOME           # cache do kubectl e config do git num volume gravável
+              value: /work
+            - name: WORKDIR
+              value: /work
+            - name: GAME_HOST      # endereço público dos jogos: fica no SSM, nunca no Git
+              valueFrom:
+                secretKeyRef:
+                  name: games-bot
+                  key: game-host
+                  optional: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: secrets
+              mountPath: /etc/games-bot
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: secrets
+          secret:
+            secretName: games-bot
+            defaultMode: 0440   # o bot copia a deploy key para /work/.ssh com 0600
+            items:
+              - key: discord-token
+                path: discord-token
+              - key: deploy-key
+                path: deploy-key
+        - name: work
+          emptyDir:
+            sizeLimit: 512Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
