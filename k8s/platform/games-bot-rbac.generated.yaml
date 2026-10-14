@@ -1,0 +1,170 @@
+# Gerado por scripts/render-games.py a partir de game.yaml: não edite à mão.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: games-bot
+  namespace: argocd
+rules:
+- apiGroups:
+  - argoproj.io
+  resources:
+  - applications
+  resourceNames:
+  - minecraft
+  - terraria
+  - zomboid
+  verbs:
+  - get
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: games-bot
+  namespace: argocd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: games-bot
+subjects:
+- kind: ServiceAccount
+  name: games-bot
+  namespace: platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: games-bot
+  namespace: minecraft
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ''
+  resources:
+  - pods/exec
+  resourceNames:
+  - minecraft-0
+  verbs:
+  - get
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: games-bot
+  namespace: minecraft
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: games-bot
+subjects:
+- kind: ServiceAccount
+  name: games-bot
+  namespace: platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: games-bot
+  namespace: terraria
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ''
+  resources:
+  - pods/exec
+  resourceNames:
+  - terraria-0
+  verbs:
+  - get
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: games-bot
+  namespace: terraria
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: games-bot
+subjects:
+- kind: ServiceAccount
+  name: games-bot
+  namespace: platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: games-bot
+  namespace: zomboid
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ''
+  resources:
+  - pods/exec
+  resourceNames:
+  - zomboid-0
+  verbs:
+  - get
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: games-bot
+  namespace: zomboid
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: games-bot
+subjects:
+- kind: ServiceAccount
+  name: games-bot
+  namespace: platform
