@@ -41,6 +41,8 @@ spec:
               value: /work
             - name: WORKDIR
               value: /work
+            - name: PLAYERS_ROLE   # cargo do Discord que pode trocar o jogo (nome exato)
+              value: Player
             - name: GAME_HOST      # endereço público dos jogos: fica no SSM, nunca no Git
               valueFrom:
                 secretKeyRef:
