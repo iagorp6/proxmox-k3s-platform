@@ -11,13 +11,19 @@ Uso:
   scripts/switch-game.py <jogo> --force      ignora a checagem de jogadores online
   scripts/switch-game.py <jogo> --dry-run    só mostra/grava os arquivos, sem git/kubectl
   scripts/switch-game.py <jogo> --no-notify  não avisa o Discord
+  scripts/switch-game.py <jogo> --requester NOME --require-player-count
+                                             usado pelo games-bot (ADR 0006): registra quem pediu
+                                             no commit e recusa a troca sem contagem de jogadores
 
-Configuração local (.env.local, fora do Git): GAME_HOST (endereço que os jogadores usam)
-e DISCORD_ROLE_ID (cargo mencionado quando o jogo fica pronto; opcional).
+Configuração local (.env.local, fora do Git) ou variáveis de ambiente (games-bot): GAME_HOST
+(endereço que os jogadores usam), DISCORD_ROLE_ID (cargo mencionado quando o jogo fica pronto;
+opcional) e DISCORD_WEBHOOK_URL (senão lê o Secret discord-webhook do cluster).
 """
 import argparse
 import base64
+import fnmatch
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -29,6 +35,8 @@ import catalog
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ACTIVE_FILE = ROOT / "platform" / "active-game.yaml"
+# Únicos caminhos que uma troca pode commitar (a deploy key do games-bot ignora o ruleset do main)
+ALLOWED_PATHS = ("platform/active-game.yaml", "k8s/games/*/replicas.yaml", "k8s/*/replicas.yaml")
 
 
 def _from_catalog(g):
@@ -60,7 +68,9 @@ def run(cmd, check=True, capture=True):
 
 
 def env_local():
-    env, path = {}, ROOT / ".env.local"
+    """Variáveis de ambiente (games-bot) com o .env.local por cima (uso local)."""
+    env = {k: v for k, v in os.environ.items() if k in ("GAME_HOST", "DISCORD_ROLE_ID", "DISCORD_WEBHOOK_URL")}
+    path = ROOT / ".env.local"
     if path.exists():
         for line in path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
@@ -72,12 +82,14 @@ def env_local():
 
 def notify(title, description, color, mention=False):
     """Envia um embed ao Discord pelo webhook guardado no cluster (Secret vindo do SSM)."""
-    r = run(["kubectl", "-n", "platform", "get", "secret", "discord-webhook",
-             "-o", "jsonpath={.data.webhook-url}"], check=False)
-    if r.returncode != 0 or not r.stdout.strip():
-        print("  AVISO: webhook do Discord indisponível; aviso não enviado")
-        return
-    url = base64.b64decode(r.stdout.strip()).decode()
+    url = env_local().get("DISCORD_WEBHOOK_URL")
+    if not url:
+        r = run(["kubectl", "-n", "platform", "get", "secret", "discord-webhook",
+                 "-o", "jsonpath={.data.webhook-url}"], check=False)
+        if r.returncode != 0 or not r.stdout.strip():
+            print("  AVISO: webhook do Discord indisponível; aviso não enviado")
+            return
+        url = base64.b64decode(r.stdout.strip()).decode()
     payload = {"username": "AsunBoid", "embeds": [{"title": title, "description": description, "color": color}]}
     role = env_local().get("DISCORD_ROLE_ID")
     if mention and role:
@@ -189,7 +201,11 @@ def main():
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--no-notify", action="store_true")
+    ap.add_argument("--requester", help="quem pediu a troca (vai na mensagem do commit)")
+    ap.add_argument("--require-player-count", action="store_true",
+                    help="recusa a troca se não der para contar os jogadores do jogo atual")
     a = ap.parse_args()
+    requester = " ".join((a.requester or "").split())[:40]
 
     target, previous = a.game, current_active()
     print(f"Jogo ativo: {previous or '(nenhum)'} -> {target}")
@@ -205,6 +221,8 @@ def main():
         run(["git", "pull", "--ff-only"])
         if previous in GAMES:
             n = players_online(GAMES[previous])
+            if n is None and a.require_player_count and not a.force:
+                sys.exit(f"ERRO: não consegui contar os jogadores de {previous}; troca recusada.")
             if n is None:
                 print(f"  AVISO: contagem de jogadores indisponível para {previous}")
             elif n > 0 and not a.force:
@@ -225,7 +243,15 @@ def main():
 
     files = [str(p.relative_to(ROOT)) for p in written + [ACTIVE_FILE]]
     run(["git", "add", *files])
-    run(["git", "-c", "core.hooksPath=/dev/null", "commit", "-m", f"platform: switch active game {previous} -> {target}"])
+    staged = run(["git", "diff", "--cached", "--name-only"]).stdout.split()
+    extra = [f for f in staged if not any(fnmatch.fnmatch(f, pat) for pat in ALLOWED_PATHS)]
+    if extra:
+        run(["git", "reset", "-q"])
+        sys.exit(f"ERRO: a troca só pode commitar réplicas e o jogo ativo; recusado: {', '.join(extra)}")
+    message = f"platform: switch active game {previous} -> {target}"
+    if requester:
+        message += f" (pedido por {requester} via Discord)"
+    run(["git", "-c", "core.hooksPath=/dev/null", "commit", "-m", message])
     run(["git", "push"])
     sha = run(["git", "rev-parse", "HEAD"]).stdout.strip()
 
