@@ -232,8 +232,8 @@ def main():
     errors = catalog.problems()
     if not re.fullmatch(r"[0-9a-f]{64}", str(DEFAULTS["kubectl"]["sha256"])):
         errors.append("platform/defaults.yaml: kubectl.sha256 precisa ser o SHA-256 do binário (64 hex)")
-    # Manifests escritos à mão que baixam o kubectl precisam usar a mesma versão e o mesmo hash
-    for f in sorted((ROOT / "k8s").rglob("*.yaml")):
+    # Manifests escritos à mão e Dockerfiles que baixam o kubectl precisam usar a mesma versão e o mesmo hash
+    for f in sorted([*(ROOT / "k8s").rglob("*.yaml"), *(ROOT / "apps").rglob("Dockerfile")]):
         text = f.read_text(encoding="utf-8")
         if not text.strip():
             errors.append(f"{f.relative_to(ROOT)}: arquivo vazio (truncado?); o Argo CD apagaria os recursos dele")

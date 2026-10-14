@@ -1,0 +1,51 @@
+name: games-bot image
+
+# Constrói a imagem do bot de troca de jogo (ADR 0006), escaneia com Trivy e, no main, publica no
+# GHCR com a tag do commit. O manifest do cluster referencia a imagem pelo digest (resumo do job).
+on:
+  push:
+    branches: [main]
+    paths: [apps/games-bot/**, .github/workflows/games-bot-image.yml]
+  pull_request:
+    paths: [apps/games-bot/**, .github/workflows/games-bot-image.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: games-bot-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    name: Build, scan and publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/games-bot
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build
+        run: docker build --pull -t games-bot:ci apps/games-bot
+      - name: Install Trivy (versão fixa, SHA-256 conferido)
+        run: |
+          bash scripts/install-ci-tools.sh "$HOME/bin" trivy
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Image scan (falha em CRITICAL com correção disponível)
+        run: trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress games-bot:ci
+      - name: Publish to GHCR
+        if: github.event_name != 'pull_request'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          TAG="${GITHUB_SHA::12}"
+          docker tag games-bot:ci "$IMAGE:$TAG"
+          docker push "$IMAGE:$TAG"
+          DIGEST="$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$TAG")"
+          echo "Imagem publicada: \`$IMAGE:$TAG\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Use no manifest: \`$IMAGE:$TAG@${DIGEST#*@}\`" >> "$GITHUB_STEP_SUMMARY"
