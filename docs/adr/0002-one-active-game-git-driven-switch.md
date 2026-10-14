@@ -28,5 +28,5 @@ Applications keep manual sync, so unrelated commits never restart a session.
 - Because only one game runs at a time, games can reuse the ports already forwarded by the
   firewall. The Services of stopped games have no ready endpoints, so a custom Argo CD health
   check treats them as healthy and a `ServiceLBPortConflict` alert covers the unexpected case.
-- Switching needs someone with repository and cluster access; self-service for players is not
-  implemented.
+- Switching needs someone with repository and cluster access. Player self-service is added on top
+  of this flow by [ADR 0006](0006-discord-self-service-switch.md), without changing the decision.

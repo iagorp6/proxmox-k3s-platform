@@ -28,6 +28,12 @@ declare -A MAP=(
   [/homelab/monitoring/grafana-admin-password]=grafana-admin
   [/homelab/monitoring/discord-webhook-url]=discord-webhook-alertas
   [/homelab/monitoring/healthchecks-watchdog-url]=healthchecks-watchdog
+  [/homelab/discord/bot-token]=discord-bot-token
+)
+
+# Segredos de várias linhas (chave SSH) ficam em Nota segura: o campo senha não guarda quebras de linha
+declare -A NOTES=(
+  [/homelab/github/games-bot-deploy-key]=games-bot-deploy-key
 )
 
 for param in "${!MAP[@]}"; do
@@ -38,6 +44,16 @@ for param in "${!MAP[@]}"; do
   aws ssm put-parameter --cli-input-json "file://$TMP" --profile "$PROFILE" --region "$REGION" >/dev/null
   : > "$TMP"
   echo "OK: $param <- $item (${#value} caracteres)"
+done
+
+for param in "${!NOTES[@]}"; do
+  item="${NOTES[$param]}"
+  bw get notes "$item" > "$TMP" 2>/dev/null || { echo "ERRO: nota '$item' não encontrada no Bitwarden" >&2; exit 1; }
+  [[ -s "$TMP" ]] || { echo "ERRO: nota '$item' está vazia" >&2; exit 1; }
+  aws ssm put-parameter --name "$param" --type SecureString --value "file://$TMP" --overwrite \
+    --profile "$PROFILE" --region "$REGION" >/dev/null
+  echo "OK: $param <- $item ($(wc -l < "$TMP") linhas)"
+  : > "$TMP"
 done
 
 aws ssm put-parameter --name /homelab/monitoring/grafana-admin-user --type String --value admin \

@@ -140,7 +140,9 @@ def render_game(g):
             "spec": {
                 "schedule": b["schedule"], "timeZone": "America/Sao_Paulo", "concurrencyPolicy": "Forbid",
                 "successfulJobsHistoryLimit": 1, "failedJobsHistoryLimit": 2,
-                "jobTemplate": {"spec": {"backoffLimit": 2, "template": {"spec": {
+                # Job encerrado (ok ou falha) some depois de 3 dias: dá tempo de investigar e evita que
+                # uma falha antiga já resolvida mantenha o KubeJobFailed disparando para sempre.
+                "jobTemplate": {"spec": {"backoffLimit": 2, "ttlSecondsAfterFinished": 259200, "template": {"spec": {
                     "restartPolicy": "Never",
                     **({"serviceAccountName": hook[1], "initContainers": [hook[0]]} if hook else
                        {"automountServiceAccountToken": False}),
