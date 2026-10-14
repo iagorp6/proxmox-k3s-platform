@@ -172,6 +172,19 @@ spec:
             summary: "{{ $labels.container }} ({{ $labels.namespace }}) morto por falta de memória"
             description: "O container foi OOMKilled nos últimos 15 minutos."
             action: "Comparar o uso com o limite e ajustar os resources no values ou no manifest."
+        # Painel de troca de jogo (ADR 0006): sem o bot, ninguém além do admin troca o jogo
+        - alert: GamesBotDown
+          expr: |
+            kube_deployment_spec_replicas{namespace="platform",deployment="games-bot"} > 0
+            unless on (namespace, deployment)
+            kube_deployment_status_replicas_available{namespace="platform",deployment="games-bot"} > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Painel de jogos do Discord fora do ar"
+            description: "O games-bot não tem réplica disponível há 10 minutos: o painel do #games não responde e a troca de jogo só funciona pelo make switch-game."
+            action: "kubectl -n platform get pods -l app.kubernetes.io/name=games-bot e kubectl -n platform describe pod -l app.kubernetes.io/name=games-bot | tail -20"
 
     - name: games
       rules:
