@@ -128,3 +128,25 @@ tests:
               summary: "Menos de 1 GiB de RAM disponível no host"
               description: "O host não tem swap. Se a memória acabar, o OOM killer do host derruba o processo da VM inteira."
               action: "ssh no host e rodar free -m; conferir o ARC (arc_summary -s arc) e o KSM (cat /sys/kernel/mm/ksm/pages_sharing)"
+  - name: games-bot sem réplica disponível dispara GamesBotDown; com réplica, não
+    interval: 1m
+    input_series:
+      - series: 'kube_deployment_spec_replicas{namespace="platform",deployment="games-bot"}'
+        values: '1x20'
+      - series: 'kube_deployment_status_replicas_available{namespace="platform",deployment="games-bot"}'
+        values: '1x4 0x15'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: GamesBotDown
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: GamesBotDown
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: GamesBotDown
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: platform, deployment: games-bot}
+            exp_annotations:
+              summary: "Painel de jogos do Discord fora do ar"
+              description: "O games-bot não tem réplica disponível há 10 minutos: o painel do #games não responde e a troca de jogo só funciona pelo make switch-game."
+              action: "kubectl -n platform get pods -l app.kubernetes.io/name=games-bot e kubectl -n platform describe pod -l app.kubernetes.io/name=games-bot | tail -20"
