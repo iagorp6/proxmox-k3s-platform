@@ -5,4 +5,4 @@ metadata:
   name: terraria
   namespace: terraria
 spec:
-  replicas: 0
+  replicas: 1
