@@ -31,6 +31,7 @@ def _str(dumper, data):
 
 yaml.SafeDumper.add_representer(str, _str)
 HEADER = "# Gerado por scripts/render-games.py a partir de game.yaml: não edite à mão.\n"
+IMAGE_REF = re.compile(r"[a-z0-9][a-z0-9._/-]*(?::[0-9]+)?(?:/[a-z0-9._-]+)*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}")
 BACKUP_KEYS = [
     ("RESTIC_REPOSITORY", "/homelab/backup/restic-repository"),
     ("RESTIC_PASSWORD", "/homelab/backup/restic-password"),
@@ -271,6 +272,9 @@ def render_bot_rbac(games):
 def main():
     check = "--check" in sys.argv
     errors = catalog.problems()
+    for key in ("resticImage", "curlImage"):
+        if not IMAGE_REF.fullmatch(str(DEFAULTS[key])):
+            errors.append(f"platform/defaults.yaml: {key} sem tag e digest válidos (use repo:tag@sha256:<64 hex>)")
     if not re.fullmatch(r"[0-9a-f]{64}", str(DEFAULTS["kubectl"]["sha256"])):
         errors.append("platform/defaults.yaml: kubectl.sha256 precisa ser o SHA-256 do binário (64 hex)")
     # Manifests escritos à mão e Dockerfiles que baixam o kubectl precisam usar a mesma versão e o mesmo hash
@@ -278,6 +282,11 @@ def main():
         text = f.read_text(encoding="utf-8")
         if not text.strip():
             errors.append(f"{f.relative_to(ROOT)}: arquivo vazio (truncado?); o Argo CD apagaria os recursos dele")
+        # Toda imagem fixada por tag e digest: uma referência malformada passa no kubeconform e só
+        # quebra no cluster (InvalidImageName), como no deploy do games-bot em 14/10/2026
+        for ref in re.findall(r"^\s*(?:- )?image:\s*(\S+)", text, re.M) + re.findall(r"^FROM\s+(\S+)", text, re.M):
+            if not IMAGE_REF.fullmatch(ref):
+                errors.append(f"{f.relative_to(ROOT)}: imagem sem tag e digest válidos: {ref} (use repo:tag@sha256:<64 hex>)")
         if "dl.k8s.io/release/" in text and "generated" not in f.name:
             if f"/release/{DEFAULTS['kubectl']['version']}/" not in text or DEFAULTS["kubectl"]["sha256"] not in text:
                 errors.append(f"{f.relative_to(ROOT)}: kubectl com versão ou SHA-256 diferente de platform/defaults.yaml")
