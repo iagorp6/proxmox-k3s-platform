@@ -92,6 +92,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 2
+      ttlSecondsAfterFinished: 259200
       template:
         spec:
           restartPolicy: Never
