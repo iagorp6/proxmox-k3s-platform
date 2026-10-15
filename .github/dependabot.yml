@@ -13,6 +13,7 @@ updates:
     commit-message:
       prefix: ci
 
+  # Providers dos dois stacks num PR só por semana (cada lock file muda no mesmo PR).
   - package-ecosystem: terraform
     directories: ["/terraform", "/terraform-aws"]
     schedule:
@@ -20,5 +21,24 @@ updates:
       day: monday
       time: "07:00"
       timezone: America/Sao_Paulo
+    groups:
+      terraform-providers:
+        patterns: ["*"]
     commit-message:
       prefix: terraform
+
+  # Imagem base do games-bot (tag e digest no FROM). Depois do merge, o workflow games-bot-image
+  # publica a imagem nova e o k8s/platform/games-bot.yaml é atualizado num PR à parte.
+  - package-ecosystem: docker
+    directory: /apps/games-bot
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: America/Sao_Paulo
+    ignore:
+      # Python fica em 3.13 até o requirements.lock (wheels cp313) ser regerado para outra versão.
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    commit-message:
+      prefix: games-bot
