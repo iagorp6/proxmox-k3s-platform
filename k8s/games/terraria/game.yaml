@@ -16,3 +16,6 @@ backup:
   exclude: [/data/tshock/logs]
   verify: [data/worlds/*.wld]   # restore drill: o mundo precisa voltar (scripts/restore-drill.py)
 metrics: true
+switch:
+  # "save" no console do TShock (FIFO /tmp/console, mesmo padrão do preStop); o sleep cobre o save do mundo grande
+  saveCommand: echo save > /tmp/console; sleep 15

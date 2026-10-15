@@ -12,6 +12,7 @@ backup:
   schedule: "15 5 * * *"
   pvc: data-minecraft-0
   paths: [/data/world]
+  verify: [data/world/level.dat]   # restore drill: o mundo precisa voltar (scripts/restore-drill.py)
 metrics: true
 switch:
   saveCommand: rcon-cli save-all flush
