@@ -1,11 +1,18 @@
 # Cloud image baixada direto pelo node Proxmox (content type "import", PVE 8.4+)
-resource "proxmox_virtual_environment_download_file" "ubuntu_2604" {
+resource "proxmox_download_file" "ubuntu_2604" {
   content_type = "import"
   datastore_id = var.files_datastore
   node_name    = var.node_name
   url          = var.cloud_image_url
   file_name    = "ubuntu-26.04-server-cloudimg-amd64.qcow2"
   overwrite    = false
+}
+
+# Renomeado no provider 0.116 (o nome antigo sai na v1.0). O provider move o state sem recriar a imagem,
+# e o id ("local:import/<arquivo>") não muda, então a VM não vê diferença no import_from.
+moved {
+  from = proxmox_virtual_environment_download_file.ubuntu_2604
+  to   = proxmox_download_file.ubuntu_2604
 }
 
 # User-data do cloud-init gravado como snippet no storage "local"
@@ -74,7 +81,7 @@ resource "proxmox_virtual_environment_vm" "k3s" {
 
   disk {
     datastore_id = var.vm_datastore
-    import_from  = proxmox_virtual_environment_download_file.ubuntu_2604.id
+    import_from  = proxmox_download_file.ubuntu_2604.id
     interface    = "scsi0"
     size         = var.vm_disk_gb
     iothread     = true
