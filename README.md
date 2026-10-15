@@ -225,7 +225,7 @@ Before each snapshot, an init container runs the game's `saveCommand` from the c
 
 Every push runs Terraform `fmt`/`validate`/`tflint` for both stacks, `ansible-lint`, `kubeconform` (including CRDs), drift checks for the generated dashboard and game manifests, alert rule tests, `shellcheck` on every tracked script, Python syntax and `ruff`, and a Trivy secret scan.
 
-- **Reproducible:** the runner image and the versions of Terraform, tflint, kubeconform, Trivy, promtool and ansible-lint are pinned; downloaded binaries are verified by SHA-256 (`scripts/install-ci-tools.sh`, shared by CI and the local runner) and GitHub Actions are pinned by commit SHA. Dependabot proposes upgrades weekly, and they merge only on a green build.
+- **Reproducible:** the runner image and the versions of Terraform, tflint, kubeconform, Trivy, promtool and ansible-lint are pinned; downloaded binaries are verified by SHA-256 (`scripts/install-ci-tools.sh`, shared by CI and the local runner) and GitHub Actions are pinned by commit SHA. Dependabot proposes upgrades to actions, Terraform providers and the bot's base image weekly; Renovate (`renovate.json`) covers what Dependabot cannot see: image digests in the manifests (grouped into one weekly PR, generated files included so the drift check stays green), Helm chart versions and K3s patch releases. Nothing auto-merges.
 - **Alert rules are tested like code:** `promtool` validates every rule and runs unit tests with synthetic series (`k8s/monitoring/tests/`): a stopped game must not page, a missing backup must, and each alert must fire with the expected labels and text. A lint also fails the build if a `critical` or `warning` alert has no first-step action.
 - **Weekly drift detection:** `terraform-drift.yml` assumes a read-only AWS role via OIDC and runs `terraform plan` on `terraform-aws/`. It fails, and GitHub sends an e-mail, when AWS diverges from the code (a change made outside Terraform or a forgotten `apply`). The repository is public, so the job logs only the address and action of each changed resource, never values.
 - **Same checks locally:** `scripts/ci-local.sh` runs the identical checks on a clean copy of the tracked files (so local secrets cannot leak into the scan) and refuses to run if any tool fails a version smoke test.
@@ -277,10 +277,10 @@ A Budgets alarm fires above USD 1/month, and a CloudWatch alarm watches the size
 
 - [x] GitHub Actions to AWS via OIDC, used for weekly drift detection
 - [x] Migrate to the non-deprecated `proxmox_download_file` resource
+- [x] Renovate for image digests, chart versions and K3s
 - [ ] Timed full DR drill and published RTO (rebuild strategy in [ADR 0005](docs/adr/0005-host-recovery-by-rebuild.md))
 - [ ] Reinstall the host on a ZFS mirror during the DR drill
 - [ ] Manage the Helm releases (monitoring, External Secrets, Argo CD) through Argo CD
-- [ ] Renovate for image digests and chart versions
 - [ ] Custom game-server image built in CI
 
 ---
