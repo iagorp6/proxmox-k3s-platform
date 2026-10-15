@@ -87,7 +87,7 @@ flowchart TB
 | Alerting | Alertmanager → Discord, Healthchecks.io dead man's switch |
 | Secrets | Bitwarden, AWS SSM Parameter Store, External Secrets Operator |
 | Backup | restic → S3 (encrypted, deduplicated) |
-| CI | GitHub Actions: tflint, ansible-lint, kubeconform, promtool, shellcheck, Trivy; Dependabot |
+| CI | GitHub Actions: tflint, ansible-lint, kubeconform, promtool, shellcheck, ruff, Trivy; Dependabot |
 
 ---
 
@@ -221,7 +221,7 @@ Before each snapshot, an init container runs the game's `saveCommand` from the c
 
 ## CI
 
-Every push runs Terraform `fmt`/`validate`/`tflint` for both stacks, `ansible-lint`, `kubeconform` (including CRDs), drift checks for the generated dashboard and game manifests, alert rule tests, `shellcheck`, Python syntax and a Trivy secret scan.
+Every push runs Terraform `fmt`/`validate`/`tflint` for both stacks, `ansible-lint`, `kubeconform` (including CRDs), drift checks for the generated dashboard and game manifests, alert rule tests, `shellcheck` on every tracked script, Python syntax and `ruff`, and a Trivy secret scan.
 
 - **Reproducible:** the runner image and the versions of Terraform, tflint, kubeconform, Trivy, promtool and ansible-lint are pinned; downloaded binaries are verified by SHA-256 (`scripts/install-ci-tools.sh`, shared by CI and the local runner) and GitHub Actions are pinned by commit SHA. Dependabot proposes upgrades weekly, and they merge only on a green build.
 - **Alert rules are tested like code:** `promtool` validates every rule and runs unit tests with synthetic series (`k8s/monitoring/tests/`): a stopped game must not page, a missing backup must, and each alert must fire with the expected labels and text. A lint also fails the build if a `critical` or `warning` alert has no first-step action.

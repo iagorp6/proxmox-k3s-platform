@@ -1,0 +1,5 @@
+# LF em tudo (scripts com CRLF quebram no bash e no container). O clone fica no WSL, mas um editor do
+# Windows pode salvar com CRLF; isso normaliza no commit.
+* text=auto eol=lf
+# Instalador do modpack roda no PowerShell do Windows: versionado como está (CRLF).
+*.ps1 -text
