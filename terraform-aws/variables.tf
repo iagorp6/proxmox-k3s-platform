@@ -26,3 +26,9 @@ variable "backup_size_alert_gb" {
   type        = number
   default     = 15
 }
+
+variable "github_repository" {
+  description = "Repositório (owner/nome) cujo branch main pode assumir a role de drift via OIDC"
+  type        = string
+  default     = "iagorp6/proxmox-k3s-platform"
+}

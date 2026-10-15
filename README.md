@@ -211,6 +211,7 @@ Before each snapshot, an init container runs the game's `saveCommand` from the c
 ## Security
 
 - IAM users scoped to a single bucket (backup) and a single SSM path, read-only (secrets)
+- GitHub Actions reaches AWS through OIDC with a short-lived role, no stored keys; only `main` can assume it, and explicit denies keep it away from backup objects and game secrets
 - Terraform state bucket: versioned, encrypted, public access blocked, TLS-only, `prevent_destroy`, native S3 locking
 - Kubernetes Secrets encrypted at rest and delivered by External Secrets; nothing secret in Git
 - Container images pinned by digest; chart, tool and action versions pinned
@@ -226,6 +227,7 @@ Every push runs Terraform `fmt`/`validate`/`tflint` for both stacks, `ansible-li
 
 - **Reproducible:** the runner image and the versions of Terraform, tflint, kubeconform, Trivy, promtool and ansible-lint are pinned; downloaded binaries are verified by SHA-256 (`scripts/install-ci-tools.sh`, shared by CI and the local runner) and GitHub Actions are pinned by commit SHA. Dependabot proposes upgrades weekly, and they merge only on a green build.
 - **Alert rules are tested like code:** `promtool` validates every rule and runs unit tests with synthetic series (`k8s/monitoring/tests/`): a stopped game must not page, a missing backup must, and each alert must fire with the expected labels and text. A lint also fails the build if a `critical` or `warning` alert has no first-step action.
+- **Weekly drift detection:** `terraform-drift.yml` assumes a read-only AWS role via OIDC and runs `terraform plan` on `terraform-aws/`. It fails, and GitHub sends an e-mail, when AWS diverges from the code (a change made outside Terraform or a forgotten `apply`). The repository is public, so the job logs only the address and action of each changed resource, never values.
 - **Same checks locally:** `scripts/ci-local.sh` runs the identical checks on a clean copy of the tracked files (so local secrets cannot leak into the scan) and refuses to run if any tool fails a version smoke test.
 
 ---
@@ -273,13 +275,13 @@ A Budgets alarm fires above USD 1/month, and a CloudWatch alarm watches the size
 
 ## Roadmap
 
+- [x] GitHub Actions to AWS via OIDC, used for weekly drift detection
+- [x] Migrate to the non-deprecated `proxmox_download_file` resource
 - [ ] Timed full DR drill and published RTO (rebuild strategy in [ADR 0005](docs/adr/0005-host-recovery-by-rebuild.md))
 - [ ] Reinstall the host on a ZFS mirror during the DR drill
 - [ ] Manage the Helm releases (monitoring, External Secrets, Argo CD) through Argo CD
 - [ ] Renovate for image digests and chart versions
-- [ ] Migrate to the non-deprecated `proxmox_download_file` resource
 - [ ] Custom game-server image built in CI
-- [ ] GitHub Actions to AWS via OIDC (no long-lived keys)
 
 ---
 

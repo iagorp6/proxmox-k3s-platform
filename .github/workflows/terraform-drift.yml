@@ -1,0 +1,81 @@
+name: Terraform drift (aws)
+
+# terraform plan do terraform-aws com credencial temporária via OIDC (github-oidc.tf), sem chave
+# guardada no GitHub. Falha quando a AWS diverge do código (mudança fora do Terraform ou apply
+# esquecido), e o GitHub avisa por e-mail. Roda só no main: a role não aceita token de PR.
+# O repositório é público, então o log mostra só endereço e ação de cada recurso, nunca valores.
+on:
+  schedule:
+    - cron: "0 9 * * 1"   # segunda, 06:00 em Brasília
+  push:
+    branches: [main]
+    paths: [terraform-aws/**, .github/workflows/terraform-drift.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-drift
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: terraform plan (terraform-aws)
+    # Fica pulado até existir a variável com o ARN da role (terraform output github_drift_role_arn)
+    if: vars.AWS_DRIFT_ROLE_ARN != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: terraform-aws
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.16.5"
+          terraform_wrapper: false
+      - name: Profile "homelab" assumindo a role com o token OIDC do run
+        env:
+          ROLE_ARN: ${{ vars.AWS_DRIFT_ROLE_ARN }}
+        run: |
+          # backend.tf e o provider usam o profile homelab; aqui ele vira web identity, sem chave
+          curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value > "$RUNNER_TEMP/oidc-token"
+          mkdir -p ~/.aws
+          printf '[profile homelab]\nrole_arn = %s\nweb_identity_token_file = %s\nrole_session_name = gha-drift-%s\nregion = sa-east-1\n' \
+            "$ROLE_ARN" "$RUNNER_TEMP/oidc-token" "$GITHUB_RUN_ID" > ~/.aws/config
+      - name: terraform init
+        run: terraform init -input=false -no-color > "$RUNNER_TEMP/init.log" 2>&1 || { grep -A8 'Error' "$RUNNER_TEMP/init.log" || tail -5 "$RUNNER_TEMP/init.log"; exit 1; }
+      - name: terraform plan
+        env:
+          TF_VAR_budget_email: ${{ secrets.BUDGET_EMAIL }}
+        run: |
+          # -lock=false: a role só lê; plan não grava o lockfile no bucket do state
+          set +e
+          terraform plan -lock=false -input=false -no-color -detailed-exitcode -out=tfplan > "$RUNNER_TEMP/plan.log" 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -eq 1 ]; then
+            grep -A8 'Error' "$RUNNER_TEMP/plan.log" || tail -5 "$RUNNER_TEMP/plan.log"
+            exit 1
+          fi
+          if [ "$rc" -eq 0 ]; then
+            echo "Sem drift: a AWS está igual ao código do terraform-aws." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "### Drift no terraform-aws"
+            echo
+            echo "A AWS diverge do código. Rode \`terraform plan\` no WSL para ver os valores e depois \`terraform apply\`."
+            echo
+            echo '```'
+            terraform show -json tfplan | jq -r '
+              ([.resource_changes[]? | select(.change.actions != ["no-op"]) | "\(.change.actions | join("+"))  \(.address)"]
+               + [.output_changes // {} | to_entries[] | select(.value.actions != ["no-op"]) | "\(.value.actions | join("+"))  output.\(.key)"])[]'
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 1
