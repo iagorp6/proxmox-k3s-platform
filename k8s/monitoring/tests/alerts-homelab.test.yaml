@@ -1,54 +1,6 @@
 rule_files: [alerts-homelab.yaml]
 evaluation_interval: 1m
 tests:
-  - name: Zomboid ativo e sem metricas dispara ZomboidExporterMissing
-    interval: 1m
-    input_series:
-      - series: 'kube_statefulset_replicas{namespace="zomboid",statefulset="zomboid"}'
-        values: '1x15'
-    alert_rule_test:
-      - eval_time: 4m
-        alertname: ZomboidExporterMissing
-        exp_alerts: []
-      - eval_time: 7m
-        alertname: ZomboidExporterMissing
-        exp_alerts:
-          - exp_labels: {severity: critical, game: zomboid}
-            exp_annotations:
-              summary: "Sem métricas do servidor do jogo"
-              description: "O pod do jogo não está sendo coletado: parado, Pending ou em crash."
-              action: "kubectl -n zomboid describe pod zomboid-0 | tail -15"
-  - name: Zomboid parado (outro jogo ativo) nao dispara alerta nenhum do Zomboid
-    interval: 1m
-    input_series:
-      - series: 'kube_statefulset_replicas{namespace="zomboid",statefulset="zomboid"}'
-        values: '0x15'
-    alert_rule_test:
-      - eval_time: 12m
-        alertname: ZomboidExporterMissing
-        exp_alerts: []
-      - eval_time: 12m
-        alertname: ZomboidDown
-        exp_alerts: []
-  - name: Zomboid sem responder ao RCON por 5 min dispara ZomboidDown
-    interval: 1m
-    input_series:
-      - series: 'game_up{game="zomboid"}'
-        values: '1x3 0x15'
-      - series: 'kube_statefulset_replicas{namespace="zomboid",statefulset="zomboid"}'
-        values: '1x20'
-    alert_rule_test:
-      - eval_time: 7m
-        alertname: ZomboidDown
-        exp_alerts: []
-      - eval_time: 10m
-        alertname: ZomboidDown
-        exp_alerts:
-          - exp_labels: {severity: critical, game: zomboid}
-            exp_annotations:
-              summary: "Servidor do jogo fora do ar"
-              description: "O servidor não responde ao RCON há mais de 5 minutos. Os jogadores não conseguem entrar."
-              action: "kubectl -n zomboid get pods e kubectl -n zomboid logs zomboid-0 -c server --tail=30"
   - name: morte no PerkLog dispara PlayerDied com as horas sobrevividas; morte antiga nao
     interval: 1m
     input_series:

@@ -57,7 +57,8 @@ alertmanager:
     global:
       resolve_timeout: 5m
     time_intervals:
-      # Restart diário do servidor (CronJob das 6h): evita alerta falso de queda
+      # Restart diário do servidor (CronJob das 6h): evita alerta falso de queda.
+      # Jogos entram pela chave alerts.muteDuring do game.yaml (o render-games.py --check confere o nome)
       - name: restart-diario
         time_intervals:
           - times:
@@ -101,10 +102,10 @@ alertmanager:
         - receiver: "null"
           matchers:
             - severity = "info"
-        # Disponibilidade do jogo: silêncio durante o restart diário
+        # Alertas de jogo com alerts.muteDuring no catálogo: silêncio durante o restart diário
         - receiver: discord
           matchers:
-            - alertname =~ "ZomboidDown|ZomboidExporterMissing"
+            - mute = "restart-diario"
           mute_time_intervals: ["restart-diario"]
           repeat_interval: 2h
         - receiver: discord
@@ -118,9 +119,10 @@ alertmanager:
       # Com o host fora, alertas que dependem dele ficam mudos
       - source_matchers: ["alertname = HostDown"]
         target_matchers: ['alertname =~ "DiskSmartFailing|DiskReallocatedSectors|ZfsPoolNotOnline|EccUncorrectableErrors|EccCorrectableErrorsHigh|HostDiskSpaceLow"']
-      # Sem o pod, o restart e a memória não importam
-      - source_matchers: ["alertname = ZomboidExporterMissing"]
-        target_matchers: ['alertname =~ "ZomboidDown|ZomboidRestarted|ZomboidMemoryHigh"']
+      # Com o jogo fora do ar, restart, memória e métricas do mesmo jogo não importam
+      - source_matchers: ["alertname = GameDown"]
+        target_matchers: ['alertname =~ "GameRestarted|GameMemoryHigh|GameExporterMissing"']
+        equal: ["namespace"]
     receivers:
       - name: "null"
       - name: healthchecks

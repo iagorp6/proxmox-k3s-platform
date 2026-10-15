@@ -82,3 +82,47 @@ tests:
               summary: "Servidor de terraria reiniciou sozinho"
               description: "O processo do jogo caiu e o Kubernetes o reiniciou. Trocas de jogo e deploys não disparam este alerta."
               action: "kubectl -n terraria logs terraria-0 -c server --previous --tail=40"
+  - name: pod pronto sem responder por 5 min dispara GameUnresponsive com a janela do jogo; pod parado nao
+    interval: 1m
+    input_series:
+      - series: 'game_up{game="zomboid",namespace="zomboid",pod="zomboid-0"}'
+        values: '1x3 0x15'
+      - series: 'kube_statefulset_status_replicas_ready{namespace="zomboid",statefulset="zomboid"}'
+        values: '1x20'
+      - series: 'game_up{game="terraria",namespace="terraria",pod="terraria-0"}'   # exporter vivo, pod fora: é caso do GameDown
+        values: '0x20'
+      - series: 'kube_statefulset_status_replicas_ready{namespace="terraria",statefulset="terraria"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: GameUnresponsive
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: GameUnresponsive
+        exp_alerts:
+          - exp_labels: {severity: critical, mute: restart-diario, game: zomboid, namespace: zomboid, pod: zomboid-0}
+            exp_annotations:
+              summary: "Servidor de zomboid não responde"
+              description: "O pod de zomboid está pronto, mas o servidor não responde ao exporter há mais de 5 minutos. Os jogadores não conseguem entrar."
+              action: "kubectl -n zomboid logs zomboid-0 -c server --tail=30"
+  - name: pod pronto sem a serie game_up dispara GameExporterMissing; com a serie nao
+    interval: 1m
+    input_series:
+      - series: 'kube_statefulset_status_replicas_ready{namespace="minecraft",statefulset="minecraft"}'
+        values: '1x15'
+      - series: 'kube_statefulset_status_replicas_ready{namespace="terraria",statefulset="terraria"}'
+        values: '1x15'
+      - series: 'game_up{game="terraria",namespace="terraria",pod="terraria-0"}'
+        values: '1x15'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: GameExporterMissing
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: GameExporterMissing
+        exp_alerts:
+          - exp_labels: {severity: warning, game: minecraft, namespace: minecraft, statefulset: minecraft}
+            exp_annotations:
+              summary: "Sem métricas do servidor de minecraft"
+              description: "O pod de minecraft está pronto, mas o Prometheus não coleta o exporter. Painel, alertas de jogador e fila do bot ficam cegos."
+              action: "kubectl -n minecraft logs minecraft-0 -c exporter --tail=30"

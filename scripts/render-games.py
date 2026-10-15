@@ -6,7 +6,7 @@ Para cada jogo com status "active" e campo "namespace", grava:
                                             backup (ExternalSecret + CronJob restic)
   k8s/argocd/apps/<jogo>.yaml               Application do Argo CD (sync manual)
 E, para o conjunto desses jogos:
-  k8s/monitoring/alerts-games.generated.yaml  alertas por jogo (fora do ar, restart, memória)
+  k8s/monitoring/alerts-games.generated.yaml  alertas por jogo (fora do ar, sem resposta, sem métricas, restart, memória)
   k8s/platform/games-bot-rbac.generated.yaml  RBAC do bot de troca de jogo em cada namespace (ADR 0006)
 O StatefulSet continua escrito à mão em cada jogo (é a parte realmente específica).
 Uso: python3 scripts/render-games.py [--check]   (--check falha se algo gerado estiver desatualizado)
@@ -22,6 +22,7 @@ import catalog
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEFAULTS = yaml.safe_load((ROOT / "platform" / "defaults.yaml").read_text(encoding="utf-8"))
+ALERTMANAGER_VALUES = ROOT / "k8s" / "monitoring" / "values-kube-prometheus-stack.yaml"
 
 
 def _str(dumper, data):
@@ -182,26 +183,51 @@ def render_game(g):
     }
 
 
-def render_alerts(games):
-    """PrometheusRule com os alertas que todo jogo do catálogo recebe, sem lista escrita à mão."""
+def game_rules(games, mute):
+    """Alertas que todo jogo recebe, para um grupo de jogos com a mesma janela de silêncio (alerts.muteDuring)."""
     ns = "|".join(g["namespace"] for g in games)
     server = f'namespace=~"{ns}",container="server"'
-    rules = [{
+    # game_up vem do exporter com a label game; o namespace do jogo é igual ao nome (catalog.py garante)
+    ready = (f'label_replace(kube_statefulset_status_replicas_ready{{namespace=~"{ns}"}} > 0, '
+             '"game", "$1", "namespace", "(.+)")')
+    labels = {"mute": mute} if mute else {}
+    return [{
         "alert": "GameDown",
         "expr": (f'kube_statefulset_replicas{{namespace=~"{ns}"}} > 0\n'
                  "unless on (namespace, statefulset)\n"
                  f'kube_statefulset_status_replicas_ready{{namespace=~"{ns}"}} > 0\n'),
         "for": "10m",
-        "labels": {"severity": "critical"},
+        "labels": {"severity": "critical", **labels},
         "annotations": {
             "summary": "Servidor de {{ $labels.namespace }} fora do ar",
             "description": "{{ $labels.namespace }} é o jogo ativo, mas o pod não está pronto há mais de 10 minutos.",
             "action": "kubectl -n {{ $labels.namespace }} get pods e kubectl -n {{ $labels.namespace }} logs {{ $labels.statefulset }}-0 -c server --tail=30",
         },
     }, {
+        # Pod pronto, mas o servidor não responde ao exporter (RCON, REST...). Cobre jogo sem readinessProbe.
+        "alert": "GameUnresponsive",
+        "expr": f'game_up{{game=~"{ns}"}} == 0\nand on (game)\n{ready}\n',
+        "for": "5m",
+        "labels": {"severity": "critical", **labels},
+        "annotations": {
+            "summary": "Servidor de {{ $labels.game }} não responde",
+            "description": "O pod de {{ $labels.game }} está pronto, mas o servidor não responde ao exporter há mais de 5 minutos. Os jogadores não conseguem entrar.",
+            "action": "kubectl -n {{ $labels.game }} logs {{ $labels.game }}-0 -c server --tail=30",
+        },
+    }, {
+        "alert": "GameExporterMissing",
+        "expr": f"{ready}\nunless on (game)\ngame_up\n",
+        "for": "5m",
+        "labels": {"severity": "warning", **labels},
+        "annotations": {
+            "summary": "Sem métricas do servidor de {{ $labels.game }}",
+            "description": "O pod de {{ $labels.game }} está pronto, mas o Prometheus não coleta o exporter. Painel, alertas de jogador e fila do bot ficam cegos.",
+            "action": "kubectl -n {{ $labels.game }} logs {{ $labels.game }}-0 -c exporter --tail=30",
+        },
+    }, {
         "alert": "GameRestarted",
         "expr": f"increase(kube_pod_container_status_restarts_total{{{server}}}[15m]) > 0",
-        "labels": {"severity": "warning"},
+        "labels": {"severity": "warning", **labels},
         "annotations": {
             "summary": "Servidor de {{ $labels.namespace }} reiniciou sozinho",
             "description": "O processo do jogo caiu e o Kubernetes o reiniciou. Trocas de jogo e deploys não disparam este alerta.",
@@ -213,20 +239,53 @@ def render_alerts(games):
                  f'/ max by (namespace, pod) (kube_pod_container_resource_limits{{{server},resource="memory"}})\n'
                  "> 0.9\n"),
         "for": "10m",
-        "labels": {"severity": "warning"},
+        "labels": {"severity": "warning", **labels},
         "annotations": {
             "summary": "Servidor de {{ $labels.namespace }} perto do limite de memória",
             "description": "Uso de {{ $value | humanizePercentage }} do limite. Risco de OOMKilled.",
             "action": "Comparar o pico no dashboard e avaliar subir o limite de memória no StatefulSet de {{ $labels.namespace }}.",
         },
     }]
+
+
+def render_alerts(games):
+    """PrometheusRule com os alertas que todo jogo do catálogo recebe, sem lista escrita à mão.
+
+    Jogos com alerts.muteDuring ganham a label mute=<janela>; o Alertmanager silencia essa label
+    durante o time_interval de mesmo nome (k8s/monitoring/values-kube-prometheus-stack.yaml).
+    """
+    by_mute = {}
+    for g in games:
+        by_mute.setdefault((g.get("alerts") or {}).get("muteDuring"), []).append(g)
+    groups = []
+    for mute, members in sorted(by_mute.items(), key=lambda kv: kv[0] or ""):
+        groups.append({"name": f"games-catalog-{mute}" if mute else "games-catalog", "rules": game_rules(members, mute)})
     doc = {
         "apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule",
         "metadata": {"name": "homelab-game-alerts", "namespace": "monitoring"},
-        "spec": {"groups": [{"name": "games-catalog", "rules": rules}]},
+        "spec": {"groups": groups},
     }
     return {ROOT / "k8s" / "monitoring" / "alerts-games.generated.yaml":
             HEADER + f"# Jogos cobertos (status active no catálogo): {', '.join(g['name'] for g in games)}\n" + dump([doc])[len(HEADER):]}
+
+
+def mute_problems(games):
+    """Toda janela citada em alerts.muteDuring precisa existir no Alertmanager, com a rota que a aplica."""
+    values = yaml.safe_load(ALERTMANAGER_VALUES.read_text(encoding="utf-8"))["alertmanager"]["config"]
+    intervals = {t["name"] for t in values.get("time_intervals", [])}
+    routed = {i for r in values["route"].get("routes", []) for i in r.get("mute_time_intervals", [])
+              if f'mute = "{i}"' in r.get("matchers", [])}
+    errors = []
+    for g in games:
+        mute = (g.get("alerts") or {}).get("muteDuring")
+        if not mute:
+            continue
+        where = f"{g['dir']}/game.yaml"
+        if mute not in intervals:
+            errors.append(f"{where}: alerts.muteDuring '{mute}' não existe nos time_intervals do Alertmanager")
+        elif mute not in routed:
+            errors.append(f"{where}: falta a rota com matcher mute = \"{mute}\" e mute_time_intervals [{mute}] no Alertmanager")
+    return errors
 
 
 def render_bot_rbac(games):
@@ -271,7 +330,7 @@ def render_bot_rbac(games):
 
 def main():
     check = "--check" in sys.argv
-    errors = catalog.problems()
+    errors = catalog.problems() + mute_problems(catalog.games())
     for key in ("resticImage", "curlImage"):
         if not IMAGE_REF.fullmatch(str(DEFAULTS[key])):
             errors.append(f"platform/defaults.yaml: {key} sem tag e digest válidos (use repo:tag@sha256:<64 hex>)")

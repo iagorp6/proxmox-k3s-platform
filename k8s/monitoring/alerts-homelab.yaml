@@ -6,29 +6,6 @@ metadata:
   namespace: monitoring
 spec:
   groups:
-    - name: zomboid
-      rules:
-        - alert: ZomboidDown
-          expr: game_up{game="zomboid"} == 0
-          for: 5m
-          labels:
-            severity: critical
-          annotations:
-            summary: "Servidor do jogo fora do ar"
-            description: "O servidor não responde ao RCON há mais de 5 minutos. Os jogadores não conseguem entrar."
-            action: "kubectl -n zomboid get pods e kubectl -n zomboid logs zomboid-0 -c server --tail=30"
-        - alert: ZomboidExporterMissing
-          expr: |
-            absent(game_up{game="zomboid"})
-            and on() (kube_statefulset_replicas{namespace="zomboid",statefulset="zomboid"} > 0)
-          for: 5m
-          labels:
-            severity: critical
-          annotations:
-            summary: "Sem métricas do servidor do jogo"
-            description: "O pod do jogo não está sendo coletado: parado, Pending ou em crash."
-            action: "kubectl -n zomboid describe pod zomboid-0 | tail -15"
-
     - name: backup
       rules:
         # Genéricas: valem para qualquer CronJob "<algo>-backup", em qualquer namespace de jogo
