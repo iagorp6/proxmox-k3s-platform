@@ -88,7 +88,8 @@ scripts_check() {
   # a cópia limpa só tem arquivos versionados
   find . -name '*.sh' -print0 | xargs -0 shellcheck &&
     python3 scripts/render-games.py --check && bash scripts/check-minecraft-pin.sh &&
-    python3 -m py_compile k8s/platform/*.py k8s/games/*/scripts/*.py scripts/*.py apps/*/*.py && ruff check .
+    python3 scripts/test-gameexporter.py &&
+    python3 -m py_compile k8s/platform/*.py k8s/games/*/scripts/*.py platform/exporter/*.py scripts/*.py apps/*/*.py && ruff check .
 }
 
 security_check() {

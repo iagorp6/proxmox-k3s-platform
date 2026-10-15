@@ -1,35 +1,61 @@
 #!/usr/bin/env python3
-"""Cria o esqueleto de um jogo novo em k8s/games/<jogo>/ (status draft, fora do cluster).
+r"""Cria o esqueleto de um jogo novo em k8s/games/<jogo>/ (status draft, fora do cluster).
 
 Gera game.yaml, namespace, kustomization, replicas (0), um StatefulSet com o container "server" e o
-sidecar "exporter" já ligados, e um exporter genérico no contrato game_* que marca game_up pelo socket
-em LISTEN na porta do jogo (lido de /proc/net, sem abrir conexão). Contagem de jogadores fica em 0 até
-o exporter ganhar o protocolo do jogo (RCON, REST, log...).
+sidecar "exporter" já ligados, e o exporter.py do jogo, que usa a lib comum (platform/exporter/
+gameexporter.py, copiada para o jogo pelo render-games.py). O driver escolhe como medir o servidor:
+  listen  game_up pelo socket da porta do jogo em /proc/net, sem abrir conexão; jogadores em 0
+  rcon    Source RCON: comando que lista jogadores + regex com grupo "list" ou "name"
+          (gera também o ExternalSecret da senha em /homelab/<jogo>/rcon-password)
 
 Uso:
-  scripts/new-game.py <jogo> --title "Valheim" --image repo:tag@sha256:<64 hex> --port 16261 \
+  scripts/new-game.py <jogo> --title "Valheim" --image repo:tag@sha256:<64 hex> --port 2456 \
       [--protocol UDP] [--memory 4Gi] [--icon 🪓] [--run-as 1000]
-  make new-game GAME=valheim TITLE="Valheim" IMAGE=... PORT=16261 PROTOCOL=UDP
+  scripts/new-game.py palworld --title Palworld --image ... --port 8211 --protocol UDP \
+      --driver rcon --rcon-port 25575 --players-command ShowPlayers \
+      --players-regex '^(?P<name>[^,\n]+),\d+,'
+  make new-game GAME=valheim TITLE="Valheim" IMAGE=... PORT=2456 PROTOCOL=UDP [DRIVER=rcon ...]
 
 Depois: complete backup.paths e o comando do servidor, troque status para active e rode
 python3 scripts/render-games.py (Service, backup, Argo, alertas e RBAC do bot saem do catálogo).
 """
 import argparse
+import json
 import pathlib
 import re
+import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-TEMPLATE_EXPORTER = ROOT / "scripts" / "templates" / "exporter.py"
 NAME = re.compile(r"[a-z][a-z0-9-]{1,30}")
 IMAGE_REF = re.compile(r"[a-z0-9][a-z0-9._/-]*(?::[0-9]+)?(?:/[a-z0-9._-]+)*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}")
 QUANTITY = re.compile(r"[0-9]+(Mi|Gi)")
 PYTHON_IMAGE = "python:3.13-slim@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b"
 
 
+def exporter_env(a):
+    """Variáveis do sidecar exporter conforme o driver (YAML já indentado para o StatefulSet)."""
+    env = [("GAME", a.name), ("GAME_DRIVER", a.driver), ("GAME_PORT", str(a.port)), ("GAME_PROTOCOL", a.protocol)]
+    if a.driver == "rcon":
+        env += [("RCON_PORT", str(a.rcon_port)), ("RCON_PLAYERS_COMMAND", a.players_command),
+                ("RCON_PLAYERS_REGEX", a.players_regex)]
+    env.append(("STATE_FILE", "/data/exporter/state.json"))
+    out = "".join(f"            - name: {k}\n              value: {json.dumps(v, ensure_ascii=False)}\n" for k, v in env)
+    if a.driver == "rcon":
+        out += f"""\
+            - name: RCON_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {a.name}-secrets
+                  key: rcon-password
+"""
+    return out
+
+
 def files(a):
     n, port, proto = a.name, a.port, a.protocol
-    return {
+    rcon = a.driver == "rcon"
+    out = {
         "game.yaml": f"""\
 # Catálogo da plataforma: o render-games.py gera Service, métricas, backup e o App do Argo CD.
 # Criado por scripts/new-game.py. Enquanto status for draft, nada deste jogo vai para o cluster.
@@ -38,7 +64,8 @@ displayName: {a.title}
 icon: {a.icon}            # botão do painel no Discord e resumo semanal
 status: draft            # troque para active quando o StatefulSet estiver pronto
 memory: {a.memory}           # igual ao limite do container server (o render-games.py --check confere)
-monitoring: listen-probe  # exporter genérico; troque quando o exporter falar o protocolo do jogo
+monitoring: {a.driver}  # driver do exporter (platform/exporter/gameexporter.py)
+exporter: shared          # o render-games.py copia a lib comum para scripts/gameexporter.py
 namespace: {n}
 runAsUser: {a.run_as}
 ports:
@@ -75,7 +102,7 @@ kind: Kustomization
 namespace: {n}
 resources:
   - namespace.yaml
-  - statefulset.yaml
+{'  - externalsecrets.yaml' + chr(10) if rcon else ''}  - statefulset.yaml
   - platform.generated.yaml   # gerado por scripts/render-games.py
 patches:
   - path: replicas.yaml       # gerado por scripts/switch-game.py
@@ -83,6 +110,7 @@ configMapGenerator:
   - name: {n}-scripts
     files:
       - exporter.py=scripts/exporter.py
+      - gameexporter.py=scripts/gameexporter.py   # lib comum, gerada pelo render-games.py
 generatorOptions:
   disableNameSuffixHash: true
 """,
@@ -145,15 +173,7 @@ spec:
           image: {PYTHON_IMAGE}
           command: ["python", "/scripts/exporter.py"]
           env:
-            - name: GAME
-              value: {n}
-            - name: GAME_PORT
-              value: "{port}"
-            - name: GAME_PROTOCOL
-              value: {proto}
-            - name: STATE_FILE
-              value: /data/exporter/state.json
-          ports:
+{exporter_env(a)}          ports:
             - name: metrics
               containerPort: 9105
               protocol: TCP
@@ -189,8 +209,39 @@ spec:
           requests:
             storage: 10Gi
 """,
-        "scripts/exporter.py": TEMPLATE_EXPORTER.read_text(encoding="utf-8"),
+        "scripts/exporter.py": f'''"""Exporter do {a.title}: contrato game_*, estado e /metrics vêm da lib comum (gameexporter.py).
+
+O driver sai de GAME_DRIVER no StatefulSet ({a.driver}). Para um protocolo próprio (REST, log...),
+troque a última linha por gameexporter.main(players=minha_funcao): ela devolve a lista de nomes
+conectados, ou None se o servidor não respondeu.
+"""
+import gameexporter
+
+gameexporter.main()
+''',
     }
+    if rcon:
+        out["externalsecrets.yaml"] = f"""\
+# Senha do RCON: fonte no Bitwarden, publicada no SSM pelo scripts/push-secrets-to-ssm.sh
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {n}-secrets
+  namespace: {n}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: aws-ssm
+  target:
+    name: {n}-secrets
+    creationPolicy: Owner
+  data:
+    - secretKey: rcon-password
+      remoteRef:
+        key: /homelab/{n}/rcon-password
+"""
+    return out
 
 
 def readiness_command(port, proto):
@@ -211,8 +262,21 @@ def main():
     p.add_argument("--memory", default="4Gi")
     p.add_argument("--icon", default="🎮")
     p.add_argument("--run-as", default=1000, type=int)
+    p.add_argument("--driver", default="listen", choices=["listen", "rcon"], help="como o exporter mede o servidor")
+    p.add_argument("--rcon-port", type=int, help="porta RCON (driver rcon)")
+    p.add_argument("--players-command", help="comando RCON que lista jogadores (driver rcon)")
+    p.add_argument("--players-regex", help='regex com grupo "list" (nomes por vírgula) ou "name" (um por jogador)')
     a = p.parse_args()
     errors = []
+    if a.driver == "rcon":
+        if not (a.rcon_port and a.players_command and a.players_regex):
+            errors.append("driver rcon precisa de --rcon-port, --players-command e --players-regex")
+        else:
+            try:
+                if not {"list", "name"} & set(re.compile(a.players_regex).groupindex):
+                    errors.append("--players-regex precisa de um grupo nomeado 'list' ou 'name'")
+            except re.error as exc:
+                errors.append(f"--players-regex inválida: {exc}")
     if not NAME.fullmatch(a.name):
         errors.append(f"nome '{a.name}' inválido: minúsculas, números e hífen (vira namespace e StatefulSet)")
     if not IMAGE_REF.fullmatch(a.image):
@@ -232,11 +296,19 @@ def main():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         print(f"  criado {path.relative_to(ROOT)}")
+    # A lib comum (scripts/gameexporter.py) é cópia gerada: o render já a escreve no jogo em draft
+    render = subprocess.run([sys.executable, str(ROOT / "scripts" / "render-games.py")], capture_output=True, text=True)
+    print("  " + (render.stdout or render.stderr).strip().replace("\n", "\n  "))
+    if render.returncode:
+        return render.returncode
+    rcon_steps = f"""
+  RCON: ligue o RCON no servidor (porta {a.rcon_port}, senha do Secret {a.name}-secrets) e adicione
+     [/homelab/{a.name}/rcon-password]={a.name}-rcon em scripts/push-secrets-to-ssm.sh""" if a.driver == "rcon" else ""
     print(f"""
 Próximos passos para {a.title}:
   1. statefulset.yaml: comando e variáveis do servidor; backup.paths/verify no game.yaml
   2. Se precisar de senha ou token: externalsecrets.yaml no jogo + entrada em scripts/push-secrets-to-ssm.sh
-  3. Exporter: k8s/games/{a.name}/scripts/exporter.py já marca game_up pela porta; troque players() pelo protocolo do jogo
+  3. Exporter: driver {a.driver} já ligado (k8s/games/{a.name}/scripts/exporter.py usa a lib comum){rcon_steps}
   4. status: active no game.yaml e python3 scripts/render-games.py
   5. Porta {a.port}/{a.protocol}: fora de 16261/16262 precisa de VIP no FortiGate
   6. make ci, PR, e depois make switch-game GAME={a.name}""")

@@ -337,6 +337,31 @@ def render_games_json(games):
             json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n"}
 
 
+def render_shared_exporters(entries):
+    """Cópia da lib de exporter em cada jogo com `exporter: shared` (drafts incluídos: o scaffold já nasce com ela)."""
+    source = ROOT / "platform" / "exporter" / "gameexporter.py"
+    content = ("# Gerado por scripts/render-games.py a partir de platform/exporter/gameexporter.py: não edite à mão.\n"
+               + source.read_text(encoding="utf-8"))
+    return {ROOT / g["dir"] / "scripts" / "gameexporter.py": content
+            for g in entries if g.get("exporter") == "shared" and g["dir"].startswith("k8s/games/")}
+
+
+def exporter_problems(entries):
+    """exporter: shared precisa do gameexporter.py no ConfigMap do jogo, senão o import falha só no pod."""
+    errors = []
+    for g in entries:
+        if "exporter" not in g:
+            continue
+        where = f"{g['dir']}/game.yaml"
+        if g["exporter"] != "shared":
+            errors.append(f"{where}: exporter '{g['exporter']}' inválido (o único valor é shared; sem o campo, o exporter é do jogo)")
+            continue
+        kust = (ROOT / g["dir"] / "kustomization.yaml").read_text(encoding="utf-8")
+        if "gameexporter.py=scripts/gameexporter.py" not in kust:
+            errors.append(f"{g['dir']}/kustomization.yaml: falta gameexporter.py=scripts/gameexporter.py no configMapGenerator")
+    return errors
+
+
 def memory_problems(games):
     """O memory do game.yaml é o limite do container server no StatefulSet: os dois precisam bater."""
     errors = []
@@ -357,7 +382,8 @@ def memory_problems(games):
 
 def main():
     check = "--check" in sys.argv
-    errors = catalog.problems() + mute_problems(catalog.games()) + memory_problems(catalog.games())
+    errors = (catalog.problems() + mute_problems(catalog.games()) + memory_problems(catalog.games())
+              + exporter_problems(catalog.load()))
     for key in ("resticImage", "curlImage"):
         if not IMAGE_REF.fullmatch(str(DEFAULTS[key])):
             errors.append(f"platform/defaults.yaml: {key} sem tag e digest válidos (use repo:tag@sha256:<64 hex>)")
@@ -387,6 +413,7 @@ def main():
         outputs.update(render_alerts(generated))
     outputs.update(render_bot_rbac(catalog.games()))
     outputs.update(render_games_json(catalog.games()))
+    outputs.update(render_shared_exporters(catalog.load()))
     stale = []
     for path, content in outputs.items():
         current = path.read_text(encoding="utf-8") if path.exists() else None
