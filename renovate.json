@@ -1,0 +1,222 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Renovate cuida do que o Dependabot não enxerga: imagens fixadas por digest nos manifests,",
+    "versões de chart (chart-version-*.txt) e a versão do K3s. Actions, providers do Terraform e o",
+    "FROM do games-bot continuam no Dependabot (.github/dependabot.yml), por isso os managers ficam restritos.",
+    "Nada faz automerge: cada PR passa pelo CI e pela revisão, e jogo só muda no cluster com Sync manual no Argo."
+  ],
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard"
+  ],
+  "timezone": "America/Sao_Paulo",
+  "schedule": [
+    "before 9am on monday"
+  ],
+  "prConcurrentLimit": 6,
+  "labels": [
+    "dependencies"
+  ],
+  "enabledManagers": [
+    "kubernetes",
+    "custom.regex"
+  ],
+  "kubernetes": {
+    "managerFilePatterns": [
+      "/^k8s/.+\\.ya?ml$/"
+    ]
+  },
+  "customManagers": [
+    {
+      "description": "Imagens padrão da plataforma (restic e curl): o render-games.py copia para os platform.generated.yaml, que o manager kubernetes atualiza no mesmo PR",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^platform/defaults\\.yaml$/"
+      ],
+      "matchStrings": [
+        "(?:resticImage|curlImage):\\s*(?<depName>[^:\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Imagem do sidecar exporter que o scripts/new-game.py escreve nos jogos novos",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^scripts/new-game\\.py$/"
+      ],
+      "matchStrings": [
+        "PYTHON_IMAGE = \"(?<depName>[^:\"]+):(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]{64})\""
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Versões de chart lidas pelos deploy.sh (helm upgrade continua manual: make deploy-*)",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^k8s/monitoring/chart-version-kps\\.txt$/"
+      ],
+      "matchStrings": [
+        "^(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "kube-prometheus-stack",
+      "datasourceTemplate": "helm",
+      "registryUrlTemplate": "https://prometheus-community.github.io/helm-charts"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^k8s/monitoring/chart-version-loki\\.txt$/"
+      ],
+      "matchStrings": [
+        "^(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "loki",
+      "datasourceTemplate": "helm",
+      "registryUrlTemplate": "https://grafana.github.io/helm-charts"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^k8s/monitoring/chart-version-alloy\\.txt$/"
+      ],
+      "matchStrings": [
+        "^(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "alloy",
+      "datasourceTemplate": "helm",
+      "registryUrlTemplate": "https://grafana.github.io/helm-charts"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^k8s/argocd/chart-version-argocd\\.txt$/"
+      ],
+      "matchStrings": [
+        "^(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "argo-cd",
+      "datasourceTemplate": "helm",
+      "registryUrlTemplate": "https://argoproj.github.io/argo-helm"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^k8s/external-secrets/chart-version-eso\\.txt$/"
+      ],
+      "matchStrings": [
+        "^(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "external-secrets",
+      "datasourceTemplate": "helm",
+      "registryUrlTemplate": "https://charts.external-secrets.io"
+    },
+    {
+      "description": "Versão do K3s instalada pelo Ansible (upgrade do cluster continua manual)",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^ansible/roles/k3s/defaults/main\\.yml$/"
+      ],
+      "matchStrings": [
+        "k3s_version:\\s*\"(?<currentValue>v[^\"]+)\""
+      ],
+      "depNameTemplate": "k3s-io/k3s",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\+k3s(?<build>\\d+)$"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "apiVersion dos manifests muda junto com o upgrade do K3s, não sozinho",
+      "matchDatasources": [
+        "kubernetes-api"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Digest novo da mesma tag (latest, java21, 3.13-slim): um PR por semana para todos",
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "groupName": "image digests",
+      "commitMessagePrefix": "images:"
+    },
+    {
+      "description": "Python fica em 3.13 (mesma regra do Dockerfile do games-bot no Dependabot); só digest",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "python"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "games-bot é publicado pelo próprio CI (tag = commit); o manifest é atualizado num PR à parte",
+      "matchPackageNames": [
+        "ghcr.io/iagorp6/games-bot"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "TShock: o cliente Terraria precisa da mesma versão do servidor, então avise os jogadores antes do merge",
+      "matchPackageNames": [
+        "ghcr.io/pryaxis/tshock"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch"
+      ],
+      "commitMessagePrefix": "terraria:",
+      "prBodyNotes": [
+        "O cliente Terraria precisa estar na versão que esta imagem do TShock suporta. Depois do merge: Sync manual do app `terraria` no Argo CD."
+      ]
+    },
+    {
+      "description": "Charts: um PR por chart, major com aviso (kube-prometheus-stack major costuma trazer CRDs novos)",
+      "matchDatasources": [
+        "helm"
+      ],
+      "commitMessagePrefix": "charts:",
+      "prBodyNotes": [
+        "Aplicar no WSL com `make deploy-monitoring`, `make deploy-eso` ou `make deploy-argocd`; o Argo CD não gerencia estes releases."
+      ]
+    },
+    {
+      "matchDatasources": [
+        "helm"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "prBodyNotes": [
+        "Major: leia o UPGRADING do chart antes. No kube-prometheus-stack, os CRDs precisam ser atualizados à mão (`kubectl apply --server-side`)."
+      ]
+    },
+    {
+      "description": "K3s: só patch automático; minor de Kubernetes se planeja junto com o kubectl do platform/defaults.yaml",
+      "matchPackageNames": [
+        "k3s-io/k3s"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "enabled": false
+    },
+    {
+      "matchPackageNames": [
+        "k3s-io/k3s"
+      ],
+      "commitMessagePrefix": "k3s:",
+      "prBodyNotes": [
+        "Upgrade do cluster: `ansible-playbook playbooks/k3s.yml` (em ansible/) no WSL, depois do merge."
+      ]
+    }
+  ]
+}
