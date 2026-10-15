@@ -2,7 +2,7 @@
 # Usa ">" como prefixo de receita (evita problemas de tab ao colar).
 .RECIPEPREFIX = >
 .DEFAULT_GOAL := help
-.PHONY: help ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd
+.PHONY: help ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd restore-drill
 
 help: ## Lista os alvos disponíveis
 > @grep -E '^[a-zA-Z_%-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -34,6 +34,9 @@ deploy-argocd: ## Instala/atualiza o Argo CD
 
 switch-game: ## Troca o jogo ativo (ex.: make switch-game GAME=terraria)
 > ./scripts/switch-game.py $(GAME)
+
+restore-drill: ## Restaura o último backup num PVC temporário e mede o tempo (ex.: make restore-drill GAME=terraria RECORD=1)
+> ./scripts/restore-drill.py $(GAME) $(if $(RECORD),--record)
 
 status: ## Estado da plataforma (jogo ativo, réplicas, alertas)
 > ./scripts/platform-status.sh

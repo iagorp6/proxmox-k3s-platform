@@ -80,6 +80,13 @@ jobs:
               -schema-location default \
               -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/f1e7f6bc0537bf0622ffe6e47dbaa85914fabbec/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
           done
+      - name: Validate the restore drill manifests of every game with backup
+        run: |
+          set -o pipefail
+          for game in $(python3 scripts/catalog.py backups); do
+            echo "== $game"
+            python3 scripts/restore-drill.py "$game" --dry-run | kubeconform -strict -summary -schema-location default
+          done
       - name: Validate monitoring, Argo CD and External Secrets manifests
         run: |
           kubeconform -strict -summary \

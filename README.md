@@ -203,7 +203,7 @@ The dashboard JSON is **generated** by `scripts/build-dashboard.py`, so it is re
 
 Before each snapshot, an init container runs the game's `saveCommand` from the catalog (`save-all flush` for Minecraft) through a ServiceAccount that may only `exec` into that one pod, so the world on disk is consistent when restic reads it. The `kubectl` binary it uses is verified against a SHA-256 pinned in `platform/defaults.yaml`. If the server is stopped, the backup takes the last save on disk.
 
-A restore of the latest snapshot completes in about **2 seconds** for the current world size. A full rebuild drill (VM from Terraform, cluster from Ansible, workloads from Argo CD, Secrets from SSM, world from S3) is on the roadmap; the measured RTO will be published here.
+`make restore-drill GAME=terraria` proves the backup comes back without touching the game: it restores the latest snapshot from S3 into a temporary PVC with the same image and Secret as the backup CronJob, checks that every backed-up path came back with content (plus the world file the catalog names in `backup.verify`), prints the snapshot age, size and timings, and deletes everything. With `RECORD=1` the result is appended to [docs/restore-drills.md](docs/restore-drills.md). A full rebuild drill (VM from Terraform, cluster from Ansible, workloads from Argo CD, Secrets from SSM, world from S3) is on the roadmap; the measured RTO will be published here.
 
 ---
 
