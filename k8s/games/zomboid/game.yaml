@@ -17,6 +17,8 @@ backup:
   pvc: data-zomboid-0
   paths: [/data/data/Saves, /data/data/db, /data/data/Server]   # PVC montado em /data no job de backup
 metrics: true
+alerts:
+  muteDuring: restart-diario   # restart diário das 6h (daily-restart.yaml); janela no Alertmanager
 switch:
   # O save do Zomboid é assíncrono: o sleep dá tempo de terminar antes do backup ou da troca de jogo
   saveCommand: echo save > /tmp/console; sleep 30

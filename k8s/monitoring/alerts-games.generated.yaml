@@ -11,9 +11,9 @@ spec:
     rules:
     - alert: GameDown
       expr: |
-        kube_statefulset_replicas{namespace=~"minecraft|terraria|zomboid"} > 0
+        kube_statefulset_replicas{namespace=~"minecraft|terraria"} > 0
         unless on (namespace, statefulset)
-        kube_statefulset_status_replicas_ready{namespace=~"minecraft|terraria|zomboid"} > 0
+        kube_statefulset_status_replicas_ready{namespace=~"minecraft|terraria"} > 0
       for: 10m
       labels:
         severity: critical
@@ -21,8 +21,32 @@ spec:
         summary: Servidor de {{ $labels.namespace }} fora do ar
         description: '{{ $labels.namespace }} é o jogo ativo, mas o pod não está pronto há mais de 10 minutos.'
         action: kubectl -n {{ $labels.namespace }} get pods e kubectl -n {{ $labels.namespace }} logs {{ $labels.statefulset }}-0 -c server --tail=30
+    - alert: GameUnresponsive
+      expr: |
+        game_up{game=~"minecraft|terraria"} == 0
+        and on (game)
+        label_replace(kube_statefulset_status_replicas_ready{namespace=~"minecraft|terraria"} > 0, "game", "$1", "namespace", "(.+)")
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Servidor de {{ $labels.game }} não responde
+        description: O pod de {{ $labels.game }} está pronto, mas o servidor não responde ao exporter há mais de 5 minutos. Os jogadores não conseguem entrar.
+        action: kubectl -n {{ $labels.game }} logs {{ $labels.game }}-0 -c server --tail=30
+    - alert: GameExporterMissing
+      expr: |
+        label_replace(kube_statefulset_status_replicas_ready{namespace=~"minecraft|terraria"} > 0, "game", "$1", "namespace", "(.+)")
+        unless on (game)
+        game_up
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: Sem métricas do servidor de {{ $labels.game }}
+        description: O pod de {{ $labels.game }} está pronto, mas o Prometheus não coleta o exporter. Painel, alertas de jogador e fila do bot ficam cegos.
+        action: kubectl -n {{ $labels.game }} logs {{ $labels.game }}-0 -c exporter --tail=30
     - alert: GameRestarted
-      expr: increase(kube_pod_container_status_restarts_total{namespace=~"minecraft|terraria|zomboid",container="server"}[15m]) > 0
+      expr: increase(kube_pod_container_status_restarts_total{namespace=~"minecraft|terraria",container="server"}[15m]) > 0
       labels:
         severity: warning
       annotations:
@@ -31,12 +55,75 @@ spec:
         action: kubectl -n {{ $labels.namespace }} logs {{ $labels.pod }} -c server --previous --tail=40
     - alert: GameMemoryHigh
       expr: |
-        max by (namespace, pod) (container_memory_working_set_bytes{namespace=~"minecraft|terraria|zomboid",container="server"})
-        / max by (namespace, pod) (kube_pod_container_resource_limits{namespace=~"minecraft|terraria|zomboid",container="server",resource="memory"})
+        max by (namespace, pod) (container_memory_working_set_bytes{namespace=~"minecraft|terraria",container="server"})
+        / max by (namespace, pod) (kube_pod_container_resource_limits{namespace=~"minecraft|terraria",container="server",resource="memory"})
         > 0.9
       for: 10m
       labels:
         severity: warning
+      annotations:
+        summary: Servidor de {{ $labels.namespace }} perto do limite de memória
+        description: Uso de {{ $value | humanizePercentage }} do limite. Risco de OOMKilled.
+        action: Comparar o pico no dashboard e avaliar subir o limite de memória no StatefulSet de {{ $labels.namespace }}.
+  - name: games-catalog-restart-diario
+    rules:
+    - alert: GameDown
+      expr: |
+        kube_statefulset_replicas{namespace=~"zomboid"} > 0
+        unless on (namespace, statefulset)
+        kube_statefulset_status_replicas_ready{namespace=~"zomboid"} > 0
+      for: 10m
+      labels:
+        severity: critical
+        mute: restart-diario
+      annotations:
+        summary: Servidor de {{ $labels.namespace }} fora do ar
+        description: '{{ $labels.namespace }} é o jogo ativo, mas o pod não está pronto há mais de 10 minutos.'
+        action: kubectl -n {{ $labels.namespace }} get pods e kubectl -n {{ $labels.namespace }} logs {{ $labels.statefulset }}-0 -c server --tail=30
+    - alert: GameUnresponsive
+      expr: |
+        game_up{game=~"zomboid"} == 0
+        and on (game)
+        label_replace(kube_statefulset_status_replicas_ready{namespace=~"zomboid"} > 0, "game", "$1", "namespace", "(.+)")
+      for: 5m
+      labels:
+        severity: critical
+        mute: restart-diario
+      annotations:
+        summary: Servidor de {{ $labels.game }} não responde
+        description: O pod de {{ $labels.game }} está pronto, mas o servidor não responde ao exporter há mais de 5 minutos. Os jogadores não conseguem entrar.
+        action: kubectl -n {{ $labels.game }} logs {{ $labels.game }}-0 -c server --tail=30
+    - alert: GameExporterMissing
+      expr: |
+        label_replace(kube_statefulset_status_replicas_ready{namespace=~"zomboid"} > 0, "game", "$1", "namespace", "(.+)")
+        unless on (game)
+        game_up
+      for: 5m
+      labels:
+        severity: warning
+        mute: restart-diario
+      annotations:
+        summary: Sem métricas do servidor de {{ $labels.game }}
+        description: O pod de {{ $labels.game }} está pronto, mas o Prometheus não coleta o exporter. Painel, alertas de jogador e fila do bot ficam cegos.
+        action: kubectl -n {{ $labels.game }} logs {{ $labels.game }}-0 -c exporter --tail=30
+    - alert: GameRestarted
+      expr: increase(kube_pod_container_status_restarts_total{namespace=~"zomboid",container="server"}[15m]) > 0
+      labels:
+        severity: warning
+        mute: restart-diario
+      annotations:
+        summary: Servidor de {{ $labels.namespace }} reiniciou sozinho
+        description: O processo do jogo caiu e o Kubernetes o reiniciou. Trocas de jogo e deploys não disparam este alerta.
+        action: kubectl -n {{ $labels.namespace }} logs {{ $labels.pod }} -c server --previous --tail=40
+    - alert: GameMemoryHigh
+      expr: |
+        max by (namespace, pod) (container_memory_working_set_bytes{namespace=~"zomboid",container="server"})
+        / max by (namespace, pod) (kube_pod_container_resource_limits{namespace=~"zomboid",container="server",resource="memory"})
+        > 0.9
+      for: 10m
+      labels:
+        severity: warning
+        mute: restart-diario
       annotations:
         summary: Servidor de {{ $labels.namespace }} perto do limite de memória
         description: Uso de {{ $value | humanizePercentage }} do limite. Risco de OOMKilled.

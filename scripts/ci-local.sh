@@ -84,7 +84,9 @@ k8s_check() {
 }
 
 scripts_check() {
-  find . -name '*.sh' -print0 | xargs -0 shellcheck &&   # a cópia limpa só tem arquivos versionados python3 scripts/render-games.py --check && bash scripts/check-minecraft-pin.sh &&
+  # a cópia limpa só tem arquivos versionados
+  find . -name '*.sh' -print0 | xargs -0 shellcheck &&
+    python3 scripts/render-games.py --check && bash scripts/check-minecraft-pin.sh &&
     python3 -m py_compile k8s/platform/*.py k8s/games/*/scripts/*.py scripts/*.py apps/*/*.py && ruff check .
 }
 
