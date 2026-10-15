@@ -8,9 +8,11 @@ Para cada jogo com status "active" e campo "namespace", grava:
 E, para o conjunto desses jogos:
   k8s/monitoring/alerts-games.generated.yaml  alertas por jogo (fora do ar, sem resposta, sem métricas, restart, memória)
   k8s/platform/games-bot-rbac.generated.yaml  RBAC do bot de troca de jogo em cada namespace (ADR 0006)
+  k8s/platform/games.generated.json           nome e ícone de cada jogo (resumo semanal no Discord)
 O StatefulSet continua escrito à mão em cada jogo (é a parte realmente específica).
 Uso: python3 scripts/render-games.py [--check]   (--check falha se algo gerado estiver desatualizado)
 """
+import json
 import pathlib
 import re
 import shlex
@@ -328,9 +330,34 @@ def render_bot_rbac(games):
     return {ROOT / "k8s" / "platform" / "games-bot-rbac.generated.yaml": dump(docs)}
 
 
+def render_games_json(games):
+    """Nome e ícone por jogo para o resumo semanal (ConfigMap weekly-summary), sem lista escrita à mão."""
+    data = {g["name"]: {"title": g["displayName"], "icon": g.get("icon", "🎮")} for g in games}
+    return {ROOT / "k8s" / "platform" / "games.generated.json":
+            json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n"}
+
+
+def memory_problems(games):
+    """O memory do game.yaml é o limite do container server no StatefulSet: os dois precisam bater."""
+    errors = []
+    for g in games:
+        if g["status"] != "active" or not g.get("memory"):
+            continue
+        path = ROOT / g["dir"] / "statefulset.yaml"
+        sts = [d for d in yaml.safe_load_all(path.read_text(encoding="utf-8")) if d and d.get("kind") == "StatefulSet"]
+        servers = [c for d in sts for c in d["spec"]["template"]["spec"]["containers"] if c["name"] == "server"]
+        if not servers:
+            errors.append(f"{g['dir']}/statefulset.yaml: nenhum container chamado server (alertas e dashboard dependem do nome)")
+            continue
+        limit = (servers[0].get("resources") or {}).get("limits", {}).get("memory")
+        if str(limit) != str(g["memory"]):
+            errors.append(f"{g['dir']}/game.yaml: memory {g['memory']} diferente do limite do container server ({limit})")
+    return errors
+
+
 def main():
     check = "--check" in sys.argv
-    errors = catalog.problems() + mute_problems(catalog.games())
+    errors = catalog.problems() + mute_problems(catalog.games()) + memory_problems(catalog.games())
     for key in ("resticImage", "curlImage"):
         if not IMAGE_REF.fullmatch(str(DEFAULTS[key])):
             errors.append(f"platform/defaults.yaml: {key} sem tag e digest válidos (use repo:tag@sha256:<64 hex>)")
@@ -359,6 +386,7 @@ def main():
     if generated:
         outputs.update(render_alerts(generated))
     outputs.update(render_bot_rbac(catalog.games()))
+    outputs.update(render_games_json(catalog.games()))
     stale = []
     for path, content in outputs.items():
         current = path.read_text(encoding="utf-8") if path.exists() else None

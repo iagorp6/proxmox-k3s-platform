@@ -16,5 +16,6 @@ configMapGenerator:
     namespace: platform
     files:
       - summary.py=weekly_summary.py
+      - games.json=games.generated.json   # gerado por scripts/render-games.py
 generatorOptions:
   disableNameSuffixHash: true

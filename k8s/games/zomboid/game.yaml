@@ -2,6 +2,7 @@
 # O StatefulSet, o ConfigMap de config, o restart diário e os Secrets próprios continuam escritos à mão.
 name: zomboid
 displayName: Project Zomboid
+icon: 🧟            # botão do painel no Discord e resumo semanal
 status: active
 memory: 10Gi
 monitoring: rcon
