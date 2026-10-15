@@ -1,8 +1,11 @@
 """Prometheus exporter for Project Zomboid (stdlib only).
 
-- Players online via Source RCON (polled in background).
-- All-time playtime per player, persisted on the game volume.
-- Player deaths parsed from the server PerkLog files.
+Segue o contrato de métricas da plataforma (game_*, label game="zomboid"):
+  game_up, game_players_online, game_player_online{player},
+  game_player_playtime_seconds_total{player} (persistido no volume do jogo).
+Extras do Zomboid, no mesmo prefixo e com o mesmo label (alertas PlayerDied e PlayerMilestone):
+  game_player_milestone_hours, game_player_deaths_total (mortes lidas dos PerkLog),
+  game_player_last_death_timestamp_seconds, game_player_last_death_hours_survived.
 """
 import glob
 import json
@@ -18,6 +21,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+GAME = os.getenv("GAME", "zomboid")
 RCON_HOST = os.getenv("RCON_HOST", "127.0.0.1")
 RCON_PORT = int(os.getenv("RCON_PORT", "27015"))
 RCON_PASSWORD = os.environ["RCON_PASSWORD"]
@@ -102,7 +106,7 @@ def load_state():
 
 def seed_from_prometheus():
     """Primeira execução: semeia o tempo de jogo com o histórico que o Prometheus já tem (30 dias)."""
-    expr = "sum by (player) (count_over_time(zomboid_player_online[30d])) * 30"
+    expr = f'sum by (player) (count_over_time(game_player_online{{game="{GAME}"}}[30d])) * 30'
     url = f"{SEED_URL}/api/v1/query?{urllib.parse.urlencode({'query': expr})}"
     try:
         with urllib.request.urlopen(url, timeout=20) as r:
@@ -208,38 +212,34 @@ def _milestone(hours):
 def render():
     with lock:
         s = {k: (dict(v) if isinstance(v, dict) else list(v) if isinstance(v, list) else v) for k, v in state.items()}
+    g = f'game="{_escape(GAME)}"'
     out = [
-        "# HELP zomboid_up 1 if the game server answered RCON on the last poll.",
-        "# TYPE zomboid_up gauge",
-        f"zomboid_up {s['up']}",
-        "# HELP zomboid_players_online Number of connected players.",
-        "# TYPE zomboid_players_online gauge",
-        f"zomboid_players_online {s['players']}",
-        "# HELP zomboid_rcon_scrape_duration_seconds RCON round-trip time.",
-        "# TYPE zomboid_rcon_scrape_duration_seconds gauge",
-        f"zomboid_rcon_scrape_duration_seconds {s['rcon_seconds']:.4f}",
-        "# HELP zomboid_exporter_last_poll_timestamp_seconds Last RCON poll.",
-        "# TYPE zomboid_exporter_last_poll_timestamp_seconds gauge",
-        f"zomboid_exporter_last_poll_timestamp_seconds {s['last_poll']:.0f}",
-        "# HELP zomboid_player_online Connected player (one series per player).",
-        "# TYPE zomboid_player_online gauge",
+        "# HELP game_up 1 if the game server answered on the last poll.", "# TYPE game_up gauge",
+        f"game_up{{{g}}} {s['up']}",
+        "# HELP game_players_online Connected players.", "# TYPE game_players_online gauge",
+        f"game_players_online{{{g}}} {s['players']}",
+        "# HELP game_exporter_last_poll_timestamp_seconds Last poll.", "# TYPE game_exporter_last_poll_timestamp_seconds gauge",
+        f"game_exporter_last_poll_timestamp_seconds{{{g}}} {s['last_poll']:.0f}",
+        "# HELP game_exporter_probe_duration_seconds Probe round-trip.", "# TYPE game_exporter_probe_duration_seconds gauge",
+        f"game_exporter_probe_duration_seconds{{{g}}} {s['rcon_seconds']:.4f}",
+        "# HELP game_player_online Connected player (one series per player).", "# TYPE game_player_online gauge",
     ]
-    out += [f'zomboid_player_online{{player="{_escape(n)}"}} 1' for n in s["names"]]
-    out += ["# HELP zomboid_player_playtime_seconds_total All-time playtime per player (persisted).",
-            "# TYPE zomboid_player_playtime_seconds_total counter"]
-    out += [f'zomboid_player_playtime_seconds_total{{player="{_escape(p)}"}} {v:.0f}' for p, v in s["playtime"].items()]
-    out += ["# HELP zomboid_player_milestone_hours Highest playtime milestone reached.",
-            "# TYPE zomboid_player_milestone_hours gauge"]
-    out += [f'zomboid_player_milestone_hours{{player="{_escape(p)}"}} {_milestone(v / 3600)}' for p, v in s["playtime"].items()]
-    out += ["# HELP zomboid_player_deaths_total Character deaths since exporter start.",
-            "# TYPE zomboid_player_deaths_total counter"]
-    out += [f'zomboid_player_deaths_total{{player="{_escape(p)}"}} {v}' for p, v in s["deaths"].items()]
-    out += ["# HELP zomboid_player_last_death_timestamp_seconds Time of the last character death.",
-            "# TYPE zomboid_player_last_death_timestamp_seconds gauge"]
-    out += [f'zomboid_player_last_death_timestamp_seconds{{player="{_escape(p)}"}} {v:.0f}' for p, v in s["last_death_ts"].items()]
-    out += ["# HELP zomboid_player_last_death_hours_survived In-game hours survived by the last dead character.",
-            "# TYPE zomboid_player_last_death_hours_survived gauge"]
-    out += [f'zomboid_player_last_death_hours_survived{{player="{_escape(p)}"}} {v}' for p, v in s["last_death_hours"].items()]
+    out += [f'game_player_online{{{g},player="{_escape(n)}"}} 1' for n in s["names"]]
+    out += ["# HELP game_player_playtime_seconds_total All-time playtime per player (persisted).",
+            "# TYPE game_player_playtime_seconds_total counter"]
+    out += [f'game_player_playtime_seconds_total{{{g},player="{_escape(p)}"}} {v:.0f}' for p, v in s["playtime"].items()]
+    out += ["# HELP game_player_milestone_hours Highest playtime milestone reached.",
+            "# TYPE game_player_milestone_hours gauge"]
+    out += [f'game_player_milestone_hours{{{g},player="{_escape(p)}"}} {_milestone(v / 3600)}' for p, v in s["playtime"].items()]
+    out += ["# HELP game_player_deaths_total Character deaths since exporter start.",
+            "# TYPE game_player_deaths_total counter"]
+    out += [f'game_player_deaths_total{{{g},player="{_escape(p)}"}} {v}' for p, v in s["deaths"].items()]
+    out += ["# HELP game_player_last_death_timestamp_seconds Time of the last character death.",
+            "# TYPE game_player_last_death_timestamp_seconds gauge"]
+    out += [f'game_player_last_death_timestamp_seconds{{{g},player="{_escape(p)}"}} {v:.0f}' for p, v in s["last_death_ts"].items()]
+    out += ["# HELP game_player_last_death_hours_survived In-game hours survived by the last dead character.",
+            "# TYPE game_player_last_death_hours_survived gauge"]
+    out += [f'game_player_last_death_hours_survived{{{g},player="{_escape(p)}"}} {v}' for p, v in s["last_death_hours"].items()]
     return "\n".join(out) + "\n"
 
 

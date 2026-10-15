@@ -135,7 +135,7 @@ Three games share one platform and only one runs at a time: the VM fits a single
 - **Players get a one-file installer.** For the modded Minecraft server, `docs/minecraft/install-cobbleverse.ps1` installs the exact modpack version the server runs, downloading every mod from the official CDN and verifying its SHA-512.
 - **Decisions are written down** in `docs/adr/`: why not Agones or a game panel, why Git owns the active game, and why a generator replaced Kustomize components.
 
-Project Zomboid, the first game, still runs on its original hand-written manifests and `zomboid_*` metrics; moving it to the catalog is on the roadmap.
+Project Zomboid, the first game, is in the catalog and on the same contract as the others. Its exporter adds a few series under the same prefix (`game_player_deaths_total`, `game_player_milestone_hours`, last death time and hours survived), which feed the death and milestone events.
 
 ### Project Zomboid, built for operability
 
@@ -274,7 +274,6 @@ A Budgets alarm fires above USD 1/month, and a CloudWatch alarm watches the size
 
 - [ ] Timed full DR drill and published RTO (rebuild strategy in [ADR 0005](docs/adr/0005-host-recovery-by-rebuild.md))
 - [ ] Reinstall the host on a ZFS mirror during the DR drill
-- [ ] Migrate Project Zomboid to the catalog and the `game_*` metric contract
 - [ ] Manage the Helm releases (monitoring, External Secrets, Argo CD) through Argo CD
 - [ ] Renovate for image digests and chart versions
 - [ ] Migrate to the non-deprecated `proxmox_download_file` resource

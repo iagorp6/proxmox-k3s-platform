@@ -13,7 +13,7 @@ tests:
       - eval_time: 7m
         alertname: ZomboidExporterMissing
         exp_alerts:
-          - exp_labels: {severity: critical}
+          - exp_labels: {severity: critical, game: zomboid}
             exp_annotations:
               summary: "Sem métricas do servidor do jogo"
               description: "O pod do jogo não está sendo coletado: parado, Pending ou em crash."
@@ -33,7 +33,7 @@ tests:
   - name: Zomboid sem responder ao RCON por 5 min dispara ZomboidDown
     interval: 1m
     input_series:
-      - series: 'zomboid_up'
+      - series: 'game_up{game="zomboid"}'
         values: '1x3 0x15'
       - series: 'kube_statefulset_replicas{namespace="zomboid",statefulset="zomboid"}'
         values: '1x20'
@@ -44,11 +44,49 @@ tests:
       - eval_time: 10m
         alertname: ZomboidDown
         exp_alerts:
-          - exp_labels: {severity: critical}
+          - exp_labels: {severity: critical, game: zomboid}
             exp_annotations:
               summary: "Servidor do jogo fora do ar"
               description: "O servidor não responde ao RCON há mais de 5 minutos. Os jogadores não conseguem entrar."
               action: "kubectl -n zomboid get pods e kubectl -n zomboid logs zomboid-0 -c server --tail=30"
+  - name: morte no PerkLog dispara PlayerDied com as horas sobrevividas; morte antiga nao
+    interval: 1m
+    input_series:
+      # PlayerDied compara com time(): no promtool o relógio começa em 0, então o timestamp é em segundos de teste
+      - series: 'game_player_last_death_timestamp_seconds{game="zomboid",player="iago"}'
+        values: '0x2 300x10'        # morreu aos 5 min de teste
+      - series: 'game_player_last_death_hours_survived{game="zomboid",player="iago"}'
+        values: '0x2 34x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: PlayerDied
+        exp_alerts:
+          - exp_labels: {severity: info, notify: events, game: zomboid, player: iago}
+            exp_annotations:
+              summary: "💀 iago morreu"
+              description: "O personagem sobreviveu 34 horas no jogo."
+      - eval_time: 10m
+        alertname: PlayerDied
+        exp_alerts: []
+  - name: marco de horas novo dispara PlayerMilestone uma vez
+    interval: 1m
+    input_series:
+      - series: 'game_player_milestone_hours{game="zomboid",player="iago"}'
+        values: '10x14 25x20'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: PlayerMilestone
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: PlayerMilestone
+        exp_alerts:
+          - exp_labels: {severity: info, notify: events, game: zomboid, player: iago}
+            exp_annotations:
+              summary: "🏆 iago completou 25 horas no servidor"
+              description: "Tempo total jogado em zomboid."
+      - eval_time: 30m
+        alertname: PlayerMilestone
+        exp_alerts: []
   - name: backup sem sucesso ha mais de 26h dispara BackupStale; backup em dia e outros CronJobs nao
     interval: 1m
     input_series:
