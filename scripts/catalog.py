@@ -9,6 +9,7 @@ listas próprias: adicionar um jogo é criar o diretório dele com um game.yaml.
 Uso como comando:
   scripts/catalog.py dirs        diretórios kustomize dos jogos, um por linha
   scripts/catalog.py workloads   "<namespace> <statefulset>" por linha
+  scripts/catalog.py backups     jogos com backup (restore drill), um por linha
   scripts/catalog.py check       valida o catálogo e o platform/active-game.yaml
 """
 import pathlib
@@ -75,6 +76,8 @@ def main():
         print("\n".join(g["dir"] for g in games()))
     elif cmd == "workloads":
         print("\n".join(f"{g['namespace']} {g['name']}" for g in games()))
+    elif cmd == "backups":
+        print("\n".join(g["name"] for g in games() if g.get("backup")))
     elif cmd == "check":
         errors = problems()
         if errors:

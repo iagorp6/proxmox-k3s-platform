@@ -14,4 +14,5 @@ backup:
   pvc: data-terraria-0
   paths: [/data/worlds, /data/tshock]
   exclude: [/data/tshock/logs]
+  verify: [data/worlds/*.wld]   # restore drill: o mundo precisa voltar (scripts/restore-drill.py)
 metrics: true
