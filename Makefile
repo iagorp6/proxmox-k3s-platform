@@ -35,8 +35,9 @@ deploy-argocd: ## Instala/atualiza o Argo CD
 switch-game: ## Troca o jogo ativo (ex.: make switch-game GAME=terraria)
 > ./scripts/switch-game.py $(GAME)
 
+# PLAYERS_REGEX com $ precisa virar $$ no make; com regex complexa, chame scripts/new-game.py direto
 new-game: ## Esqueleto de jogo novo, status draft (ex.: make new-game GAME=valheim TITLE=Valheim IMAGE=repo:tag@sha256:... PORT=16261 PROTOCOL=UDP)
-> ./scripts/new-game.py $(GAME) --title "$(TITLE)" --image "$(IMAGE)" --port $(PORT) $(if $(PROTOCOL),--protocol $(PROTOCOL)) $(if $(MEMORY),--memory $(MEMORY)) $(if $(ICON),--icon "$(ICON)")
+> ./scripts/new-game.py $(GAME) --title "$(TITLE)" --image "$(IMAGE)" --port $(PORT) $(if $(PROTOCOL),--protocol $(PROTOCOL)) $(if $(MEMORY),--memory $(MEMORY)) $(if $(ICON),--icon "$(ICON)") $(if $(DRIVER),--driver $(DRIVER)) $(if $(RCON_PORT),--rcon-port $(RCON_PORT)) $(if $(PLAYERS_COMMAND),--players-command "$(PLAYERS_COMMAND)") $(if $(PLAYERS_REGEX),--players-regex '$(PLAYERS_REGEX)')
 
 restore-drill: ## Restaura o último backup num PVC temporário e mede o tempo (ex.: make restore-drill GAME=terraria RECORD=1)
 > ./scripts/restore-drill.py $(GAME) $(if $(RECORD),--record)
