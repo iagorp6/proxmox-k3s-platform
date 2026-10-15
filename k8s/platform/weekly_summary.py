@@ -14,7 +14,13 @@ PROM = os.getenv("PROMETHEUS_URL", "http://kps-kube-prometheus-stack-prometheus.
 WEBHOOK = os.environ["DISCORD_WEBHOOK_URL"]
 BRT = timezone(timedelta(hours=-3))
 UA = {"User-Agent": "AsunBoid-WeeklySummary/2.0"}
-TITLES = {"zomboid": "Project Zomboid", "terraria": "Terraria", "minecraft": "Minecraft"}
+# Nomes dos jogos: games.json gerado do catálogo por scripts/render-games.py (ConfigMap weekly-summary)
+GAMES_FILE = os.getenv("GAMES_FILE", "/app/games.json")
+try:
+    with open(GAMES_FILE, encoding="utf-8") as f:
+        TITLES = {name: g["title"] for name, g in json.load(f).items()}
+except FileNotFoundError:
+    TITLES = {}
 
 HOURS_7D = "sum by (game, player) (count_over_time(game_player_online[7d])) * 30"
 PEAK_7D = "max_over_time((sum(game_players_online) or vector(0))[7d:1m])"

@@ -74,6 +74,7 @@ k8s_check() {
   for game in $(python3 scripts/catalog.py backups); do   # manifests do restore drill de cada jogo com backup
     python3 scripts/restore-drill.py "$game" --dry-run | kubeconform -strict -summary -schema-location default || return 1
   done
+  bash scripts/test-new-game.sh "$CRD_CATALOG" || return 1
   python3 scripts/test-alerts.py || return 1
   cp k8s/monitoring/dashboard-asunboid.yaml /tmp/dashboard-committed.yaml
   python3 scripts/build-dashboard.py >/dev/null || return 1

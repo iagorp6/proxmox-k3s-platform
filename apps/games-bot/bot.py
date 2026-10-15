@@ -56,7 +56,7 @@ PANEL_TITLE = "🎮 Servidor de Jogos"
 GITHUB_HOST_KEY = "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
 
 GREEN, YELLOW, RED, GREY = 0x2ECC71, 0xF1C40F, 0xE74C3C, 0x95A5A6
-ICONS = {"minecraft": "⛏️", "terraria": "🌳", "zomboid": "🧟"}   # jogo novo usa 🎮 até ganhar ícone
+ICONS = {}   # preenchido pelo catálogo (campo icon do game.yaml); jogo sem ícone usa 🎮
 
 
 def now():
@@ -134,6 +134,8 @@ def catalog():
         g = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
         if g.get("status") in ("active", "legacy") and g.get("namespace"):
             sw = g.get("switch") or {}
+            if g.get("icon"):
+                ICONS[g["name"]] = g["icon"]
             games[g["name"]] = {
                 "title": g["displayName"], "ns": g["namespace"], "sts": g["name"],
                 "port": g["ports"][0]["port"], "metric": sw.get("playersMetric", "game_players_online"),

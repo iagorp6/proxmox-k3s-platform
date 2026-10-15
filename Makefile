@@ -2,7 +2,7 @@
 # Usa ">" como prefixo de receita (evita problemas de tab ao colar).
 .RECIPEPREFIX = >
 .DEFAULT_GOAL := help
-.PHONY: help ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game restore-drill status
+.PHONY: help ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game new-game restore-drill status
 
 help: ## Lista os alvos disponíveis
 > @grep -E '^[a-zA-Z_%-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -34,6 +34,9 @@ deploy-argocd: ## Instala/atualiza o Argo CD
 
 switch-game: ## Troca o jogo ativo (ex.: make switch-game GAME=terraria)
 > ./scripts/switch-game.py $(GAME)
+
+new-game: ## Esqueleto de jogo novo, status draft (ex.: make new-game GAME=valheim TITLE=Valheim IMAGE=repo:tag@sha256:... PORT=16261 PROTOCOL=UDP)
+> ./scripts/new-game.py $(GAME) --title "$(TITLE)" --image "$(IMAGE)" --port $(PORT) $(if $(PROTOCOL),--protocol $(PROTOCOL)) $(if $(MEMORY),--memory $(MEMORY)) $(if $(ICON),--icon "$(ICON)")
 
 restore-drill: ## Restaura o último backup num PVC temporário e mede o tempo (ex.: make restore-drill GAME=terraria RECORD=1)
 > ./scripts/restore-drill.py $(GAME) $(if $(RECORD),--record)

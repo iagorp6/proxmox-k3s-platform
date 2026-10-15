@@ -2,6 +2,7 @@
 # O StatefulSet (statefulset.yaml) e os Secrets próprios continuam escritos à mão.
 name: terraria
 displayName: Terraria
+icon: 🌳            # botão do painel no Discord e resumo semanal
 status: active
 memory: 2560Mi
 monitoring: tshock-rest

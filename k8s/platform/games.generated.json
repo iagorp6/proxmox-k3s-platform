@@ -1,0 +1,14 @@
+{
+  "minecraft": {
+    "icon": "⛏️",
+    "title": "Minecraft"
+  },
+  "terraria": {
+    "icon": "🌳",
+    "title": "Terraria"
+  },
+  "zomboid": {
+    "icon": "🧟",
+    "title": "Project Zomboid"
+  }
+}

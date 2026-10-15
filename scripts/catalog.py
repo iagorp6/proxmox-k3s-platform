@@ -11,6 +11,7 @@ Uso como comando:
   scripts/catalog.py workloads   "<namespace> <statefulset>" por linha
   scripts/catalog.py backups     jogos com backup (restore drill), um por linha
   scripts/catalog.py check       valida o catálogo e o platform/active-game.yaml
+Jogos com status "draft" (recém-criados pelo scripts/new-game.py) ficam fora de tudo até virarem "active".
 """
 import pathlib
 import re
@@ -22,6 +23,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 ACTIVE_FILE = ROOT / "platform" / "active-game.yaml"
 REQUIRED = ("name", "displayName", "status", "namespace", "ports")
 DEPLOYED = ("active", "legacy")
+STATUSES = (*DEPLOYED, "draft")   # draft: criado pelo scripts/new-game.py, ainda fora do cluster
 
 
 def load():
@@ -61,6 +63,8 @@ def problems():
         # Dashboard e alertas derivam o jogo do namespace: os dois precisam ser iguais.
         if g["namespace"] != g["name"]:
             errors.append(f"{where}: namespace '{g['namespace']}' precisa ser igual ao nome '{g['name']}'")
+        if g["status"] not in STATUSES:
+            errors.append(f"{where}: status '{g['status']}' inválido (use {', '.join(STATUSES)})")
         if g["status"] == "active" and not g["dir"].startswith("k8s/games/"):
             errors.append(f"{where}: jogo com status active precisa ficar em k8s/games/")
     active = active_game()

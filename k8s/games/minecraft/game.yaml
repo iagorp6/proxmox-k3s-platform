@@ -1,6 +1,7 @@
 # Catálogo da plataforma: o render-games.py gera Service, métricas, backup e o App do Argo CD.
 name: minecraft
 displayName: Minecraft
+icon: ⛏️            # botão do painel no Discord e resumo semanal
 status: active
 memory: 10Gi
 monitoring: rcon
