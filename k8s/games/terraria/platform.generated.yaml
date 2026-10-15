@@ -96,7 +96,44 @@ spec:
       template:
         spec:
           restartPolicy: Never
-          automountServiceAccountToken: false
+          serviceAccountName: terraria-backup
+          initContainers:
+          - name: save-world
+            image: curlimages/curl:latest@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+            command:
+            - /bin/sh
+            - -c
+            args:
+            - |
+              set -eu
+              cd /tmp
+              curl -fsSLo kubectl https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl
+              echo '6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  kubectl' | sha256sum -c -
+              chmod +x kubectl
+              phase=$(./kubectl -n terraria get pod terraria-0 -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              if [ "$phase" = Running ]; then
+                ./kubectl -n terraria exec terraria-0 -c server -- sh -c 'echo save > /tmp/console; sleep 15' || echo 'AVISO: save falhou; o backup usa o último autosave'
+              else
+                echo "terraria-0 não está rodando (${phase:-ausente}): backup do último save em disco"
+              fi
+            env:
+            - name: HOME
+              value: /tmp
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                memory: 256Mi
+            volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           securityContext:
             runAsNonRoot: true
             runAsUser: 1654
@@ -153,3 +190,47 @@ spec:
           - name: tmp
             emptyDir:
               sizeLimit: 1Gi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: terraria-backup
+  namespace: terraria
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: terraria-backup
+  namespace: terraria
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  resourceNames:
+  - terraria-0
+  verbs:
+  - get
+- apiGroups:
+  - ''
+  resources:
+  - pods/exec
+  resourceNames:
+  - terraria-0
+  verbs:
+  - get
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: terraria-backup
+  namespace: terraria
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: terraria-backup
+subjects:
+- kind: ServiceAccount
+  name: terraria-backup
+  namespace: terraria

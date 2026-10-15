@@ -16,6 +16,8 @@ backup:
   schedule: "30 5 * * *"
   pvc: data-zomboid-0
   paths: [/data/data/Saves, /data/data/db, /data/data/Server]   # PVC montado em /data no job de backup
+  # restore drill: save do servidor "k3s" (PZ_SERVER_NAME), banco de jogadores e config
+  verify: [data/data/Saves/Multiplayer/k3s/*, data/data/db/k3s.db, data/data/Server/k3s.ini]
 metrics: true
 alerts:
   muteDuring: restart-diario   # restart diário das 6h (daily-restart.yaml); janela no Alertmanager
