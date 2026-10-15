@@ -19,9 +19,13 @@ ensure_tools() {
     echo ">> instalando ansible-lint"
     pipx install --include-deps "ansible-lint==26.9.0" >/dev/null   # mesma versão do ci.yml
   fi
+  if ! command -v ruff >/dev/null; then
+    echo ">> instalando ruff"
+    pipx install "ruff==0.16.8" >/dev/null   # mesma versão do ci.yml
+  fi
   command -v shellcheck >/dev/null || { echo "ERRO: instale o shellcheck (sudo apt-get install -y shellcheck)"; exit 2; }
   local out tool
-  for tool in terraform tflint kubeconform trivy promtool ansible-lint shellcheck; do
+  for tool in terraform tflint kubeconform trivy promtool ansible-lint shellcheck ruff; do
     out="$(tool_version "$tool" 2>&1 || true)"
     [[ "$out" =~ [0-9]+\.[0-9]+ ]] || { echo "ERRO: $tool não responde com a versão (instalação corrompida?)"; exit 2; }
   done
@@ -80,7 +84,8 @@ k8s_check() {
 }
 
 scripts_check() {
-  shellcheck scripts/*.sh k8s/*/deploy.sh && python3 scripts/render-games.py --check && bash scripts/check-minecraft-pin.sh && python3 -m py_compile k8s/platform/*.py k8s/games/*/scripts/*.py scripts/*.py
+  find . -name '*.sh' -print0 | xargs -0 shellcheck &&   # a cópia limpa só tem arquivos versionados python3 scripts/render-games.py --check && bash scripts/check-minecraft-pin.sh &&
+    python3 -m py_compile k8s/platform/*.py k8s/games/*/scripts/*.py scripts/*.py apps/*/*.py && ruff check .
 }
 
 security_check() {

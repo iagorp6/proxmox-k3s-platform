@@ -1,0 +1,6 @@
+# Lint de Python (CI e scripts/ci-local.sh). Só regras que pegam bug real: nomes indefinidos, imports
+# não usados, erros de sintaxe e armadilhas do flake8-bugbear. Estilo fica de fora de propósito.
+target-version = "py313"
+
+[lint]
+select = ["F", "E9", "B"]
