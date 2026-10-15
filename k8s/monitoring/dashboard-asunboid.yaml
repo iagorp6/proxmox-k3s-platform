@@ -115,7 +115,7 @@ data:
           },
           "targets": [
             {
-              "expr": "max((label_replace(max(zomboid_up), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
+              "expr": "max((max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
               "refId": "A"
             }
           ],
@@ -183,7 +183,7 @@ data:
           },
           "targets": [
             {
-              "expr": "sum((label_replace(max(zomboid_players_online), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_players_online)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
+              "expr": "sum((max by (game) (game_players_online)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
               "refId": "A"
             }
           ],
@@ -232,7 +232,7 @@ data:
           },
           "targets": [
             {
-              "expr": "avg_over_time((max((label_replace(max(zomboid_up), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0))[7d:5m])",
+              "expr": "avg_over_time((max((max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0))[7d:5m])",
               "refId": "A"
             }
           ],
@@ -414,7 +414,7 @@ data:
               "legendFormat": "{{game}}"
             },
             {
-              "expr": "max((label_replace(max(zomboid_up), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
+              "expr": "max((max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0)",
               "refId": "B",
               "legendFormat": "Servidor no ar"
             }
@@ -543,7 +543,7 @@ data:
           },
           "targets": [
             {
-              "expr": "(label_replace(sum by (player) (count_over_time(zomboid_player_online[24h])) * 30, \"game\", \"zomboid\", \"\", \"\") or sum by (game, player) (count_over_time(game_player_online[24h])) * 30) and on (game, player) (label_replace(max by (player) (zomboid_player_online), \"game\", \"zomboid\", \"\", \"\") or max by (game, player) (game_player_online))",
+              "expr": "(sum by (game, player) (count_over_time(game_player_online[24h])) * 30) and on (game, player) (max by (game, player) (game_player_online))",
               "refId": "A",
               "instant": true,
               "format": "table"
@@ -647,7 +647,7 @@ data:
           },
           "targets": [
             {
-              "expr": "label_replace(max(zomboid_players_online), \"game\", \"zomboid\", \"\", \"\") or max by (game) (game_players_online)",
+              "expr": "max by (game) (game_players_online)",
               "refId": "A",
               "legendFormat": "{{game}}"
             }
@@ -708,7 +708,7 @@ data:
           },
           "targets": [
             {
-              "expr": "label_replace(max by (player) (zomboid_player_online), \"game\", \"zomboid\", \"\", \"\") or max by (game, player) (game_player_online)",
+              "expr": "max by (game, player) (game_player_online)",
               "refId": "A",
               "legendFormat": "{{player}} ({{game}})"
             }
@@ -773,37 +773,37 @@ data:
           },
           "targets": [
             {
-              "expr": "label_replace(max by (player) (last_over_time(timestamp(zomboid_player_online)[30d:1m])) * 1000, \"game\", \"zomboid\", \"\", \"\") or max by (game, player) (last_over_time(timestamp(game_player_online)[30d:1m])) * 1000",
+              "expr": "max by (game, player) (last_over_time(timestamp(game_player_online)[30d:1m])) * 1000",
               "refId": "A",
               "instant": true,
               "format": "table"
             },
             {
-              "expr": "label_replace(sum by (player) (count_over_time(zomboid_player_online[24h])) * 30, \"game\", \"zomboid\", \"\", \"\") or sum by (game, player) (count_over_time(game_player_online[24h])) * 30",
+              "expr": "sum by (game, player) (count_over_time(game_player_online[24h])) * 30",
               "refId": "B",
               "instant": true,
               "format": "table"
             },
             {
-              "expr": "label_replace(sum by (player) (count_over_time(zomboid_player_online[7d])) * 30, \"game\", \"zomboid\", \"\", \"\") or sum by (game, player) (count_over_time(game_player_online[7d])) * 30",
+              "expr": "sum by (game, player) (count_over_time(game_player_online[7d])) * 30",
               "refId": "C",
               "instant": true,
               "format": "table"
             },
             {
-              "expr": "label_replace(sum by (player) (count_over_time(zomboid_player_online[30d])) * 30, \"game\", \"zomboid\", \"\", \"\") or sum by (game, player) (count_over_time(game_player_online[30d])) * 30",
+              "expr": "sum by (game, player) (count_over_time(game_player_online[30d])) * 30",
               "refId": "D",
               "instant": true,
               "format": "table"
             },
             {
-              "expr": "label_replace(max by (player) (zomboid_player_playtime_seconds_total), \"game\", \"zomboid\", \"\", \"\") or max by (game, player) (game_player_playtime_seconds_total)",
+              "expr": "max by (game, player) (game_player_playtime_seconds_total)",
               "refId": "E",
               "instant": true,
               "format": "table"
             },
             {
-              "expr": "label_replace(round(sum by (player) (increase(zomboid_player_deaths_total[30d]))), \"game\", \"zomboid\", \"\", \"\")",
+              "expr": "round(sum by (game, player) (increase(game_player_deaths_total[30d])))",
               "refId": "F",
               "instant": true,
               "format": "table"

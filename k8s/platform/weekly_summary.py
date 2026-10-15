@@ -1,6 +1,6 @@
 """Resumo semanal da plataforma de jogos no Discord (stdlib only).
 
-Multi-jogo: une as métricas zomboid_* (Zomboid) e game_* (contrato da plataforma).
+Multi-jogo: lê o contrato game_* da plataforma (label game), que todos os jogos seguem.
 Com DRY_RUN=1 só imprime o que enviaria, sem postar no Discord (para testar o CronJob).
 """
 import json
@@ -16,11 +16,10 @@ BRT = timezone(timedelta(hours=-3))
 UA = {"User-Agent": "AsunBoid-WeeklySummary/2.0"}
 TITLES = {"zomboid": "Project Zomboid", "terraria": "Terraria", "minecraft": "Minecraft"}
 
-HOURS_7D = ('label_replace(sum by (player) (count_over_time(zomboid_player_online[7d])) * 30, "game", "zomboid", "", "") '
-            'or sum by (game, player) (count_over_time(game_player_online[7d])) * 30')
-PEAK_7D = "max_over_time(((sum(zomboid_players_online) or vector(0)) + (sum(game_players_online) or vector(0)))[7d:1m])"
-AVAIL_7D = "avg_over_time(((max(zomboid_up) or vector(0)) + (max(game_up) or vector(0)) > bool 0)[7d:5m])"
-DEATHS_7D = "sum by (player) (increase(zomboid_player_deaths_total[7d]))"
+HOURS_7D = "sum by (game, player) (count_over_time(game_player_online[7d])) * 30"
+PEAK_7D = "max_over_time((sum(game_players_online) or vector(0))[7d:1m])"
+AVAIL_7D = "avg_over_time((max(game_up) or vector(0))[7d:5m])"
+DEATHS_7D = "sum by (player) (increase(game_player_deaths_total{game=\"zomboid\"}[7d]))"
 
 
 def q(expr):

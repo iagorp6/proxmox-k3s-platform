@@ -20,5 +20,4 @@ metrics: true
 switch:
   # O save do Zomboid é assíncrono: o sleep dá tempo de terminar antes do backup ou da troca de jogo
   saveCommand: echo save > /tmp/console; sleep 30
-  playersMetric: zomboid_players_online   # ainda fora do contrato game_*
   suspendWhenIdle: [zomboid-daily-restart]

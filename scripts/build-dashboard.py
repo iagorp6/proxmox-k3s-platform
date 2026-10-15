@@ -2,8 +2,8 @@
 """Gera k8s/monitoring/dashboard-asunboid.yaml (dashboard da plataforma de jogos como código).
 
 Multi-jogo: o topo mostra o jogo ativo (réplicas > 0) e o status dele; as seções de jogadores
-juntam todos os jogos com uma coluna "Jogo". O Zomboid ainda expõe métricas zomboid_* e o
-Terraria segue o contrato game_*; as consultas unificam os dois com label_replace.
+juntam todos os jogos com uma coluna "Jogo". Todo jogo segue o contrato game_* (label game),
+então as consultas não dependem de qual jogo está ativo.
 Uso: python3 scripts/build-dashboard.py
 """
 import json
@@ -18,28 +18,24 @@ GREEN, ORANGE, RED = "green", "orange", "red"
 NS = "|".join(g["namespace"] for g in catalog.games())
 TITLES = [(g["name"], g["displayName"]) for g in catalog.games()]
 
-# ---------- PromQL: unificação zomboid_* + game_* ----------
+# ---------- PromQL: contrato game_* ----------
 ACTIVE = (f'label_replace(max by (namespace) (kube_statefulset_replicas{{namespace=~"{NS}"}}) > 0, '
           '"game", "$1", "namespace", "(.+)")')
-UP = 'label_replace(max(zomboid_up), "game", "zomboid", "", "") or max by (game) (game_up)'
-PLAYERS = 'label_replace(max(zomboid_players_online), "game", "zomboid", "", "") or max by (game) (game_players_online)'
-PLAYER_ONLINE = ('label_replace(max by (player) (zomboid_player_online), "game", "zomboid", "", "") '
-                 'or max by (game, player) (game_player_online)')
+UP = "max by (game) (game_up)"
+PLAYERS = "max by (game) (game_players_online)"
+PLAYER_ONLINE = "max by (game, player) (game_player_online)"
 ACTIVE_UP = f"max(({UP}) * on (game) ({ACTIVE})) or vector(0)"
 ACTIVE_PLAYERS = f"sum(({PLAYERS}) * on (game) ({ACTIVE})) or vector(0)"
 
 
 def dur(r):
     """Tempo online (s) por jogo/jogador na janela r (coleta a cada 30s)."""
-    return (f'label_replace(sum by (player) (count_over_time(zomboid_player_online[{r}])) * 30, "game", "zomboid", "", "") '
-            f'or sum by (game, player) (count_over_time(game_player_online[{r}])) * 30')
+    return f"sum by (game, player) (count_over_time(game_player_online[{r}])) * 30"
 
 
-LAST_SEEN = ('label_replace(max by (player) (last_over_time(timestamp(zomboid_player_online)[30d:1m])) * 1000, '
-             '"game", "zomboid", "", "") or max by (game, player) (last_over_time(timestamp(game_player_online)[30d:1m])) * 1000')
-TOTAL = ('label_replace(max by (player) (zomboid_player_playtime_seconds_total), "game", "zomboid", "", "") '
-         'or max by (game, player) (game_player_playtime_seconds_total)')
-DEATHS = 'label_replace(round(sum by (player) (increase(zomboid_player_deaths_total[30d]))), "game", "zomboid", "", "")'
+LAST_SEEN = "max by (game, player) (last_over_time(timestamp(game_player_online)[30d:1m])) * 1000"
+TOTAL = "max by (game, player) (game_player_playtime_seconds_total)"
+DEATHS = "round(sum by (game, player) (increase(game_player_deaths_total[30d])))"
 ALERT_FILTER = 'alertname!~"Watchdog|InfoInhibitor|.*PlayerOnline"'
 
 
