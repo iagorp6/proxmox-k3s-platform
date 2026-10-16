@@ -152,6 +152,17 @@ spec:
           image: python:3.13-slim@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b
           command: ["python", "/scripts/exporter.py"]
           env:
+            - name: GAME
+              value: minecraft
+            - name: GAME_DRIVER
+              value: rcon
+            - name: RCON_PORT
+              value: "25575"
+            - name: RCON_PLAYERS_COMMAND
+              value: list
+            # Ex.: "There are 2 of a max of 6 players online: IguinhoGamerPvP, joao"
+            - name: RCON_PLAYERS_REGEX
+              value: "There are \\d+ of a max(?: of)? \\d+ players online:?\\s*(?P<list>.*)"
             - name: RCON_PASSWORD
               valueFrom:
                 secretKeyRef:

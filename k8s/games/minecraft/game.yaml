@@ -5,6 +5,7 @@ icon: ⛏️            # botão do painel no Discord e resumo semanal
 status: active
 memory: 10Gi
 monitoring: rcon
+exporter: shared   # driver rcon da lib comum (platform/exporter/gameexporter.py)
 namespace: minecraft
 runAsUser: 1000
 ports:
