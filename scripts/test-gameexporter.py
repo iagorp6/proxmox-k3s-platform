@@ -74,6 +74,39 @@ class RconTest(unittest.TestCase):
             ge.rcon("127.0.0.1", srv.port, "errada", "list")
 
 
+class GameConfigTest(unittest.TestCase):
+    """Os jogos do repositório com `exporter: shared` + driver rcon: o env real do StatefulSet contra o servidor falso."""
+
+    def exporter_env(self, game):
+        import yaml
+        docs = yaml.safe_load_all((ROOT / "k8s" / "games" / game / "statefulset.yaml").read_text(encoding="utf-8"))
+        sts = next(d for d in docs if d and d.get("kind") == "StatefulSet")
+        containers = sts["spec"]["template"]["spec"]["containers"]
+        return {e["name"]: e["value"] for c in containers if c["name"] == "exporter" for e in c["env"] if "value" in e}
+
+    def run_driver(self, env, response):
+        srv = FakeRcon("pw", {env["RCON_PLAYERS_COMMAND"]: response})
+        patched = {**env, "RCON_PORT": str(srv.port), "RCON_PASSWORD": "pw"}
+        old = {k: ge.os.environ.get(k) for k in patched}
+        ge.os.environ.update(patched)
+        try:
+            return ge.rcon_driver()()
+        finally:
+            for k, v in old.items():
+                if v is None:
+                    ge.os.environ.pop(k, None)
+                else:
+                    ge.os.environ[k] = v
+
+    def test_minecraft(self):
+        env = self.exporter_env("minecraft")
+        self.assertEqual(env["GAME_DRIVER"], "rcon")
+        self.assertEqual(self.run_driver(env, "There are 2 of a max of 6 players online: IguinhoGamerPvP, joao"),
+                         ["IguinhoGamerPvP", "joao"])
+        self.assertEqual(self.run_driver(env, "There are 0 of a max of 6 players online: "), [])
+        self.assertIsNone(self.run_driver(env, "Unknown or incomplete command"))
+
+
 class ListenTest(unittest.TestCase):
     def test_tcp_listen_and_closed(self):
         s = socket.socket()

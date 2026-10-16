@@ -12,6 +12,7 @@ configMapGenerator:
   - name: minecraft-scripts
     files:
       - exporter.py=scripts/exporter.py
+      - gameexporter.py=scripts/gameexporter.py   # lib comum, gerada pelo render-games.py
       - users.py=scripts/users.py
       - easyauth.py=scripts/easyauth.py
 generatorOptions:
