@@ -1,0 +1,26 @@
+# Loki single binary (logs dos pods, lidos pelo Grafana). Sync MANUAL, como o kube-prometheus-stack (ADR 0007).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: loki
+      targetRevision: 7.3.0
+      helm:
+        releaseName: loki
+        valueFiles:
+          - $values/k8s/monitoring/values-loki.yaml
+    - repoURL: git@github.com:iagorp6/proxmox-k3s-platform.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

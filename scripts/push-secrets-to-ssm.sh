@@ -5,6 +5,11 @@ set -euo pipefail
 PROFILE="${AWS_PROFILE:-homelab}"
 REGION="${AWS_REGION:-sa-east-1}"
 : "${BW_SESSION:?Rode antes: export BW_SESSION=\"\$(bw unlock --raw)\"}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# IP do host Proxmox (scrape do Prometheus): vem do .env.local, que não vai para o Git
+# shellcheck source=/dev/null
+[[ -f "$ROOT/.env.local" ]] && source "$ROOT/.env.local"
+: "${PVE_HOST:?Defina PVE_HOST no .env.local (veja .env.local.example)}"
 
 synced=false
 for attempt in 1 2 3; do
@@ -59,3 +64,7 @@ done
 aws ssm put-parameter --name /homelab/monitoring/grafana-admin-user --type String --value admin \
   --overwrite --profile "$PROFILE" --region "$REGION" >/dev/null
 echo "OK: /homelab/monitoring/grafana-admin-user"
+
+aws ssm put-parameter --name /homelab/monitoring/proxmox-host --type String --value "$PVE_HOST" \
+  --overwrite --profile "$PROFILE" --region "$REGION" >/dev/null
+echo "OK: /homelab/monitoring/proxmox-host"

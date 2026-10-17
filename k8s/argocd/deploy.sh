@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Instala/atualiza o Argo CD com versão de chart fixada em chart-version-argocd.txt
+# Instala/atualiza o Argo CD com versão de chart fixada em chart-version-argocd.txt.
+# É o único release que continua no Helm: o Argo precisa existir antes de aplicar o resto (ADR 0007).
 set -euo pipefail
 cd "$(dirname "$0")"
 helm repo add argo https://argoproj.github.io/argo-helm >/dev/null 2>&1 || true

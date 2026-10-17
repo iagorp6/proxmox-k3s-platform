@@ -1,0 +1,37 @@
+# Prometheus, Alertmanager, Grafana e operator (ADR 0007). Sync MANUAL: atualização de chart
+# chega por PR do Renovate e entra no cluster quando alguém clica Sync, nunca sozinha.
+# releaseName "kps" mantém os nomes dos recursos criados pelo antigo `helm upgrade --install kps`.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 91.8.2
+      helm:
+        releaseName: kps
+        valueFiles:
+          - $values/k8s/monitoring/values-kube-prometheus-stack.yaml
+    - repoURL: git@github.com:iagorp6/proxmox-k3s-platform.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  # O job de admission do operator grava o caBundle depois do sync; sem isto o app fica OutOfSync
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      jqPathExpressions: [".webhooks[]?.clientConfig.caBundle"]
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      jqPathExpressions: [".webhooks[]?.clientConfig.caBundle"]
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true   # CRDs do operator passam do limite de 256 KiB da annotation do apply client-side
+      - RespectIgnoreDifferences=true

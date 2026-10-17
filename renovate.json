@@ -2,9 +2,9 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": [
     "Renovate cuida do que o Dependabot não enxerga: imagens fixadas por digest nos manifests,",
-    "versões de chart (chart-version-*.txt) e a versão do K3s. Actions, providers do Terraform e o",
+    "versões de chart (Applications do Argo CD e chart-version-argocd.txt) e a versão do K3s. Actions, providers do Terraform e o",
     "FROM do games-bot continuam no Dependabot (.github/dependabot.yml), por isso os managers ficam restritos.",
-    "Nada faz automerge: cada PR passa pelo CI e pela revisão, e jogo só muda no cluster com Sync manual no Argo."
+    "Nada faz automerge: cada PR passa pelo CI e pela revisão, e nada muda no cluster sem Sync manual no Argo (exceto platform e monitoring-config)."
   ],
   "extends": [
     "config:recommended",
@@ -20,11 +20,17 @@
   ],
   "enabledManagers": [
     "kubernetes",
+    "argocd",
     "custom.regex"
   ],
   "kubernetes": {
     "managerFilePatterns": [
       "/^k8s/.+\\.ya?ml$/"
+    ]
+  },
+  "argocd": {
+    "managerFilePatterns": [
+      "/^k8s/argocd/apps/.+\\.yaml$/"
     ]
   },
   "customManagers": [
@@ -51,43 +57,6 @@
       "datasourceTemplate": "docker"
     },
     {
-      "description": "Versões de chart lidas pelos deploy.sh (helm upgrade continua manual: make deploy-*)",
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^k8s/monitoring/chart-version-kps\\.txt$/"
-      ],
-      "matchStrings": [
-        "^(?<currentValue>\\S+)"
-      ],
-      "depNameTemplate": "kube-prometheus-stack",
-      "datasourceTemplate": "helm",
-      "registryUrlTemplate": "https://prometheus-community.github.io/helm-charts"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^k8s/monitoring/chart-version-loki\\.txt$/"
-      ],
-      "matchStrings": [
-        "^(?<currentValue>\\S+)"
-      ],
-      "depNameTemplate": "loki",
-      "datasourceTemplate": "helm",
-      "registryUrlTemplate": "https://grafana.github.io/helm-charts"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^k8s/monitoring/chart-version-alloy\\.txt$/"
-      ],
-      "matchStrings": [
-        "^(?<currentValue>\\S+)"
-      ],
-      "depNameTemplate": "alloy",
-      "datasourceTemplate": "helm",
-      "registryUrlTemplate": "https://grafana.github.io/helm-charts"
-    },
-    {
       "customType": "regex",
       "managerFilePatterns": [
         "/^k8s/argocd/chart-version-argocd\\.txt$/"
@@ -97,19 +66,8 @@
       ],
       "depNameTemplate": "argo-cd",
       "datasourceTemplate": "helm",
-      "registryUrlTemplate": "https://argoproj.github.io/argo-helm"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^k8s/external-secrets/chart-version-eso\\.txt$/"
-      ],
-      "matchStrings": [
-        "^(?<currentValue>\\S+)"
-      ],
-      "depNameTemplate": "external-secrets",
-      "datasourceTemplate": "helm",
-      "registryUrlTemplate": "https://charts.external-secrets.io"
+      "registryUrlTemplate": "https://argoproj.github.io/argo-helm",
+      "description": "Versão do chart do Argo CD, o único release fora do Argo (bootstrap): aplicar com make deploy-argocd"
     },
     {
       "description": "Versão do K3s instalada pelo Ansible (upgrade do cluster continua manual)",
@@ -130,6 +88,16 @@
       "description": "apiVersion dos manifests muda junto com o upgrade do K3s, não sozinho",
       "matchDatasources": [
         "kubernetes-api"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Os Applications apontam para o próprio repositório em main; o manager argocd só cuida das versões de chart",
+      "matchManagers": [
+        "argocd"
+      ],
+      "matchDatasources": [
+        "git-tags"
       ],
       "enabled": false
     },
@@ -184,7 +152,7 @@
       ],
       "commitMessagePrefix": "charts:",
       "prBodyNotes": [
-        "Aplicar no WSL com `make deploy-monitoring`, `make deploy-eso` ou `make deploy-argocd`; o Argo CD não gerencia estes releases."
+        "Depois do merge: Sync manual do app no Argo CD (kube-prometheus-stack, loki, alloy ou external-secrets). Argo CD: `make deploy-argocd` no WSL."
       ]
     },
     {

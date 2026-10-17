@@ -23,13 +23,13 @@ plan: ## terraform plan nos dois stacks (Proxmox e AWS)
 > bash -c 'source ~/.proxmox.env && cd terraform && terraform plan'
 > cd terraform-aws && terraform plan
 
-deploy-monitoring: ## Instala/atualiza a stack de observabilidade (Helm, versões fixadas)
+deploy-monitoring: ## Break-glass: stack de observabilidade via Helm (no dia a dia é Sync no Argo CD)
 > ./k8s/monitoring/deploy.sh
 
-deploy-eso: ## Instala/atualiza o External Secrets Operator
+deploy-eso: ## Break-glass: External Secrets via Helm (no dia a dia é Sync no Argo CD)
 > ./k8s/external-secrets/deploy.sh
 
-deploy-argocd: ## Instala/atualiza o Argo CD
+deploy-argocd: ## Instala/atualiza o Argo CD (único release fora do Argo)
 > ./k8s/argocd/deploy.sh
 
 switch-game: ## Troca o jogo ativo (ex.: make switch-game GAME=terraria)
