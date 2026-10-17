@@ -26,7 +26,12 @@ prometheus:
     serviceMonitorSelectorNilUsesHelmValues: false
     podMonitorSelectorNilUsesHelmValues: false
     ruleSelectorNilUsesHelmValues: false
-    # Scrape do host Proxmox: definido em values-kube-prometheus-stack.local.yaml
+    # Scrape do host Proxmox: o ExternalSecret prometheus-additional-scrape (externalsecrets.yaml)
+    # monta os jobs com o IP guardado no SSM, que não vai para o Git
+    additionalScrapeConfigsSecret:
+      enabled: true
+      name: prometheus-additional-scrape
+      key: scrape.yaml
     resources:
       requests:
         cpu: 100m

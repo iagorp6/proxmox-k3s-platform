@@ -95,7 +95,7 @@ flowchart TB
 terraform/ Proxmox VM (cloud image, cloud-init, DHCP-reserved NIC)
 terraform-aws/ S3 (backups + state), least-privilege IAM, SSM parameters, Budgets
 ansible/ K3s install, game-server network tuning, host exporters
-k8s/argocd/ Argo CD install + app of apps
+k8s/argocd/ Argo CD install + app of apps (games, platform, monitoring and External Secrets charts)
 k8s/games/ One directory per catalog game (Project Zomboid, Terraria, Minecraft): game.yaml, StatefulSet, generated manifests
 k8s/platform/ Workloads that belong to no game: weekly Discord summary, shared webhook Secret
 platform/ Active game and platform defaults read by the generator
@@ -111,8 +111,8 @@ docs/ Architecture decision records, client installer for the Minecraft modpack
 1. **`terraform-aws/`** creates the state bucket, the backup bucket, scoped IAM users, SSM parameters and a budget alarm.
 2. **`terraform/`** creates the VM from an Ubuntu cloud image with cloud-init (user, SSH key, network).
 3. **Ansible** installs K3s (artifacts fetched and checksum-verified on the control node), tunes the game network path, and installs exporters on the Proxmox host.
-4. **Helm** installs the observability stack, External Secrets and Argo CD, all with pinned chart versions.
-5. **Two bootstrap secrets** (the External Secrets AWS credential and the Argo CD deploy key) and one `kubectl apply` of the root app. Argo CD reconciles everything else, and External Secrets restores every Secret from SSM.
+4. **Helm** installs Argo CD, the only release that has to exist before GitOps can start.
+5. **Two bootstrap secrets** (the External Secrets AWS credential and the Argo CD deploy key) and one `kubectl apply` of the root app. Argo CD reconciles everything else, including the third-party charts (observability stack and External Secrets, pinned in their Applications, [ADR 0007](docs/adr/0007-helm-releases-under-argocd.md)), and External Secrets restores every Secret from SSM.
 
 Day-to-day tasks are wrapped in a `Makefile`: run `make help` to list them (`make ci` mirrors the GitHub Actions checks locally).
 
@@ -278,9 +278,9 @@ A Budgets alarm fires above USD 1/month, and a CloudWatch alarm watches the size
 - [x] GitHub Actions to AWS via OIDC, used for weekly drift detection
 - [x] Migrate to the non-deprecated `proxmox_download_file` resource
 - [x] Renovate for image digests, chart versions and K3s
+- [x] Third-party Helm releases (monitoring, External Secrets) managed by Argo CD
 - [ ] Timed full DR drill and published RTO (rebuild strategy in [ADR 0005](docs/adr/0005-host-recovery-by-rebuild.md))
 - [ ] Reinstall the host on a ZFS mirror during the DR drill
-- [ ] Manage the Helm releases (monitoring, External Secrets, Argo CD) through Argo CD
 - [ ] Custom game-server image built in CI
 
 ---
