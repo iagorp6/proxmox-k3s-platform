@@ -2,7 +2,7 @@
 # Usa ">" como prefixo de receita (evita problemas de tab ao colar).
 .RECIPEPREFIX = >
 .DEFAULT_GOAL := help
-.PHONY: help ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game new-game restore-drill status
+.PHONY: help ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game new-game restore-drill restore-game status
 
 help: ## Lista os alvos disponíveis
 > @grep -E '^[a-zA-Z_%-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -41,6 +41,9 @@ new-game: ## Esqueleto de jogo novo, status draft (ex.: make new-game GAME=valhe
 
 restore-drill: ## Restaura o último backup num PVC temporário e mede o tempo (ex.: make restore-drill GAME=terraria RECORD=1)
 > ./scripts/restore-drill.py $(GAME) $(if $(RECORD),--record)
+
+restore-game: ## Restaura o último backup no volume do jogo, com o servidor parado (DR; ex.: make restore-game GAME=minecraft)
+> ./scripts/restore-drill.py $(GAME) --live
 
 status: ## Estado da plataforma (jogo ativo, réplicas, alertas)
 > ./scripts/platform-status.sh
