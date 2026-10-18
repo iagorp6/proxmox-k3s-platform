@@ -2,7 +2,7 @@
 # Usa ">" como prefixo de receita (evita problemas de tab ao colar).
 .RECIPEPREFIX = >
 .DEFAULT_GOAL := help
-.PHONY: help ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game new-game restore-drill restore-game status
+.PHONY: help ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game new-game restore-drill restore-game console status
 
 help: ## Lista os alvos disponíveis
 > @grep -E '^[a-zA-Z_%-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -44,6 +44,12 @@ restore-drill: ## Restaura o último backup num PVC temporário e mede o tempo (
 
 restore-game: ## Restaura o último backup no volume do jogo, com o servidor parado (DR; ex.: make restore-game GAME=minecraft)
 > ./scripts/restore-drill.py $(GAME) --live
+
+# CMD vai literal para o FIFO /tmp/console do container server (Zomboid e Terraria); a resposta sai no log
+console: ## Comando no console do servidor (ex.: make console GAME=zomboid CMD='servermsg "restart em 5 min"')
+> $(if $(and $(GAME),$(CMD)),,$(error uso: make console GAME=zomboid CMD='comando'))
+> kubectl -n $(GAME) exec $(GAME)-0 -c server -- sh -c 'test -p /tmp/console && printf "%s\n" "$$1" > /tmp/console' _ '$(CMD)'
+> @sleep 3; kubectl -n $(GAME) logs $(GAME)-0 -c server --since=10s | tail -n 20
 
 status: ## Estado da plataforma (jogo ativo, réplicas, alertas)
 > ./scripts/platform-status.sh
