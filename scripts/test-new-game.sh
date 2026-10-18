@@ -23,6 +23,12 @@ python3 scripts/render-games.py --check >/dev/null   # a cópia da lib já nasce
 for game in exemplo exemplo-rcon; do
   sed -i 's/^status: draft .*/status: active/' "k8s/games/$game/game.yaml"
 done
+# Porta fora do VIP do FortiGate (platform/defaults.yaml publishedPorts) barra o jogo active
+if python3 scripts/render-games.py --check >"$WORK/ports.log" 2>&1 || ! grep -q "fora do VIP do FortiGate" "$WORK/ports.log"; then
+  echo "ERRO: --check não barrou porta fora de publishedPorts"; cat "$WORK/ports.log"; exit 1
+fi
+sed -i 's/port: 2456,/port: 16261,/' k8s/games/exemplo/game.yaml
+sed -i 's/port: 27015,/port: 16262,/' k8s/games/exemplo-rcon/game.yaml
 python3 scripts/render-games.py >/dev/null
 python3 scripts/render-games.py --check >/dev/null
 for game in exemplo exemplo-rcon; do

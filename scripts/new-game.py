@@ -310,7 +310,7 @@ Próximos passos para {a.title}:
   2. Se precisar de senha ou token: externalsecrets.yaml no jogo + entrada em scripts/push-secrets-to-ssm.sh
   3. Exporter: driver {a.driver} já ligado (k8s/games/{a.name}/scripts/exporter.py usa a lib comum){rcon_steps}
   4. status: active no game.yaml e python3 scripts/render-games.py
-  5. Porta {a.port}/{a.protocol}: fora de 16261/16262 precisa de VIP no FortiGate
+  5. Porta {a.port}/{a.protocol}: fora de platform/defaults.yaml publishedPorts precisa de VIP no FortiGate (o --check cobra)
   6. make ci, PR, e depois make switch-game GAME={a.name}""")
     return 0
 

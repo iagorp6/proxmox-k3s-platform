@@ -380,9 +380,18 @@ def memory_problems(games):
     return errors
 
 
+def port_problems(games):
+    """Jogo active só é alcançável nas portas que o VIP do FortiGate encaminha (publishedPorts)."""
+    published = set(DEFAULTS["publishedPorts"])
+    return [f"{g['dir']}/game.yaml: porta {p['port']}/{p['protocol']} ({p['name']}) fora do VIP do FortiGate "
+            f"({', '.join(map(str, sorted(published)))}); crie o encaminhamento e adicione em platform/defaults.yaml publishedPorts"
+            for g in games if g["status"] == "active" for p in g["ports"] if p["port"] not in published]
+
+
 def main():
     check = "--check" in sys.argv
     errors = (catalog.problems() + mute_problems(catalog.games()) + memory_problems(catalog.games())
+              + port_problems(catalog.games())
               + exporter_problems(catalog.load()))
     for key in ("resticImage", "curlImage"):
         if not IMAGE_REF.fullmatch(str(DEFAULTS[key])):
