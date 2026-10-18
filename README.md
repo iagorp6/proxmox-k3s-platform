@@ -43,6 +43,7 @@ flowchart TB
                 hostexp["node_exporter<br/>smartctl_exporter"]
                 subgraph vm["VM k3s-01 · Ubuntu · cloud-init"]
                     argo["Argo CD"]
+                    bot["games-bot<br/>Discord switch panel"]
                     game["Active game server<br/>Zomboid · Terraria · Minecraft<br/>+ exporter sidecar"]
                     jobs["CronJobs<br/>backup · restart · weekly summary"]
                     eso["External Secrets"]
@@ -68,6 +69,10 @@ flowchart TB
     mon -->|"alerts + player events"| discord
     mon -->|"watchdog ping"| hc
     hc -.->|"if pings stop"| discord
+    discord <-->|"panel clicks"| bot
+    bot -->|"commit active game"| github
+    bot -->|"sync"| argo
+    github -->|"OIDC, read-only drift plan"| aws
 ```
 
 ---
@@ -87,7 +92,7 @@ flowchart TB
 | Alerting | Alertmanager → Discord, Healthchecks.io dead man's switch |
 | Secrets | Bitwarden, AWS SSM Parameter Store, External Secrets Operator |
 | Backup | restic → S3 (encrypted, deduplicated) |
-| CI | GitHub Actions: tflint, ansible-lint, kubeconform, promtool, shellcheck, ruff, Trivy; Dependabot |
+| CI | GitHub Actions: tflint, ansible-lint, kubeconform, promtool, shellcheck, ruff, Trivy; Dependabot and Renovate; weekly Terraform drift plan over OIDC |
 
 ---
 
@@ -131,6 +136,29 @@ Three games share one platform and only one runs at a time: the VM fits a single
 - **Catalog-driven.** Each game declares its name, ports, backup paths and schedule in `k8s/games/<game>/game.yaml`. `scripts/render-games.py` generates the game Service, the metrics Service and ServiceMonitor, the restic backup (ExternalSecret + CronJob) and the Argo CD Application. Only the StatefulSet and the game's own Secrets are hand-written, because that is where games really differ. The dashboard generator, the switch script, the status command and CI read the same catalog (`scripts/catalog.py`), so no script keeps its own list of games. CI fails if a generated file is stale or the catalog is inconsistent, including an active game on a port the edge firewall does not forward (`publishedPorts` in `platform/defaults.yaml`, the one step outside Git).
 - **Adding a game is a scaffold.** `make new-game GAME=valheim TITLE=Valheim IMAGE=repo:tag@sha256:... PORT=2456 PROTOCOL=UDP` creates the game directory in `draft` status: catalog entry, namespace, replica patch, a StatefulSet with the `server` container and the exporter sidecar wired in, and a three-line exporter on top of a shared library (`platform/exporter/gameexporter.py`, copied into each game by the generator because kustomize only reads files inside the game directory). The library owns the metric contract, persisted playtime and `/metrics`; a driver decides how the server is measured: `listen` reports `game_up` from the game port's socket in `/proc/net` (no connection, so no player slot taken), and `rcon` speaks Source RCON with a players command and a regex (`--driver rcon --rcon-port ... --players-command ... --players-regex ...`), which covers Minecraft, Zomboid, Palworld, ARK or CS2 without new code. The library is unit-tested against a fake RCON server and real sockets. Flip it to `active`, run the generator, and the game gets its Service, backup, Argo CD app, alerts, bot button and dashboard rows. CI scaffolds a throwaway game on every run to keep the template valid.
 - **Switching is a commit.** `make switch-game GAME=terraria` refuses to run while anyone is online, saves the world, flips the replica patches and `platform/active-game.yaml`, commits, syncs the outgoing game first and the incoming one second, and announces on Discord when the new server is ready. Git always says what is running.
+- **Players switch on their own.** A Discord bot keeps one panel in `#games` with the active game, players online and one button per game ([ADR 0006](docs/adr/0006-discord-self-service-switch.md)). It runs the same Git flow from inside the cluster, with a deploy key read through External Secrets, and refuses (queuing the request) while anyone is still playing:
+
+```mermaid
+sequenceDiagram
+    actor P as Player
+    participant B as games-bot
+    participant Prom as Prometheus
+    participant G as GitHub (main)
+    participant A as Argo CD
+    participant K as K3s
+    P->>B: clicks "Terraria" on the panel
+    B->>Prom: game_players_online of the active game
+    alt someone is online
+        B-->>P: request queued, runs when the server empties
+    else server empty
+        B->>K: save the world (saveCommand)
+        B->>G: commit replica patches + active-game.yaml
+        B->>A: sync outgoing game, then incoming game
+        A->>K: scale old StatefulSet to 0, new one to 1
+        K-->>B: new pod Ready (read from Prometheus)
+        B-->>P: DM "Terraria is ready" + log in #alerts
+    end
+```
 - **One metric contract.** The exporter sidecar of each catalog game exposes `game_up`, `game_players_online`, `game_player_online{player}` and `game_player_playtime_seconds_total{player}`, whatever the protocol behind it, so a new game reuses the same dashboard panels, alerts and Discord notifications.
 - **Alerts follow the desired state.** `GameDown` compares `kube_statefulset_replicas` with ready replicas, so a stopped game never pages. It is generated from the catalog together with `GameUnresponsive` (pod ready, server not answering the exporter), `GameExporterMissing`, `GameRestarted` and `GameMemoryHigh`, so every new game gets the same alert set without anyone editing a rule.
 - **Players get a one-file installer.** For the modded Minecraft server, `docs/minecraft/install-cobbleverse.ps1` installs the exact modpack version the server runs, downloading every mod from the official CDN and verifying its SHA-512.
