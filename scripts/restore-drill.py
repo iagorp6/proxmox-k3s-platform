@@ -10,11 +10,18 @@ Prova que o backup volta, sem tocar no jogo: o PVC do servidor nem é montado. F
 O tempo medido é o RTO do dado (do apply ao mundo restaurado e conferido no cluster), não o de
 um rebuild completo do host (ADR 0005).
 
+--live é o restore de verdade (DR ou voltar um mundo quebrado): o mesmo Job grava no PVC do jogo
+(backup.pvc), com o servidor parado (StatefulSet em 0 réplicas, senão recusa). O que existir em cada
+backup.paths é renomeado para <path>.pre-restore-<data> antes, então dá para voltar atrás. Se o PVC
+ainda não existe (cluster novo), ele é criado com o volumeClaimTemplate do statefulset.yaml, e o
+StatefulSet adota o PVC pelo nome quando subir. Ver docs/dr-runbook.md.
+
 Uso:
   scripts/restore-drill.py <jogo>              roda o drill e limpa tudo no fim
   scripts/restore-drill.py <jogo> --keep       mantém o PVC e o Job para inspecionar
   scripts/restore-drill.py <jogo> --dry-run    só imprime os manifests (o CI valida com kubeconform)
   scripts/restore-drill.py <jogo> --record     acrescenta o resultado em docs/restore-drills.md
+  scripts/restore-drill.py <jogo> --live       restaura no PVC do jogo (servidor parado; pede confirmação)
 """
 import argparse
 import datetime
@@ -36,35 +43,69 @@ RECORD_FILE = ROOT / "docs" / "restore-drills.md"
 TARGET = "/restore"
 
 
-def drill_script(g):
-    """Script do Job: restaura, confere e imprime uma linha RESULT em JSON para o drill ler dos logs."""
+def drill_script(g, live=False):
+    """Script do Job: restaura, confere e imprime uma linha RESULT em JSON para o drill ler dos logs.
+
+    Drill: snapshot inteiro em TARGET (os paths ficam em TARGET/data/...). Live: o PVC do jogo está em
+    /data, como no CronJob de backup, e o restore usa a subpasta latest:/data do snapshot, então cada
+    path volta exatamente onde estava."""
     name, b = g["name"], g["backup"]
+    root, measure = ("", "/data") if live else (TARGET, TARGET)
     checks = "".join(
-        f'[ -n "$(ls -A {TARGET}{shlex.quote(p)} 2>/dev/null)" ] || {{ echo "FALHA: {p} vazio ou ausente"; exit 1; }}\n'
+        f'[ -n "$(ls -A {root}{shlex.quote(p)} 2>/dev/null)" ] || {{ echo "FALHA: {p} vazio ou ausente"; exit 1; }}\n'
         for p in b["paths"])
     # Glob sem aspas de propósito: o shell expande; sem match, o ls do padrão literal falha
     checks += "".join(
-        f'ls -d {TARGET}/{v.lstrip("/")} >/dev/null 2>&1 || {{ echo "FALHA: nada casa com {v}"; exit 1; }}\n'
+        f'ls -d {root}/{v.lstrip("/")} >/dev/null 2>&1 || {{ echo "FALHA: nada casa com {v}"; exit 1; }}\n'
         for v in b.get("verify", []))
+    if live:
+        # Guarda o que está no PVC (mundo novo gerado no boot, ou o mundo quebrado) em vez de apagar
+        aside = "".join(
+            f'[ -e {shlex.quote(p)} ] && mv {shlex.quote(p)} {shlex.quote(p)}.pre-restore-$stamp && echo "guardado: {p}.pre-restore-$stamp"\n'
+            for p in b["paths"])
+        restore = (f"stamp=$(date +%Y%m%d-%H%M%S)\n{aside}"
+                   f"restic restore latest:/data --tag {name} --host {name} --target /data\n")
+    else:
+        restore = f"restic restore latest --tag {name} --host {name} --target {TARGET}\n"
     return (
         "set -eu\n"
         f"restic snapshots --tag {name} --host {name} --latest 1 --json > /tmp/snap.json\n"
         "start=$(date +%s)\n"
-        f"restic restore latest --tag {name} --host {name} --target {TARGET}\n"
+        f"{restore}"
         "end=$(date +%s)\n"
         f"{checks}"
-        f"bytes=$(( $(du -sk {TARGET} | cut -f1) * 1024 ))\n"   # du do busybox não tem -b
-        f"files=$(find {TARGET} -type f | wc -l)\n"
+        f"bytes=$(( $(du -sk {measure} | cut -f1) * 1024 ))\n"   # du do busybox não tem -b
+        f"files=$(find {measure} -type f | wc -l)\n"
         "snap=$(tr -d '\\n' < /tmp/snap.json)\n"
         'echo "RESULT {\\"restore_seconds\\": $((end - start)), \\"bytes\\": $bytes, \\"files\\": $files, \\"snapshots\\": $snap}"\n'
     )
 
 
-def manifests(g):
+def game_statefulset(g):
+    """StatefulSet do jogo no repositório (nome e volumeClaimTemplate do PVC de dados)."""
+    path = ROOT / g["dir"] / "statefulset.yaml"
+    return next(d for d in yaml.safe_load_all(path.read_text(encoding="utf-8")) if d and d.get("kind") == "StatefulSet")
+
+
+def live_pvc(g):
+    """PVC do jogo como o StatefulSet criaria (<template>-<sts>-0), para o restore num cluster novo."""
+    sts = game_statefulset(g)
+    name = g["backup"]["pvc"]
+    tpl = next((t for t in sts["spec"].get("volumeClaimTemplates", [])
+                if name == f'{t["metadata"]["name"]}-{sts["metadata"]["name"]}-0'), None)
+    if tpl is None:
+        sys.exit(f"ERRO: backup.pvc {name} não corresponde a nenhum volumeClaimTemplate de {g['dir']}/statefulset.yaml")
+    return {"apiVersion": "v1", "kind": "PersistentVolumeClaim",
+            "metadata": {"name": name, "namespace": g["namespace"],
+                         "labels": {**sts["spec"]["selector"].get("matchLabels", {})}},
+            "spec": tpl["spec"]}
+
+
+def manifests(g, live=False):
     name, ns, uid = g["name"], g["namespace"], g.get("runAsUser", 1000)
-    drill = f"{name}-restore-drill"
+    drill = f"{name}-restore-live" if live else f"{name}-restore-drill"
     labels = {"app.kubernetes.io/name": drill, "platform.homelab/game": name}
-    pvc = {
+    pvc = live_pvc(g) if live else {
         "apiVersion": "v1", "kind": "PersistentVolumeClaim",
         "metadata": {"name": drill, "namespace": ns, "labels": labels},
         "spec": {"accessModes": ["ReadWriteOnce"], "storageClassName": "local-path",
@@ -81,17 +122,17 @@ def manifests(g):
                                     "seccompProfile": {"type": "RuntimeDefault"}},
                 "containers": [{
                     "name": "restic", "image": DEFAULTS["resticImage"],
-                    "command": ["/bin/sh", "-c"], "args": [drill_script(g)],
+                    "command": ["/bin/sh", "-c"], "args": [drill_script(g, live)],
                     "envFrom": [{"secretRef": {"name": f"{name}-backup"}}],
                     "env": [{"name": "RESTIC_CACHE_DIR", "value": "/cache"}, {"name": "TMPDIR", "value": "/tmp"}],
                     "securityContext": {"allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True,
                                         "capabilities": {"drop": ["ALL"]}},
                     "resources": {"requests": {"cpu": "100m", "memory": "128Mi"}, "limits": {"memory": "512Mi"}},
-                    "volumeMounts": [{"name": "restore", "mountPath": TARGET},
+                    "volumeMounts": [{"name": "restore", "mountPath": "/data" if live else TARGET},
                                      {"name": "cache", "mountPath": "/cache"},
                                      {"name": "tmp", "mountPath": "/tmp"}],
                 }],
-                "volumes": [{"name": "restore", "persistentVolumeClaim": {"claimName": drill}},
+                "volumes": [{"name": "restore", "persistentVolumeClaim": {"claimName": pvc["metadata"]["name"]}},
                             {"name": "cache", "emptyDir": {}},
                             {"name": "tmp", "emptyDir": {"sizeLimit": "1Gi"}}],
             }}},
@@ -151,6 +192,22 @@ def record(g, result, total):
     print(f"registrado em {RECORD_FILE.relative_to(ROOT)}")
 
 
+def preflight_live(g):
+    """Restore no PVC do jogo só com o servidor parado, e com o Secret do backup já no namespace."""
+    ns, sts = g["namespace"], game_statefulset(g)["metadata"]["name"]
+    r = kubectl("-n", ns, "get", "statefulset", sts, "-o", "jsonpath={.spec.replicas} {.status.replicas}", check=False)
+    if r.returncode != 0:
+        sys.exit(f"ERRO: StatefulSet {sts} não existe em {ns}. Dê Sync no app {g['name']} do Argo CD primeiro\n"
+                 f"(ele traz o Secret {g['name']}-backup) e depois: kubectl -n {ns} scale statefulset {sts} --replicas=0")
+    desired, current = (r.stdout.split() + ["0", "0"])[:2]
+    if desired != "0" or current not in ("", "0"):
+        sys.exit(f"ERRO: {sts} está rodando (spec {desired}, pods {current}). Pare o servidor antes:\n"
+                 f"  kubectl -n {ns} scale statefulset {sts} --replicas=0")
+    if kubectl("-n", ns, "get", "secret", f"{g['name']}-backup", check=False).returncode != 0:
+        sys.exit(f"ERRO: Secret {g['name']}-backup ausente em {ns} (ExternalSecret ainda não sincronizou?)")
+    return sts
+
+
 def main():
     games = {g["name"]: g for g in catalog.games() if g.get("backup")}
     ap = argparse.ArgumentParser(description="Restore drill de um jogo do catálogo")
@@ -158,23 +215,44 @@ def main():
     ap.add_argument("--keep", action="store_true", help="não apaga o PVC e o Job no fim")
     ap.add_argument("--dry-run", action="store_true", help="só imprime os manifests")
     ap.add_argument("--record", action="store_true", help="acrescenta o resultado em docs/restore-drills.md")
+    ap.add_argument("--live", action="store_true", help="restaura no PVC do jogo (servidor parado)")
+    ap.add_argument("--yes", action="store_true", help="com --live, não pede confirmação")
     ap.add_argument("--timeout", type=int, default=900, help="limite em segundos para o Job (padrão 900)")
     args = ap.parse_args()
+    if args.live and args.record:
+        sys.exit("ERRO: --record é só para o drill (PVC temporário); no --live anote o tempo no runbook")
     g = games[args.game]
-    docs = yaml.safe_dump_all(manifests(g), sort_keys=False, allow_unicode=True, width=1000)
+    pvc, job = manifests(g, args.live)
     if args.dry_run:
-        print(docs, end="")
+        print(yaml.safe_dump_all([pvc, job], sort_keys=False, allow_unicode=True, width=1000), end="")
         return 0
 
-    ns, drill = g["namespace"], f"{g['name']}-restore-drill"
+    ns, drill = g["namespace"], job["metadata"]["name"]
     if kubectl("-n", ns, "get", "job", drill, check=False).returncode == 0:
-        sys.exit(f"ERRO: já existe um Job {drill} em {ns} (drill anterior com --keep?). Apague com:\n"
-                 f"  kubectl -n {ns} delete job,pvc {drill}")
-    print(f">> restore drill de {g['displayName']} (namespace {ns})")
+        sys.exit(f"ERRO: já existe um Job {drill} em {ns} (execução anterior com --keep?). Apague com:\n"
+                 f"  kubectl -n {ns} delete job {drill}" + ("" if args.live else f" && kubectl -n {ns} delete pvc {drill}"))
+    if args.live:
+        sts = preflight_live(g)
+        print(f"ATENÇÃO: restaura o último snapshot no PVC {g['backup']['pvc']} de {g['displayName']}.")
+        print(f"  O conteúdo atual de {', '.join(g['backup']['paths'])} é renomeado para <path>.pre-restore-<data>.")
+        if not args.yes:
+            try:
+                answer = input(f"  Digite {g['name']} para continuar: ").strip()
+            except EOFError:
+                answer = ""
+            if answer != g["name"]:
+                sys.exit("cancelado (sem terminal, use --yes)")
+        apply = [job]
+        if kubectl("-n", ns, "get", "pvc", pvc["metadata"]["name"], check=False).returncode != 0:
+            print(f"   PVC {pvc['metadata']['name']} não existe: criando com o volumeClaimTemplate do StatefulSet")
+            apply.insert(0, pvc)
+    else:
+        apply = [pvc, job]
+    print(f">> {'restore' if args.live else 'restore drill'} de {g['displayName']} (namespace {ns})")
     start = time.monotonic()
     ok = False
     try:
-        kubectl("apply", "-f", "-", stdin=docs)
+        kubectl("apply", "-f", "-", stdin=yaml.safe_dump_all(apply, sort_keys=False, allow_unicode=True, width=1000))
         ok = wait_job(ns, drill, args.timeout)
         total = time.monotonic() - start
         logs = kubectl("-n", ns, "logs", f"job/{drill}", check=False).stdout
@@ -184,19 +262,29 @@ def main():
             print("FALHOU: o restore não terminou ou não passou nas verificações")
             ok = False
             return 1
+        for l in logs.splitlines():
+            if l.startswith("guardado: "):
+                print(f"   {l}")
         result = json.loads(line[len("RESULT "):])
         snap = result["snapshots"][0]
         print(f"   snapshot   {snap['short_id']} de {snapshot_time(snap):%Y-%m-%d %H:%M} UTC ({', '.join(snap.get('paths', []))})")
         print(f"   tamanho    {human(result['bytes'])} em {result['files']} arquivos")
         print(f"   restic     {result['restore_seconds']} s")
         print(f"   total      {total:.0f} s (apply até o dado restaurado e conferido)")
-        print("OK: backup restaurado e conferido")
+        if args.live:
+            print(f"OK: mundo restaurado. Suba o servidor: kubectl -n {ns} scale statefulset {sts} --replicas=1\n"
+                  f"    (ou Sync do app {g['name']} no Argo CD, se ele é o jogo ativo)")
+        else:
+            print("OK: backup restaurado e conferido")
         if args.record:
             record(g, result, total)
         return 0
     finally:
         if args.keep:
-            print(f"--keep: inspecione com kubectl -n {ns} get job,pvc {drill}; apague com kubectl -n {ns} delete job,pvc {drill}")
+            print(f"--keep: inspecione com kubectl -n {ns} get job {drill}")
+        elif args.live:   # o PVC é o do jogo: só o Job sai
+            kubectl("-n", ns, "delete", "job", drill, "--ignore-not-found", "--wait=true", check=False)
+            print("   Job do restore removido" + ("" if ok else " (rode com --keep para inspecionar)"))
         else:
             kubectl("-n", ns, "delete", "job", drill, "--ignore-not-found", "--wait=true", check=False)
             kubectl("-n", ns, "delete", "pvc", drill, "--ignore-not-found", "--wait=false", check=False)
