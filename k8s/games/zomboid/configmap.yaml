@@ -113,6 +113,7 @@ data:
     Bandits.General_OverallAccuracy = 2          # 3 -> 2 (escala 1-5): erram mais; armas do VFE já pesam
     Bandits.General_GeneratorCutoff = false      # true -> false: não desligam o gerador da base
     Bandits.General_SabotageCrops = false        # true -> false: não destroem a plantação
+    Bandits.General_SabotageVehicles = false     # true -> false: não sabotam carro parado (KI5 é raro)
     # Airdrops: objetivo curto e frequente, sem incêndio
     KnoxAirdrops.MinHoursBetween = 18            # 24 -> 18 h de jogo (~45 min reais com dia de 1 h)
     KnoxAirdrops.ChancePerHour = 8.0             # 5% -> 8% por hora depois do intervalo mínimo
