@@ -28,7 +28,10 @@ variable "backup_size_alert_gb" {
 }
 
 variable "github_repository" {
-  description = "Repositório (owner/nome) cujo branch main pode assumir a role de drift via OIDC"
+  # O GitHub emite o sub do token OIDC com os IDs imutáveis do dono e do repositório
+  # (repo:<owner>@<owner_id>/<repo>@<repo_id>:ref:...): um repositório recriado com o mesmo nome
+  # tem outro ID e não assume a role. O workflow de drift imprime o sub recebido.
+  description = "Repositório no formato do sub OIDC (<owner>@<owner_id>/<repo>@<repo_id>) cujo main pode assumir a role de drift"
   type        = string
-  default     = "iagorp6/proxmox-k3s-platform"
+  default     = "iagorp6@108373479/proxmox-k3s-platform@1392447632"
 }
