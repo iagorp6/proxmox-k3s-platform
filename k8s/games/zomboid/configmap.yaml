@@ -38,9 +38,14 @@ data:
   #   3268487204 [B42] Bandits NPC           -> Bandits2 (NPCs hostis; spawn ajustado no PZ_SANDBOX depois do 1º start)
   #   3778817690 [B42.20] Airdrops [Stable]  -> KnoxAirdrops (caixas com loot anunciadas no chat)
   #   3716405632 Dynamic Horde Events B42    -> DynamicHordeEventsB42 (hordas com aviso de direção)
+  #   3783517891 Realistic Backpacks [B42.20+] -> RealisticBackpacksB42 (4 mochilas novas; caça e assalto no loot)
+  #   3461263912 Clean HotBar [B42]          -> CleanHotBar (condição, munição e bateria na hotbar; perto do fim da ordem)
   #   2757712197 Vehicle Repair Overhaul     -> VehicleRepairOverhaul (por último: sobrescreve as ações de reparo)
-  PZ_WORKSHOP_ITEMS: "3543229299;3171167894;3508537032;3502080466;2847184718;3419026942;3480305133;3388721641;3387539308;3388183573;3389448389;3281755175;3413150945;2962175696;2886832936;2870394916;3088951320;3287727378;3761077099;3780639614;3268487204;3778817690;3716405632;2757712197"
-  PZ_MODS: "PROJECTRVInterior42;damnlib;NeatUI_Framework;Neat_Crafting;ProximityInventory;shaderz;twistonfirestatsmpstable;AutoCook;AutoMechanics;AutoTailoring;AutoReload;VanillaVehiclesAnimated;MoreDamagedObjects;92fordCVPI;88chevyS10;86fordE150;93fordTaurus;92jeepYJ;VFExpansion1;PushVehicle;Bandits2;KnoxAirdrops;DynamicHordeEventsB42;VehicleRepairOverhaul"
+  # Carros e mochilas de mod nascem só em chunks gerados depois que o mod entrou: áreas já exploradas
+  # ficam com os carros antigos (o loot de mochila volta com o respawn de loot). Para testar se um carro
+  # carrega: make console GAME=zomboid CMD='addvehicle "Base.92fordCVPI" "<jogador online>"'
+  PZ_WORKSHOP_ITEMS: "3543229299;3171167894;3508537032;3502080466;2847184718;3419026942;3480305133;3388721641;3387539308;3388183573;3389448389;3281755175;3413150945;2962175696;2886832936;2870394916;3088951320;3287727378;3761077099;3780639614;3268487204;3778817690;3716405632;3783517891;3461263912;2757712197"
+  PZ_MODS: "PROJECTRVInterior42;damnlib;NeatUI_Framework;Neat_Crafting;ProximityInventory;shaderz;twistonfirestatsmpstable;AutoCook;AutoMechanics;AutoTailoring;AutoReload;VanillaVehiclesAnimated;MoreDamagedObjects;92fordCVPI;88chevyS10;86fordE150;93fordTaurus;92jeepYJ;VFExpansion1;PushVehicle;Bandits2;KnoxAirdrops;DynamicHordeEventsB42;RealisticBackpacksB42;CleanHotBar;VehicleRepairOverhaul"
   # Pastas de mapa: as de mods primeiro, o mapa base por último
   PZ_MAP: "map_distanciado;Muldraugh, KY"
   # Sandbox (base: preset Apocalypse). "Caminho = valor"; o caminho segue as tabelas do
