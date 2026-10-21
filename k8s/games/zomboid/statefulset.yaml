@@ -72,6 +72,19 @@ spec:
             limits:
               cpu: "3"
               memory: 10Gi
+          # Sem liveness: o container já termina quando o processo do jogo morre (start.sh), e um save
+          # longo não pode ser confundido com travamento. Startup e readiness são passivas (sem
+          # conexão no jogo): marcador do start.sh + socket UDP da 16261 (0x3F85) em /proc/net/udp.
+          startupProbe:                 # 26 mods e o mundo levam alguns minutos para carregar
+            exec:
+              command: ["sh", "-c", "test -f /tmp/pz-ready && grep -qiE ':3F85 ' /proc/net/udp /proc/net/udp6"]
+            periodSeconds: 10
+            failureThreshold: 90          # até 15 min
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "test -f /tmp/pz-ready && grep -qiE ':3F85 ' /proc/net/udp /proc/net/udp6"]
+            periodSeconds: 15
+            failureThreshold: 3
           lifecycle:
             preStop:
               exec:

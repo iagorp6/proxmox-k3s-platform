@@ -192,7 +192,7 @@ def apply_switch(previous, target, sha):
     print(f"Subindo {target}...")
     argo_sync(GAMES[target]["app"], sha)
     g = GAMES[target]
-    run(["kubectl", "-n", g["ns"], "rollout", "status", f"statefulset/{g['sts']}", "--timeout=900s"], capture=False)
+    run(["kubectl", "-n", g["ns"], "rollout", "status", f"statefulset/{g['sts']}", "--timeout=1200s"], capture=False)
 
 
 def main():
