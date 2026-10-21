@@ -84,7 +84,7 @@ flowchart TB
 | Hardware | HPE ProLiant DL20 Gen9, Xeon E3-1220 v5, 24 GB ECC, 2x HDD (ZFS) |
 | Virtualization | Proxmox VE |
 | Provisioning | Terraform (`bpg/proxmox`, `hashicorp/aws`), cloud-init, remote state on S3 |
-| Configuration | Ansible (roles: `k3s`, `gameserver_net`, `host_exporters`, `pve_host`) |
+| Configuration | Ansible (roles: `k3s`, `gameserver_net`, `host_exporters`, `pve_host`, `auto_updates`) |
 | Orchestration | K3s (pinned version, secrets encrypted at rest) |
 | GitOps | Argo CD (app of apps) |
 | Workloads | Project Zomboid (Build 42), Terraria (TShock), Minecraft (Fabric modpack) |
@@ -99,7 +99,7 @@ flowchart TB
 ## Repository layout
 terraform/ Proxmox VM (cloud image, cloud-init, DHCP-reserved NIC)
 terraform-aws/ S3 (backups + state), least-privilege IAM, SSM parameters, Budgets
-ansible/ K3s install, game-server network tuning, host exporters
+ansible/ K3s install, game-server network tuning, host exporters, patching
 k8s/argocd/ Argo CD install + app of apps (games, platform, monitoring and External Secrets charts)
 k8s/games/ One directory per catalog game (Project Zomboid, Terraria, Minecraft): game.yaml, StatefulSet, generated manifests
 k8s/platform/ Workloads that belong to no game: weekly Discord summary, shared webhook Secret
@@ -184,7 +184,7 @@ Project Zomboid, the first game, is in the catalog and on the same contract as t
 | Character death | 💀 *iago died* · survived 34 in-game hours |
 | Playtime milestone | 🏆 *joao reached 50 hours on the server* |
 | Weekly summary | 📊 Hours played, ranking with medals, peak concurrency, deaths, availability |
-| Daily health check | ✅ *Tudo OK* or ⚠️ the list of what needs attention: firing alerts, game up, last backup age, free disk, pod restarts, host uptime (a failed Prometheus query is reported too, never silence) |
+| Daily health check | ✅ *Tudo OK* or ⚠️ the list of what needs attention: firing alerts, game up, last backup age, free disk, pod restarts, host and VM uptime, pending host patches (a failed Prometheus query is reported too, never silence) |
 
 <!-- DISCORD_IMAGE -->
 
@@ -247,6 +247,7 @@ Before each snapshot, an init container runs the game's `saveCommand` from the c
 - Game server and sidecars run as non-root; RCON reachable only inside the pod
 - CI fails on any committed secret (Trivy); environment-specific values live in git-ignored local files
 - The game VM sits in an isolated VLAN with no route to the internal network
+- OS patching: the VM installs security updates on its own (unattended-upgrades, security pockets only) and reboots only when a package asks for it, in a weekly Monday 04:30 window that saves the running game first and is muted in Alertmanager. The Proxmox host is patched by hand (`playbooks/pve-upgrade.yml`, optional reboot) because its reboot takes everything down; alerts fire when host security updates or a reboot have been pending for more than 7 days
 
 ---
 
@@ -308,6 +309,7 @@ A Budgets alarm fires above USD 1/month, and a CloudWatch alarm watches the size
 - [x] Migrate to the non-deprecated `proxmox_download_file` resource
 - [x] Renovate for image digests, chart versions and K3s
 - [x] Third-party Helm releases (monitoring, External Secrets) managed by Argo CD
+- [x] Automatic security patching on the VM, pending-patch alerts on the host
 - [ ] Timed full DR drill and published RTO (rebuild strategy in [ADR 0005](docs/adr/0005-host-recovery-by-rebuild.md))
 - [ ] Reinstall the host on a ZFS mirror during the DR drill
 - [ ] Custom game-server image built in CI

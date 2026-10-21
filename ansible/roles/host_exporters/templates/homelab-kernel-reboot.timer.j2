@@ -1,0 +1,9 @@
+[Unit]
+Description=Atualiza a métrica de reboot pendente por kernel novo
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target

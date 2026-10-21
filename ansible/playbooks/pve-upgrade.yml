@@ -1,0 +1,60 @@
+# Upgrade manual do host Proxmox (o host não se atualiza sozinho: um reboot dele derruba a VM e o jogo).
+# Os alertas HostSecurityUpdatesPending e HostRebootPending avisam quando é hora de rodar.
+#   ansible-playbook playbooks/pve-upgrade.yml                         # só atualiza os pacotes
+#   ansible-playbook playbooks/pve-upgrade.yml -e pve_upgrade_reboot=true  # salva os jogos e reinicia o host
+- name: Upgrade do host Proxmox
+  hosts: proxmox
+  become: true
+  serial: 1
+  vars:
+    pve_upgrade_reboot: false
+  tasks:
+    - name: Full upgrade (dist-upgrade, como recomenda a Proxmox)
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+        autoremove: true
+      register: pve_upgrade_result
+
+    - name: Refresh patch metrics
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+      loop:
+        - prometheus-node-exporter-apt.service
+        - homelab-kernel-reboot.service
+      changed_when: false
+
+    - name: Check running and newest kernel
+      ansible.builtin.shell: |
+        set -o pipefail
+        echo "$(uname -r) $(find /lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n 1)"
+      args:
+        executable: /bin/bash
+      register: pve_upgrade_kernel
+      changed_when: false
+
+    - name: Decide reboot
+      ansible.builtin.set_fact:
+        pve_upgrade_needs_reboot: "{{ pve_upgrade_kernel.stdout.split()[0] != pve_upgrade_kernel.stdout.split()[1] }}"
+
+    - name: Show result
+      ansible.builtin.debug:
+        msg:
+          - "Pacotes atualizados: {{ 'sim' if pve_upgrade_result.changed else 'nada pendente' }}"
+          - "Kernel em execução {{ pve_upgrade_kernel.stdout.split()[0] }}, mais novo instalado {{ pve_upgrade_kernel.stdout.split()[1] }}"
+          - >-
+            {{ 'Reboot pendente. Rode de novo com -e pve_upgrade_reboot=true quando ninguém estiver jogando.'
+               if pve_upgrade_needs_reboot and not pve_upgrade_reboot | bool else 'Sem reboot agora.' }}
+
+    - name: Save the games on the K3s VM before rebooting the host
+      ansible.builtin.command: /usr/local/sbin/homelab-patch-reboot --save-only
+      delegate_to: "{{ groups['k3s'][0] }}"
+      changed_when: true
+      when: pve_upgrade_needs_reboot and pve_upgrade_reboot | bool
+
+    - name: Reboot the host (the VM shuts down and comes back with onboot)
+      ansible.builtin.reboot:
+        reboot_timeout: 900
+        msg: "Reboot do host por patch (pve-upgrade.yml)"
+      when: pve_upgrade_needs_reboot and pve_upgrade_reboot | bool

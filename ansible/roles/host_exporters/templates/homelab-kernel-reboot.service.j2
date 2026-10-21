@@ -1,0 +1,6 @@
+[Unit]
+Description=Métrica de reboot pendente por kernel novo (textfile do node_exporter)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/homelab-kernel-reboot

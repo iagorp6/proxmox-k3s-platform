@@ -1,3 +1,5 @@
 # Vazio = resolve a última versão no GitHub; depois da primeira execução, fixe a versão exibida
 host_exporters_smartctl_version: "0.14.0"
 host_exporters_smartctl_listen: ":9633"
+# Diretório padrão do textfile collector no pacote Debian (o apt timer do collectors escreve aqui)
+host_exporters_textfile_dir: /var/lib/prometheus/node-exporter

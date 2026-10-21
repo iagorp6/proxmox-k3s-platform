@@ -54,7 +54,7 @@ On the server console (iLO or monitor):
 ```bash
 cd ansible
 ansible-playbook playbooks/pve-host.yml        # SSH hardening, ZFS ARC limit, datacenter firewall (with auto-rollback)
-ansible-playbook playbooks/host-exporters.yml  # node_exporter, smartctl_exporter, ZFS and EDAC metrics
+ansible-playbook playbooks/host-exporters.yml  # node_exporter, smartctl_exporter, ZFS, EDAC and pending-patch metrics
 ```
 
 ## 3. VM (Terraform)
@@ -76,6 +76,7 @@ Wait for cloud-init to finish: `$(terraform output -raw ssh_command) cloud-init 
 cd ansible
 ansible-playbook playbooks/k3s.yml             # K3s pinned, secrets encrypted at rest, kubeconfig written to the control node
 ansible-playbook playbooks/gameserver-net.yml  # MTU and RakNet clamp for the game ports
+ansible-playbook playbooks/auto-updates.yml    # security updates, weekly reboot window (saves the game first)
 kubectl get nodes                              # Ready
 ```
 

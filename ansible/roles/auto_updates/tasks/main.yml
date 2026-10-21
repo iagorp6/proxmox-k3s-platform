@@ -1,0 +1,99 @@
+- name: Install unattended-upgrades
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+    update_cache: true
+
+- name: Enable daily package lists and unattended-upgrades
+  ansible.builtin.template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    mode: "0644"
+
+- name: Unattended-upgrades without automatic reboot
+  ansible.builtin.template:
+    src: 52homelab-unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/52homelab-unattended-upgrades
+    mode: "0644"
+
+- name: Read allowed origins
+  ansible.builtin.command: apt-config dump Unattended-Upgrade::Allowed-Origins Unattended-Upgrade::Origins-Pattern
+  register: auto_updates_origins
+  changed_when: false
+
+- name: Only security origins are upgraded automatically
+  ansible.builtin.assert:
+    that: auto_updates_origins.stdout is not search('-(updates|proposed|backports)"')
+    fail_msg: "O unattended-upgrades está liberado para origens além de -security: {{ auto_updates_origins.stdout_lines }}"
+    quiet: true
+
+- name: Enable apt timers
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+
+- name: Find game catalog entries in the repository
+  ansible.builtin.find:
+    paths: "{{ auto_updates_catalog_dirs }}"
+    patterns: game.yaml
+    recurse: true
+    depth: 2
+  register: auto_updates_catalog
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Read game catalog (save command of each deployed game)
+  ansible.builtin.set_fact:
+    auto_updates_games: >-
+      {{ query('ansible.builtin.file', *(auto_updates_catalog.files | map(attribute='path') | unique | sort))
+         | map('from_yaml') | selectattr('status', 'in', ['active', 'legacy']) | list }}
+
+- name: Show games saved before a reboot
+  ansible.builtin.debug:
+    msg: "Save antes do reboot: {% for g in auto_updates_games if (g.switch | default({})).saveCommand is defined %}{{ g.name }} {% endfor %}"
+
+- name: Install reboot script
+  ansible.builtin.template:
+    src: homelab-patch-reboot.sh.j2
+    dest: /usr/local/sbin/homelab-patch-reboot
+    mode: "0755"
+
+- name: Install reboot window units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - homelab-patch-reboot.service
+    - homelab-patch-reboot.timer
+  notify: Reload systemd
+
+- name: Apply pending systemd reload
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable reboot window timer
+  ansible.builtin.systemd:
+    name: homelab-patch-reboot.timer
+    enabled: true
+    state: started
+
+- name: Read next reboot window
+  ansible.builtin.command: systemctl list-timers homelab-patch-reboot.timer --no-pager  # noqa: command-instead-of-module (o módulo não lista timers)
+  register: auto_updates_next
+  changed_when: false
+
+- name: Check pending reboot
+  ansible.builtin.stat:
+    path: /run/reboot-required
+  register: auto_updates_reboot_required
+
+- name: Show next reboot window
+  ansible.builtin.debug:
+    msg:
+      - "{{ auto_updates_next.stdout_lines[1] | default('timer não listado') }}"
+      - "Reboot pendente agora: {{ 'sim, acontece na próxima janela' if auto_updates_reboot_required.stat.exists else 'não' }}"

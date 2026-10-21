@@ -112,6 +112,27 @@ spec:
             summary: "Pouco espaço em {{ $labels.mountpoint }} no host"
             description: "Menos de 15% livre."
             action: "ssh no host e rodar zfs list -o name,used,avail"
+        # Métricas do textfile collector (role host_exporters): o host não se atualiza sozinho
+        - alert: HostSecurityUpdatesPending
+          expr: sum by (instance) (apt_upgrades_pending{job="proxmox-node",origin=~".*-security.*"}) > 0
+          for: 7d
+          labels:
+            severity: warning
+          annotations:
+            summary: "Patches de segurança pendentes no host há mais de 7 dias"
+            description: "{{ $value }} pacote(s) de segurança do Debian sem instalar no host Proxmox."
+            action: "No WSL, em ansible/: ansible-playbook playbooks/pve-upgrade.yml"
+        - alert: HostRebootPending
+          expr: |
+            (max by (instance) (node_reboot_required{job="proxmox-node"}) > 0)
+            or (max by (instance) (homelab_kernel_reboot_pending{job="proxmox-node"}) > 0)
+          for: 7d
+          labels:
+            severity: warning
+          annotations:
+            summary: "Host Proxmox com reboot pendente há mais de 7 dias"
+            description: "Um kernel ou pacote novo só vale depois do reboot. O reboot do host derruba a VM e o jogo por alguns minutos."
+            action: "Quando ninguém estiver jogando: ansible-playbook playbooks/pve-upgrade.yml -e pve_upgrade_reboot=true"
 
     - name: vm
       rules:

@@ -70,6 +70,16 @@ alertmanager:
               - start_time: "05:55"
                 end_time: "06:15"
             location: America/Sao_Paulo
+      # Janela semanal de patch da VM (homelab-patch-reboot.timer, role auto_updates do Ansible):
+      # se um patch pediu reboot, a VM reinicia segunda 04:30 e jogo, Prometheus e Alertmanager voltam
+      # juntos. Alertas que seguem disparando depois das 05:15 notificam normalmente.
+      - name: patch-semanal
+        time_intervals:
+          - weekdays: ["monday"]
+            times:
+              - start_time: "04:25"
+                end_time: "05:15"
+            location: America/Sao_Paulo
     route:
       receiver: discord
       group_by: ["alertname"]
@@ -111,12 +121,16 @@ alertmanager:
         - receiver: discord
           matchers:
             - mute = "restart-diario"
-          mute_time_intervals: ["restart-diario"]
+          mute_time_intervals: ["restart-diario", "patch-semanal"]
           repeat_interval: 2h
         - receiver: discord
           matchers:
             - severity = "critical"
+          mute_time_intervals: ["patch-semanal"]
           repeat_interval: 2h
+        # Resto (warning): mesmo receiver da raiz, só para aplicar a janela de patch
+        - receiver: discord
+          mute_time_intervals: ["patch-semanal"]
     inhibit_rules:
       - source_matchers: ["severity = critical"]
         target_matchers: ["severity = warning"]

@@ -140,3 +140,44 @@ tests:
               summary: "Painel de jogos do Discord fora do ar"
               description: "O games-bot não tem réplica disponível há 10 minutos: o painel do #games não responde e a troca de jogo só funciona pelo make switch-game."
               action: "kubectl -n platform get pods -l app.kubernetes.io/name=games-bot e kubectl -n platform describe pod -l app.kubernetes.io/name=games-bot | tail -20"
+  - name: patch de segurança pendente no host por mais de 7 dias dispara HostSecurityUpdatesPending
+    interval: 1m                    # amostra a cada minuto: com 1h a série some entre amostras (lookback de 5m) e o for zera
+    input_series:
+      - series: 'apt_upgrades_pending{job="proxmox-node",instance="pve",origin="Debian:trixie-security/stable-security",arch="amd64"}'
+        values: '2x12000'
+      - series: 'apt_upgrades_pending{job="proxmox-node",instance="pve",origin="Proxmox:trixie/trixie",arch="amd64"}'
+        values: '5x12000'             # pacote da Proxmox (não é -security): não conta
+    alert_rule_test:
+      - eval_time: 6d
+        alertname: HostSecurityUpdatesPending
+        exp_alerts: []
+      - eval_time: 8d
+        alertname: HostSecurityUpdatesPending
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: pve}
+            exp_annotations:
+              summary: "Patches de segurança pendentes no host há mais de 7 dias"
+              description: "2 pacote(s) de segurança do Debian sem instalar no host Proxmox."
+              action: "No WSL, em ansible/: ansible-playbook playbooks/pve-upgrade.yml"
+  - name: kernel novo sem reboot por mais de 7 dias dispara HostRebootPending; reboot zera
+    interval: 1m                    # amostra a cada minuto: com 1h a série some entre amostras (lookback de 5m) e o for zera
+    input_series:
+      - series: 'node_reboot_required{job="proxmox-node",instance="pve"}'
+        values: '0x14000'
+      - series: 'homelab_kernel_reboot_pending{job="proxmox-node",instance="pve",running="6.14.8-2-pve",newest="6.14.11-1-pve"}'
+        values: '1x12000 0x2000'     # reboot no dia ~8,3
+    alert_rule_test:
+      - eval_time: 6d
+        alertname: HostRebootPending
+        exp_alerts: []
+      - eval_time: 8d
+        alertname: HostRebootPending
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: pve}
+            exp_annotations:
+              summary: "Host Proxmox com reboot pendente há mais de 7 dias"
+              description: "Um kernel ou pacote novo só vale depois do reboot. O reboot do host derruba a VM e o jogo por alguns minutos."
+              action: "Quando ninguém estiver jogando: ansible-playbook playbooks/pve-upgrade.yml -e pve_upgrade_reboot=true"
+      - eval_time: 9d
+        alertname: HostRebootPending
+        exp_alerts: []

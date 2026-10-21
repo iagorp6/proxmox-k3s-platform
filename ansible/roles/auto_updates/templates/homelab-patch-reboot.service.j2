@@ -1,0 +1,7 @@
+[Unit]
+Description=Reboot da VM se um patch pedir (salva os jogos antes)
+After=k3s.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/homelab-patch-reboot
