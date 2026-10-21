@@ -257,3 +257,34 @@ tests:
               summary: "ExternalSecret monitoring/prometheus-additional-scrape não sincroniza"
               description: "O Secret do cluster não está sendo atualizado a partir do SSM. Quase sempre é parâmetro faltando ou renomeado no SSM."
               action: "kubectl -n monitoring describe externalsecret prometheus-additional-scrape | tail -5 e, se faltar parâmetro, make secrets"
+  - name: restic check sem sucesso depois do agendamento alerta; com sucesso não
+    interval: 1m
+    input_series:
+      # Agendado em t=0, sem sucesso registrado (Job falhou ou ainda roda): o for de 3h dá tempo ao check longo
+      - series: 'kube_cronjob_status_last_schedule_time{namespace="platform",cronjob="restic-check"}'
+        values: '0x330'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="platform",cronjob="restic-check"}'
+        values: '_x330'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: ResticCheckFailed
+        exp_alerts: []
+      - eval_time: 4h
+        alertname: ResticCheckFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: platform, cronjob: restic-check}
+            exp_annotations:
+              summary: "Verificação semanal do repositório restic falhou"
+              description: "O restic check não terminou com sucesso: pode haver pack ou índice corrompido no S3. Os backups diários seguem rodando, mas o restore pode falhar."
+              action: "kubectl -n platform logs job/$(kubectl -n platform get jobs -o name --sort-by=.metadata.creationTimestamp | grep restic-check | tail -1 | cut -d/ -f2) --tail=40"
+  - name: restic check que terminou logo depois do agendamento não alerta
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_status_last_schedule_time{namespace="platform",cronjob="restic-check"}'
+        values: '0x330'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="platform",cronjob="restic-check"}'
+        values: '1800x330'
+    alert_rule_test:
+      - eval_time: 5h
+        alertname: ResticCheckFailed
+        exp_alerts: []

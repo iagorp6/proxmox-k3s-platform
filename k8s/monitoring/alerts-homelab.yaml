@@ -37,6 +37,26 @@ spec:
             summary: "Sem backup bem-sucedido de {{ $labels.namespace }} há mais de 26h"
             description: "O CronJob {{ $labels.cronjob }} não tem sucesso registrado nas últimas 26 horas."
             action: "kubectl -n {{ $labels.namespace }} create job --from=cronjob/{{ $labels.cronjob }} backup-manual"
+        # Verificação semanal do repositório (k8s/platform/restic-check.yaml): backup que não restaura não é backup
+        - alert: ResticCheckFailed
+          expr: |
+            (
+              max by (namespace, cronjob) (kube_cronjob_status_last_schedule_time{namespace="platform",cronjob="restic-check"})
+              - max by (namespace, cronjob) (kube_cronjob_status_last_successful_time{namespace="platform",cronjob="restic-check"})
+            ) > 3 * 3600
+            or
+            (
+              max by (namespace, cronjob) (kube_cronjob_status_last_schedule_time{namespace="platform",cronjob="restic-check"})
+              unless on (namespace, cronjob)
+              kube_cronjob_status_last_successful_time{namespace="platform",cronjob="restic-check"}
+            )
+          for: 3h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Verificação semanal do repositório restic falhou"
+            description: "O restic check não terminou com sucesso: pode haver pack ou índice corrompido no S3. Os backups diários seguem rodando, mas o restore pode falhar."
+            action: "kubectl -n platform logs job/$(kubectl -n platform get jobs -o name --sort-by=.metadata.creationTimestamp | grep restic-check | tail -1 | cut -d/ -f2) --tail=40"
 
     - name: host
       rules:

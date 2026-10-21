@@ -27,6 +27,12 @@ variable "backup_size_alert_gb" {
   default     = 15
 }
 
+variable "backup_noncurrent_days" {
+  description = "Dias que um objeto apagado ou sobrescrito no bucket de backup continua recuperável (versão não corrente)"
+  type        = number
+  default     = 30
+}
+
 variable "github_repository" {
   # O GitHub emite o sub do token OIDC com os IDs imutáveis do dono e do repositório
   # (repo:<owner>@<owner_id>/<repo>@<repo_id>:ref:...): um repositório recriado com o mesmo nome

@@ -31,6 +31,17 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "backups" {
   }
 }
 
+# Versionamento: o usuário do restic precisa de DeleteObject (prune), então sozinho ele (ou quem
+# pegar a credencial no cluster) apagaria todos os snapshots. Com versionamento, o que é apagado
+# vira versão não corrente e fica recuperável por backup_noncurrent_days; a política do restic não
+# tem s3:DeleteObjectVersion nem permissão sobre versionamento e lifecycle, então não apaga as versões.
+resource "aws_s3_bucket_versioning" "backups" {
+  bucket = aws_s3_bucket.backups.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
 resource "aws_s3_bucket_lifecycle_configuration" "backups" {
   bucket = aws_s3_bucket.backups.id
   rule {
@@ -41,6 +52,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
       days_after_initiation = 7
     }
   }
+  # O prune diário gera versões não correntes; elas expiram sozinhas e o custo fica limitado
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+    filter {}
+    noncurrent_version_expiration {
+      noncurrent_days = var.backup_noncurrent_days
+    }
+    expiration {
+      expired_object_delete_marker = true
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.backups]
 }
 
 # ---------- IAM: usuário do restic com acesso só a este bucket ----------

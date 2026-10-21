@@ -1,0 +1,101 @@
+# Verificação semanal do repositório restic (todos os jogos dividem o mesmo repositório no S3).
+# O backup diário só escreve e faz prune: corrupção em pack ou índice só apareceria no restore.
+# --read-data-subset baixa 5% dos packs, sorteados a cada execução: em poucos meses o repositório
+# inteiro foi lido, e o egress do S3 fica em centavos. Falha vira o alerta ResticCheckFailed.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: restic-check
+  namespace: platform
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: aws-ssm
+  target:
+    name: restic-check
+    creationPolicy: Owner
+  data:
+    - secretKey: RESTIC_REPOSITORY
+      remoteRef:
+        key: /homelab/backup/restic-repository
+    - secretKey: RESTIC_PASSWORD
+      remoteRef:
+        key: /homelab/backup/restic-password
+    - secretKey: AWS_ACCESS_KEY_ID
+      remoteRef:
+        key: /homelab/backup/restic-aws-access-key-id
+    - secretKey: AWS_SECRET_ACCESS_KEY
+      remoteRef:
+        key: /homelab/backup/restic-aws-secret-access-key
+    - secretKey: AWS_DEFAULT_REGION
+      remoteRef:
+        key: /homelab/backup/aws-region
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: restic-check
+  namespace: platform
+spec:
+  # Domingo de madrugada: longe dos backups (05:15 a 05:45) e da janela de patch (segunda 04:30)
+  schedule: "0 3 * * 0"
+  timeZone: America/Sao_Paulo
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 604800   # o Job de falha fica uma semana para ler o log
+      activeDeadlineSeconds: 7200
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: restic
+              # Mesma imagem do backup (platform/defaults.yaml); o Renovate atualiza as duas no mesmo PR
+              image: restic/restic:latest@sha256:9940e6c7421ab3a21ee9fdc4e91596d04c792b600d31b102696c75cbf3ac4481
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  restic snapshots --compact
+                  restic check --read-data-subset=5% --retry-lock 30m
+              envFrom:
+                - secretRef:
+                    name: restic-check
+              env:
+                - name: RESTIC_CACHE_DIR
+                  value: /cache
+                - name: TMPDIR
+                  value: /tmp
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+              volumeMounts:
+                - name: cache
+                  mountPath: /cache
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: cache
+              emptyDir:
+                sizeLimit: 2Gi
+            - name: tmp
+              emptyDir:
+                sizeLimit: 1Gi
