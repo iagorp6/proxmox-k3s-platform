@@ -223,6 +223,7 @@ The dashboard JSON is **generated** by `scripts/build-dashboard.py`, so it is re
 - **Every message carries a first-step action**, the command to run at 3 a.m.
 - **Mute windows per game:** a game declares `alerts.muteDuring: <time_interval>` in its `game.yaml`, its generated alerts carry a `mute` label, and Alertmanager silences that label during the window (the daily restart, for Project Zomboid). `render-games.py --check` fails if the window or its route does not exist.
 - **Inhibitions:** with the host down, disk/ZFS/ECC alerts stay silent; with a game down, its restart, memory and missing-metrics alerts stay silent.
+- **GitOps is watched too:** Argo CD and External Secrets export metrics, so an Application that stays Degraded, an auto-synced app that drifts from `main`, or an ExternalSecret that stops syncing from SSM raises a warning instead of waiting for someone to open the UI.
 - **Dead man's switch:** Alertmanager's always-firing `Watchdog` pings Healthchecks.io every minute. If the whole VM or host goes down, the external service notices the silence and alerts Discord.
 
 ---

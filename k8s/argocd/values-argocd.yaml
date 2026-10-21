@@ -36,6 +36,13 @@ notifications:
   enabled: false
 
 controller:
+  # argocd_app_info (health e sync de cada Application) para os alertas do grupo gitops. O chart só
+  # cria o ServiceMonitor se o CRD existir: num rebuild, rode make deploy-argocd de novo depois do
+  # kube-prometheus-stack (docs/dr-runbook.md)
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
   resources:
     requests:
       cpu: 100m
