@@ -7,6 +7,7 @@ resources:
   - namespace.yaml
   - externalsecrets.yaml
   - weekly-summary.yaml
+  - daily-health.yaml
   - games-bot.yaml
   - games-bot-rbac.generated.yaml   # gerado por scripts/render-games.py
 
@@ -17,5 +18,10 @@ configMapGenerator:
     files:
       - summary.py=weekly_summary.py
       - games.json=games.generated.json   # gerado por scripts/render-games.py
+  - name: daily-health
+    namespace: platform
+    files:
+      - check.py=daily_health.py
+      - games.json=games.generated.json
 generatorOptions:
   disableNameSuffixHash: true
