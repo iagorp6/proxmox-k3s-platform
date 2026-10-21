@@ -97,17 +97,21 @@ flowchart TB
 ---
 
 ## Repository layout
-terraform/ Proxmox VM (cloud image, cloud-init, DHCP-reserved NIC)
-terraform-aws/ S3 (backups + state), least-privilege IAM, SSM parameters, Budgets
-ansible/ K3s install, game-server network tuning, host exporters, patching
-k8s/argocd/ Argo CD install + app of apps (games, platform, monitoring and External Secrets charts)
-k8s/games/ One directory per catalog game (Project Zomboid, Terraria, Minecraft): game.yaml, StatefulSet, generated manifests
-k8s/platform/ Workloads that belong to no game: weekly Discord summary, shared webhook Secret
-platform/ Active game and platform defaults read by the generator
-k8s/monitoring/ Helm values, alert rules, generated Grafana dashboard
-k8s/external-secrets/ External Secrets Operator + ClusterSecretStore (AWS SSM)
-scripts/ Game manifest generator, game switch, dashboard generator, local CI runner, secret publishing, image pinning
-docs/ Architecture decision records, client installer for the Minecraft modpack
+
+```text
+terraform/             Proxmox VM (cloud image, cloud-init, DHCP-reserved NIC)
+terraform-aws/         S3 (backups + state), least-privilege IAM, SSM parameters, Budgets, GitHub OIDC
+ansible/               K3s install, game-server network tuning, host exporters, OS patching
+k8s/argocd/            Argo CD install + app of apps (games, platform, monitoring and External Secrets charts)
+k8s/games/             One directory per catalog game: game.yaml, StatefulSet, generated manifests
+k8s/platform/          Workloads that belong to no game: games-bot, weekly summary, daily health check
+k8s/monitoring/        Helm values, alert rules and their tests, generated Grafana dashboard
+k8s/external-secrets/  External Secrets Operator + ClusterSecretStore (AWS SSM)
+platform/              Active game, platform defaults and the shared game exporter library
+apps/games-bot/        Discord bot for self-service game switching (image built and scanned in CI)
+scripts/               Generators (games, dashboard, scaffold), game switch, restore drill, local CI runner
+docs/                  ADRs, DR runbook, restore drill records, Minecraft modpack installer
+```
 
 ---
 
@@ -307,7 +311,7 @@ A Budgets alarm fires above USD 1/month, and a CloudWatch alarm watches the size
 
 - [x] GitHub Actions to AWS via OIDC, used for weekly drift detection
 - [x] Migrate to the non-deprecated `proxmox_download_file` resource
-- [x] Renovate for image digests, chart versions and K3s
+- [ ] Renovate running for image digests, chart versions and K3s (configured in `renovate.json`, app not installed yet)
 - [x] Third-party Helm releases (monitoring, External Secrets) managed by Argo CD
 - [x] Automatic security patching on the VM, pending-patch alerts on the host
 - [ ] Timed full DR drill and published RTO (rebuild strategy in [ADR 0005](docs/adr/0005-host-recovery-by-rebuild.md))

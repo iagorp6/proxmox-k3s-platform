@@ -249,5 +249,9 @@ data:
     cd /pz/server
     # A senha de admin vai em todo start: sem ela, o servidor trava pedindo a senha no terminal
     ARGS=(-servername "${PZ_SERVER_NAME}" -cachedir=/pz/data -adminusername admin -adminpassword "${PZ_ADMIN_PASSWORD}")
+    # Marcador de pronto para a readinessProbe: o socket UDP abre antes de o mundo carregar, então só
+    # o "SERVER STARTED" do log diz que dá para entrar (o bot avisa "pronto" a partir do Ready do pod)
+    rm -f /tmp/pz-ready
     # O pzexe imprime os argumentos (inclusive a senha): essas linhas são filtradas da saída
-    ./start-server.sh "${ARGS[@]}" <&3 2>&1 | grep --line-buffered -v '^pzexe: arg: '
+    ./start-server.sh "${ARGS[@]}" <&3 2>&1 | grep --line-buffered -v '^pzexe: arg: ' \
+      | awk '{ print; fflush() } !ready && /SERVER STARTED/ { system("touch /tmp/pz-ready"); ready = 1 }'
