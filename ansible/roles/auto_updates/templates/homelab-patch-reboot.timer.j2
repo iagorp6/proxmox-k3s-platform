@@ -1,0 +1,11 @@
+[Unit]
+Description=Janela semanal de reboot por patch
+
+[Timer]
+OnCalendar={{ auto_updates_reboot_calendar }}
+# Sem catch-up: se a VM estava desligada na janela, o reboot espera a próxima
+Persistent=false
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

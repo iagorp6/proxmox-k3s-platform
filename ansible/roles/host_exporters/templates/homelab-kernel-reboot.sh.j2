@@ -1,0 +1,18 @@
+#!/bin/sh
+# Gerenciado pelo Ansible (role host_exporters). Textfile do node_exporter: 1 se o kernel em
+# execução não é o mais novo instalado. No Proxmox o kernel vem do repositório da Proxmox e não
+# cria /run/reboot-required, então o node_reboot_required do pacote collectors não basta.
+set -eu
+dir={{ host_exporters_textfile_dir }}
+running=$(uname -r)
+newest=$(find /lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort -V | tail -n 1)
+pending=0
+[ -z "$newest" ] || [ "$running" = "$newest" ] || pending=1
+tmp=$(mktemp "$dir/.homelab-kernel.XXXXXX")
+cat > "$tmp" <<PROM
+# HELP homelab_kernel_reboot_pending 1 se há um kernel mais novo instalado do que o em execução.
+# TYPE homelab_kernel_reboot_pending gauge
+homelab_kernel_reboot_pending{running="$running",newest="$newest"} $pending
+PROM
+chmod 0644 "$tmp"
+mv "$tmp" "$dir/homelab-kernel.prom"

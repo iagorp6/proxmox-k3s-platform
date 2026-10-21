@@ -1,7 +1,8 @@
 """Checagem diária da plataforma no Discord (stdlib only): um "está tudo OK" por dia.
 
 Lê o Prometheus: alertas warning/critical disparando, jogo no ar, idade do último backup,
-espaço em disco, restarts de container nas últimas 24 h e uptime do host. Se o Prometheus
+espaço em disco, restarts de container nas últimas 24 h, uptime do host e da VM e patches
+pendentes no host. Se o Prometheus
 não responder, a falha também vai para o Discord: silêncio nunca significa "tudo OK".
 Com DRY_RUN=1 só imprime o que enviaria, sem postar no Discord (para testar o CronJob).
 """
@@ -32,6 +33,10 @@ DISK_FREE = ('min by (job) (node_filesystem_avail_bytes{mountpoint="/", fstype!~
              ' / node_filesystem_size_bytes{mountpoint="/", fstype!~"tmpfs|overlay"})')
 RESTARTS = "sum by (namespace, pod) (increase(kube_pod_container_status_restarts_total[24h])) >= 1"
 HOST_UPTIME = 'time() - node_boot_time_seconds{job="proxmox-node"}'
+VM_UPTIME = 'time() - max(node_boot_time_seconds{job="node-exporter"})'
+HOST_SECURITY = 'sum(apt_upgrades_pending{job="proxmox-node", origin=~".*-security.*"})'
+HOST_REBOOT = ('max(max(node_reboot_required{job="proxmox-node"})'
+               ' or max(homelab_kernel_reboot_pending{job="proxmox-node"}))')
 
 
 def q(expr):
@@ -88,16 +93,30 @@ def build():
         f"{'🟢' if f >= DISK_MIN_FREE else '🟡'} {names.get(j, j)} · {f:.0%}" for j, f in sorted(disks.items()))
         or "Sem dado", "inline": True})
 
+    vm_uptime = q(VM_UPTIME)
+    # Reboot da VM nas últimas 24 h (janela semanal de patch): os restarts vêm dele, não de falha
+    vm_rebooted = bool(vm_uptime) and val(vm_uptime[0]) < 24 * 3600
     restarts = sorted(((r["metric"].get("namespace", "?"), r["metric"].get("pod", "?"), round(val(r)))
                        for r in q(RESTARTS)), key=lambda x: -x[2])
     if restarts:
-        problems.append(f"{len(restarts)} pod(s) reiniciaram")
+        if not vm_rebooted:
+            problems.append(f"{len(restarts)} pod(s) reiniciaram")
         fields.append({"name": "🔁 Restarts em 24 h", "value": "\n".join(
             f"{ns}/{pod} · {n}x" for ns, pod, n in restarts[:5]), "inline": False})
 
     uptime = q(HOST_UPTIME)
     if uptime:
         fields.append({"name": "⏱️ Host no ar", "value": age(val(uptime[0])), "inline": True})
+    if vm_uptime:
+        fields.append({"name": "⏱️ VM no ar", "value": age(val(vm_uptime[0]))
+                       + (" (reiniciou por patch)" if vm_rebooted else ""), "inline": True})
+
+    # Informativo: os alertas HostSecurityUpdatesPending/HostRebootPending cobrem o que passa de 7 dias
+    security, reboot = q(HOST_SECURITY), q(HOST_REBOOT)
+    if security or reboot:
+        n = round(val(security[0])) if security else 0
+        fields.append({"name": "🩹 Patches do host", "value": (f"{n} de segurança pendente(s)" if n else "Em dia")
+                       + (" · reboot pendente" if reboot and val(reboot[0]) > 0 else ""), "inline": True})
 
     return problems, fields
 

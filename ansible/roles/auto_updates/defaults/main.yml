@@ -1,0 +1,11 @@
+# Janela semanal de reboot da VM: só reinicia se um patch pedir (/run/reboot-required).
+# Segunda 04:30 em Brasília: antes dos backups (05:15 a 05:45) e do restart diário do Zomboid (06:00).
+# O Alertmanager silencia a mesma janela (time interval "patch-semanal" no values do kube-prometheus-stack).
+auto_updates_reboot_calendar: "Mon *-*-* 04:30:00 America/Sao_Paulo"
+
+# Jogos com switch.saveCommand recebem o save antes do reboot; a lista vem do catálogo (game.yaml)
+# (k8s/*/game.yaml e k8s/games/*/game.yaml, como no scripts/catalog.py)
+auto_updates_catalog_dirs:
+  - "{{ playbook_dir }}/../../k8s"
+  - "{{ playbook_dir }}/../../k8s/games"
+auto_updates_kubectl: /usr/local/bin/kubectl

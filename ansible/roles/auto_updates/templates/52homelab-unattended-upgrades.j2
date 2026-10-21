@@ -1,0 +1,8 @@
+// Gerenciado pelo Ansible (role auto_updates).
+// As origens continuam as do 50unattended-upgrades do Ubuntu (só -security e ESM); a role confere isso.
+// O reboot não fica com o unattended-upgrades: o homelab-patch-reboot.timer salva o jogo e reinicia
+// na janela semanal, e só quando um pacote pediu.
+Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Unattended-Upgrade::SyslogEnable "true";

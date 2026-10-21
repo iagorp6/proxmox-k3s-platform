@@ -1,0 +1,54 @@
+#!/bin/bash
+# Gerenciado pelo Ansible (role auto_updates). Rodado pelo homelab-patch-reboot.timer.
+# Se um patch pediu reboot (/run/reboot-required), salva os jogos no ar e reinicia a VM.
+# Uso manual: homelab-patch-reboot [--save-only | --force]
+#   --save-only  só salva os jogos (o playbook pve-upgrade.yml usa antes de reiniciar o host)
+#   --force      reinicia mesmo sem patch pedindo
+set -uo pipefail
+
+KUBECTL={{ auto_updates_kubectl }}
+MODE=${1:-}
+log() { echo "patch-reboot: $*"; }
+
+save_game() {
+  local ns=$1 sts=$2 cmd=$3
+  [[ "$("$KUBECTL" -n "$ns" get statefulset "$sts" -o jsonpath='{.status.readyReplicas}' 2>/dev/null)" == "1" ]] || return 0
+  log "salvando $sts"
+  timeout 120 "$KUBECTL" -n "$ns" exec "$sts-0" -c server -- sh -c "$cmd" \
+    || log "AVISO: save de $sts falhou; seguindo"
+}
+
+save_all() {
+{% for g in auto_updates_games if (g.switch | default({})).saveCommand is defined %}
+  save_game {{ g.namespace | quote }} {{ g.name | quote }} {{ g.switch.saveCommand | quote }}
+{% else %}
+  log "nenhum jogo com saveCommand no catálogo"
+{% endfor %}
+  sync
+}
+
+if [[ "$MODE" == "--save-only" ]]; then
+  save_all
+  exit 0
+fi
+
+if [[ "$MODE" != "--force" && ! -f /run/reboot-required ]]; then
+  log "nenhum reboot pendente"
+  exit 0
+fi
+log "reboot pedido por: $(tr '\n' ' ' < /run/reboot-required.pkgs 2>/dev/null || echo '?')"
+
+# Não reinicia no meio de um unattended-upgrade (dpkg pela metade)
+for _ in $(seq 1 40); do
+  systemctl is-active --quiet apt-daily-upgrade.service || break
+  log "unattended-upgrade rodando; aguardando"
+  sleep 30
+done
+if systemctl is-active --quiet apt-daily-upgrade.service; then
+  log "ERRO: unattended-upgrade ainda rodando após 20 min; reboot fica para a próxima janela"
+  exit 1
+fi
+
+save_all
+log "reiniciando a VM"
+systemctl reboot

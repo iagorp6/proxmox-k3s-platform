@@ -2,6 +2,8 @@
   ansible.builtin.apt:
     name:
       - prometheus-node-exporter
+      # apt_upgrades_pending e node_reboot_required (timer prometheus-node-exporter-apt)
+      - prometheus-node-exporter-collectors
       - smartmontools
     state: present
     update_cache: true
@@ -68,10 +70,44 @@
     - prometheus-node-exporter
     - smartctl_exporter
 
+- name: Install kernel reboot metric script
+  ansible.builtin.template:
+    src: homelab-kernel-reboot.sh.j2
+    dest: /usr/local/sbin/homelab-kernel-reboot
+    mode: "0755"
+
+- name: Install kernel reboot metric units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - homelab-kernel-reboot.service
+    - homelab-kernel-reboot.timer
+  notify: Reload systemd
+
 - name: Apply pending restarts
   ansible.builtin.meta: flush_handlers
 
-- name: Verify node_exporter metrics (ZFS + EDAC collectors)
+- name: Enable patch metric timers
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - prometheus-node-exporter-apt.timer
+    - homelab-kernel-reboot.timer
+
+- name: Write patch metrics now (the timers only run later)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+  loop:
+    - prometheus-node-exporter-apt.service
+    - homelab-kernel-reboot.service
+  changed_when: false
+
+- name: Verify node_exporter metrics (ZFS, EDAC and patch textfiles)
   ansible.builtin.uri:
     url: http://127.0.0.1:9100/metrics
     return_content: true
@@ -79,7 +115,9 @@
   retries: 6
   delay: 5
   until: host_exporters_node_metrics.status == 200
-  failed_when: "'node_zfs_' not in host_exporters_node_metrics.content or 'node_edac_' not in host_exporters_node_metrics.content"
+  failed_when: >-
+    ['node_zfs_', 'node_edac_', 'node_reboot_required', 'homelab_kernel_reboot_pending']
+    | reject('in', host_exporters_node_metrics.content) | list | length > 0
 
 - name: Verify smartctl_exporter metrics
   ansible.builtin.uri:
