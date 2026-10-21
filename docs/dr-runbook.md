@@ -104,6 +104,9 @@ kubectl get nodes                              # Ready
 4. In the Argo CD UI, Sync in this order and wait for Healthy each time:
    `external-secrets`, then `kube-prometheus-stack`, `loki`, `alloy`.
 5. Check that every ExternalSecret resolved: `kubectl get externalsecrets -A` (all `SecretSynced`).
+6. Now that the ServiceMonitor CRD exists, run `make deploy-argocd` again and Sync `external-secrets`
+   again: both charts skip their ServiceMonitor while the CRD is missing, and without them the
+   `gitops` alerts (Argo CD apps, ExternalSecrets) have no data and `ArgoCDMetricsMissing` fires.
 
 ## 6. Game data (restic)
 

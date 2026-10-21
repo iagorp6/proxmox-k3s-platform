@@ -184,6 +184,47 @@ spec:
             description: "O games-bot não tem réplica disponível há 10 minutos: o painel do #games não responde e a troca de jogo só funciona pelo make switch-game."
             action: "kubectl -n platform get pods -l app.kubernetes.io/name=games-bot e kubectl -n platform describe pod -l app.kubernetes.io/name=games-bot | tail -20"
 
+    # Reconciliação: sem isto, um app Degraded ou um Secret sem sincronizar só aparece quando alguém abre o Argo
+    - name: gitops
+      rules:
+        - alert: ArgoAppDegraded
+          expr: max by (name) (argocd_app_info{health_status=~"Degraded|Missing"}) == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "App {{ $labels.name }} do Argo CD está Degraded ou Missing"
+            description: "O Argo CD aplicou o app, mas algum recurso dele não está saudável há 15 minutos."
+            action: "kubectl -n argocd get application {{ $labels.name }} -o yaml | grep -B3 -A2 'status: Degraded\\|status: Missing'"
+        # Jogos e charts têm Sync manual: OutOfSync neles é o normal até alguém sincronizar
+        - alert: ArgoAppOutOfSync
+          expr: max by (name) (argocd_app_info{autosync_enabled="true",sync_status="OutOfSync"}) == 1
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "App {{ $labels.name }} com auto-sync não acompanha o main"
+            description: "O app tem sync automático, mas está diferente do Git há 30 minutos: o último sync provavelmente falhou."
+            action: "kubectl -n argocd get application {{ $labels.name }} -o jsonpath='{.status.operationState.message}'"
+        - alert: ArgoCDMetricsMissing
+          expr: absent(argocd_app_info)
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Prometheus sem métricas do Argo CD"
+            description: "Os alertas de app Degraded e OutOfSync estão cegos: o application-controller caiu ou o ServiceMonitor sumiu."
+            action: "kubectl -n argocd get pods,servicemonitors e, se faltar o ServiceMonitor, make deploy-argocd"
+        - alert: ExternalSecretNotReady
+          expr: max by (namespace, name) (externalsecret_status_condition{condition="Ready",status="False"}) == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} não sincroniza"
+            description: "O Secret do cluster não está sendo atualizado a partir do SSM. Quase sempre é parâmetro faltando ou renomeado no SSM."
+            action: "kubectl -n {{ $labels.namespace }} describe externalsecret {{ $labels.name }} | tail -5 e, se faltar parâmetro, make secrets"
+
     - name: games
       rules:
         # GameDown, GameRestarted e GameMemoryHigh (Zomboid incluso) são gerados do catálogo: alerts-games.generated.yaml

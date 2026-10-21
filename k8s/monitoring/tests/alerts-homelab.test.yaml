@@ -181,3 +181,79 @@ tests:
       - eval_time: 9d
         alertname: HostRebootPending
         exp_alerts: []
+  - name: app do Argo CD Degraded alerta depois de 15 min; Healthy não
+    interval: 1m
+    input_series:
+      - series: 'argocd_app_info{name="platform",autosync_enabled="true",health_status="Degraded",sync_status="Synced"}'
+        values: '1x30'
+      - series: 'argocd_app_info{name="zomboid",autosync_enabled="false",health_status="Healthy",sync_status="Synced"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ArgoAppDegraded
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: ArgoAppDegraded
+        exp_alerts:
+          - exp_labels: {severity: warning, name: platform}
+            exp_annotations:
+              summary: "App platform do Argo CD está Degraded ou Missing"
+              description: "O Argo CD aplicou o app, mas algum recurso dele não está saudável há 15 minutos."
+              action: "kubectl -n argocd get application platform -o yaml | grep -B3 -A2 'status: Degraded\\|status: Missing'"
+      - eval_time: 20m
+        alertname: ArgoCDMetricsMissing
+        exp_alerts: []
+  - name: OutOfSync só alerta em app com auto-sync (jogos ficam OutOfSync até o Sync manual)
+    interval: 1m
+    input_series:
+      - series: 'argocd_app_info{name="monitoring-config",autosync_enabled="true",health_status="Healthy",sync_status="OutOfSync"}'
+        values: '1x40'
+      - series: 'argocd_app_info{name="terraria",autosync_enabled="false",health_status="Healthy",sync_status="OutOfSync"}'
+        values: '1x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ArgoAppOutOfSync
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: ArgoAppOutOfSync
+        exp_alerts:
+          - exp_labels: {severity: warning, name: monitoring-config}
+            exp_annotations:
+              summary: "App monitoring-config com auto-sync não acompanha o main"
+              description: "O app tem sync automático, mas está diferente do Git há 30 minutos: o último sync provavelmente falhou."
+              action: "kubectl -n argocd get application monitoring-config -o jsonpath='{.status.operationState.message}'"
+  - name: sem métrica do Argo CD alerta que os alertas de gitops estão cegos
+    interval: 1m
+    input_series:
+      - series: 'up{job="node-exporter"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ArgoCDMetricsMissing
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "Prometheus sem métricas do Argo CD"
+              description: "Os alertas de app Degraded e OutOfSync estão cegos: o application-controller caiu ou o ServiceMonitor sumiu."
+              action: "kubectl -n argocd get pods,servicemonitors e, se faltar o ServiceMonitor, make deploy-argocd"
+  - name: ExternalSecret com Ready=False alerta; Ready=True não
+    interval: 1m
+    input_series:
+      - series: 'externalsecret_status_condition{namespace="monitoring",name="prometheus-additional-scrape",condition="Ready",status="False"}'
+        values: '1x30'
+      - series: 'externalsecret_status_condition{namespace="monitoring",name="prometheus-additional-scrape",condition="Ready",status="True"}'
+        values: '0x30'
+      - series: 'externalsecret_status_condition{namespace="platform",name="games-bot",condition="Ready",status="False"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ExternalSecretNotReady
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: ExternalSecretNotReady
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: monitoring, name: prometheus-additional-scrape}
+            exp_annotations:
+              summary: "ExternalSecret monitoring/prometheus-additional-scrape não sincroniza"
+              description: "O Secret do cluster não está sendo atualizado a partir do SSM. Quase sempre é parâmetro faltando ou renomeado no SSM."
+              action: "kubectl -n monitoring describe externalsecret prometheus-additional-scrape | tail -5 e, se faltar parâmetro, make secrets"
