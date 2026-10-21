@@ -44,8 +44,9 @@
           - "Pacotes atualizados: {{ 'sim' if pve_upgrade_result.changed else 'nada pendente' }}"
           - "Kernel em execução {{ pve_upgrade_kernel.stdout.split()[0] }}, mais novo instalado {{ pve_upgrade_kernel.stdout.split()[1] }}"
           - >-
-            {{ 'Reboot pendente. Rode de novo com -e pve_upgrade_reboot=true quando ninguém estiver jogando.'
-               if pve_upgrade_needs_reboot and not pve_upgrade_reboot | bool else 'Sem reboot agora.' }}
+            {{ 'Sem reboot pendente.' if not pve_upgrade_needs_reboot
+               else 'Reboot pendente: salvando os jogos e reiniciando o host agora.' if pve_upgrade_reboot | bool
+               else 'Reboot pendente. Rode de novo com -e pve_upgrade_reboot=true quando ninguém estiver jogando.' }}
 
     - name: Save the games on the K3s VM before rebooting the host
       ansible.builtin.command: /usr/local/sbin/homelab-patch-reboot --save-only
