@@ -45,7 +45,7 @@ flowchart TB
                     argo["Argo CD"]
                     bot["games-bot<br/>Discord switch panel"]
                     game["Active game server<br/>Zomboid · Terraria · Minecraft<br/>+ exporter sidecar"]
-                    jobs["CronJobs<br/>backup · restart · weekly summary"]
+                    jobs["CronJobs<br/>backup · restart · weekly summary · daily check"]
                     eso["External Secrets"]
                     mon["Prometheus · Alertmanager<br/>Grafana · Loki · Alloy"]
                 end
@@ -184,6 +184,7 @@ Project Zomboid, the first game, is in the catalog and on the same contract as t
 | Character death | 💀 *iago died* · survived 34 in-game hours |
 | Playtime milestone | 🏆 *joao reached 50 hours on the server* |
 | Weekly summary | 📊 Hours played, ranking with medals, peak concurrency, deaths, availability |
+| Daily health check | ✅ *Tudo OK* or ⚠️ the list of what needs attention: firing alerts, game up, last backup age, free disk, pod restarts, host uptime (a failed Prometheus query is reported too, never silence) |
 
 <!-- DISCORD_IMAGE -->
 
