@@ -8,6 +8,7 @@ resources:
   - externalsecrets.yaml
   - weekly-summary.yaml
   - daily-health.yaml
+  - restic-check.yaml
   - games-bot.yaml
   - games-bot-rbac.generated.yaml   # gerado por scripts/render-games.py
 

@@ -408,6 +408,11 @@ def main():
         for ref in re.findall(r"^\s*(?:- )?image:\s*(\S+)", text, re.M) + re.findall(r"^FROM\s+(\S+)", text, re.M):
             if not IMAGE_REF.fullmatch(ref):
                 errors.append(f"{f.relative_to(ROOT)}: imagem sem tag e digest válidos: {ref} (use repo:tag@sha256:<64 hex>)")
+        # restic escrito à mão (restic-check) usa a mesma imagem do backup gerado: versões diferentes
+        # do restic no mesmo repositório são um risco desnecessário
+        for ref in re.findall(r"^\s*(?:- )?image:\s*(restic/restic\S*)", text, re.M):
+            if ref != DEFAULTS["resticImage"]:
+                errors.append(f"{f.relative_to(ROOT)}: restic {ref} diferente do resticImage de platform/defaults.yaml")
         if "dl.k8s.io/release/" in text and "generated" not in f.name:
             if f"/release/{DEFAULTS['kubectl']['version']}/" not in text or DEFAULTS["kubectl"]["sha256"] not in text:
                 errors.append(f"{f.relative_to(ROOT)}: kubectl com versão ou SHA-256 diferente de platform/defaults.yaml")
