@@ -133,9 +133,14 @@
         seconds: 15
       when: pve_host_fw_config is changed
 
-    - name: Drop the existing SSH connection
-      ansible.builtin.meta: reset_connection
+# Fora do block: meta reset_connection não aceita "when" (herdado do block, gera warning e é ignorado).
+# Sem condição ela só fecha a conexão SSH atual, inofensivo também em check mode ou sem firewall.
+- name: Drop the existing SSH connection
+  ansible.builtin.meta: reset_connection
 
+- name: Datacenter firewall (confirm access)
+  when: pve_host_firewall_enabled | bool and not ansible_check_mode
+  block:
     - name: Confirm SSH still works through the firewall
       ansible.builtin.wait_for_connection:
         timeout: 60
