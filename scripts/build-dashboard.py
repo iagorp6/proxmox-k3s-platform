@@ -94,7 +94,7 @@ P += [
   stat("Players online", "Jogadores conectados no jogo ativo, de no máximo 6 vagas.",
        8, y, 4, 4, [prom(ACTIVE_PLAYERS)], unit="suffix: / 6", decimals=0,
        steps=th(("blue", None)), color="value", graph="area"),
-  stat("Disponibilidade (7 dias)", "SLO: % do tempo em que o jogo ativo respondeu nos últimos 7 dias. Trocas de jogo e o restart diário contam como indisponibilidade. Meta: 99%.",
+  stat("Disponibilidade (7 dias)", "% do tempo em que o jogo ativo respondeu nos últimos 7 dias. Trocas de jogo e o restart diário contam como indisponibilidade. O SLO oficial (28 dias, com error budget) fica na seção SLO.",
        12, y, 4, 4, [prom(f"avg_over_time(({ACTIVE_UP})[7d:5m])")], unit="percentunit", decimals=2,
        steps=th((RED, None), (ORANGE, 0.95), (GREEN, 0.99))),
   stat("Backup mais antigo", "Tempo desde o último backup bem-sucedido do jogo mais atrasado (restic → AWS S3, diário). Vermelho acima de 26h.",
@@ -121,6 +121,30 @@ P.append({"type": "state-timeline", "title": "Jogo ativo e disponibilidade",
           "options": {"showValue": "never", "mergeValues": True, "rowHeight": 0.8,
                       "legend": {"showLegend": False}, "tooltip": {"mode": "single"}}})
 y += 5
+
+# ---------------- SLO (k8s/monitoring/alerts-slo.yaml, docs/slo.md) ----------------
+# Lê as recording rules game_slo:*, as mesmas dos alertas de burn rate: painel e alerta nunca discordam.
+P.append(row("SLO: 99% do tempo no ar em 28 dias", y)); y += 1
+P += [
+  stat("Disponibilidade (28 dias)", "SLI do SLO: fração do tempo em que o jogo ativo respondeu ao exporter. Trocas, restart diário e reboot de patch contam como fora. Meta: 99%.",
+       0, y, 6, 6, [prom("1 - game_slo:unavailable:ratio_avg28d")], unit="percentunit", decimals=2,
+       steps=th((RED, None), (ORANGE, 0.99), (GREEN, 0.995))),
+  stat("Error budget restante", "Quanto sobra dos 1% de indisponibilidade permitidos em 28 dias (6h43min). Abaixo de 0, a política de docs/slo.md congela mudanças de risco no jogo.",
+       6, y, 6, 6, [prom("1 - game_slo:unavailable:ratio_avg28d / 0.01")], unit="percentunit", decimals=0,
+       steps=th((RED, None), (ORANGE, 0), (GREEN, 0.25))),
+]
+P.append({"type": "timeseries", "title": "Burn rate do error budget",
+          "description": "Velocidade de consumo do budget: 1 = acaba em exatos 28 dias. GameSLOBurnRateHigh: acima de 6 em 6h e 30min. GameSLOBurnRateSlow: acima de 1 em 3 dias e 6h.",
+          "datasource": DS, "gridPos": {"x": 12, "y": y, "w": 12, "h": 6},
+          "targets": [prom("game_slo:burn_rate:avg30m", legend="30 min"),
+                      prom("game_slo:burn_rate:avg6h", ref="B", legend="6 h"),
+                      prom("game_slo:burn_rate:avg3d", ref="C", legend="3 dias")],
+          "fieldConfig": {"defaults": {"min": 0, "decimals": 1,
+                                       "thresholds": th((GREEN, None), (ORANGE, 1), (RED, 6)),
+                                       "custom": {"fillOpacity": 10, "lineWidth": 2, "thresholdsStyle": {"mode": "dashed"}}},
+                          "overrides": []},
+          "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}})
+y += 6
 
 # ---------------- 2. Jogadores ----------------
 P.append(row("Jogadores", y)); y += 1

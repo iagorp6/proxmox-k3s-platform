@@ -98,7 +98,7 @@ jobs:
           kubeconform -strict -summary \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/f1e7f6bc0537bf0622ffe6e47dbaa85914fabbec/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
-            k8s/monitoring/alerts-homelab.yaml k8s/monitoring/alerts-games.generated.yaml k8s/monitoring/dashboard-asunboid.yaml \
+            k8s/monitoring/alerts-homelab.yaml k8s/monitoring/alerts-slo.yaml k8s/monitoring/alerts-games.generated.yaml k8s/monitoring/dashboard-asunboid.yaml \
             k8s/monitoring/externalsecrets.yaml k8s/argocd/root.yaml k8s/argocd/apps/*.yaml k8s/external-secrets/cluster-secret-store.yaml
       - name: Third-party charts render with the repo values (helm template + kubeconform)
         run: python3 scripts/check-charts.py 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/f1e7f6bc0537bf0622ffe6e47dbaa85914fabbec/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'

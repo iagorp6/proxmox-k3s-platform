@@ -1,0 +1,79 @@
+# SLO do jogo ativo (docs/slo.md). Arquivo separado do alerts-homelab.yaml porque as janelas longas
+# (3 e 28 dias) deixam lentos os testes do promtool que simulam vários dias.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab-slo
+  namespace: monitoring
+spec:
+  groups:
+    # 99% do tempo respondendo em 28 dias, error budget de 6h43min.
+    # SLI = game_up do jogo com réplicas > 0. Sem jogo ativo, ou sem exporter, conta como fora.
+    # Trocas de jogo, o restart diário e o reboot de patch gastam budget de propósito: é o que o jogador sente.
+    - name: slo
+      interval: 1m
+      rules:
+        # Sem filtro de namespace: o join com game_up já deixa só os jogos (Prometheus e Loki também são StatefulSets)
+        - record: game_slo:active_up
+          expr: |
+            max(
+              max by (game) (game_up)
+              * on (game)
+              label_replace(max by (namespace) (kube_statefulset_replicas > bool 0) == 1, "game", "$1", "namespace", "(.+)")
+            ) or vector(0)
+        - record: game_slo:unavailable:ratio_avg5m
+          expr: 1 - avg_over_time(game_slo:active_up[5m])
+        - record: game_slo:unavailable:ratio_avg30m
+          expr: 1 - avg_over_time(game_slo:active_up[30m])
+        - record: game_slo:unavailable:ratio_avg6h
+          expr: 1 - avg_over_time(game_slo:active_up[6h])
+        - record: game_slo:unavailable:ratio_avg3d
+          expr: 1 - avg_over_time(game_slo:active_up[3d])
+        # 28 dias em amostras de 1m são 40 mil pontos por avaliação: a média das janelas de 30 min,
+        # alinhadas pelo subquery, cobre o mesmo intervalo com 1.344 pontos
+        - record: game_slo:unavailable:ratio_avg28d
+          expr: avg_over_time(game_slo:unavailable:ratio_avg30m[28d:30m])
+        # Burn rate = taxa de erro / 1% (o budget). 1 = gasta o budget exatamente em 28 dias.
+        - record: game_slo:burn_rate:avg30m
+          expr: game_slo:unavailable:ratio_avg30m / 0.01
+        - record: game_slo:burn_rate:avg6h
+          expr: game_slo:unavailable:ratio_avg6h / 0.01
+        - record: game_slo:burn_rate:avg3d
+          expr: game_slo:unavailable:ratio_avg3d / 0.01
+        # Multiwindow, multi-burn-rate (SRE Workbook, cap. 5). Sem o nível de 14,4x em 1h: GameDown e
+        # GameUnresponsive já pegam a queda aguda, e uma troca de jogo lenta dispararia esse nível à toa.
+        # Janela curta: o alerta só vale se ainda estiver queimando agora, e resolve rápido quando para.
+        # O count_over_time exige histórico que cubra a janela longa: logo depois do deploy das regras (ou de um
+        # Prometheus zerado), 5 min de troca de jogo em 30 min de dados pareceriam 16% de indisponibilidade.
+        - alert: GameSLOBurnRateHigh
+          expr: |
+            game_slo:burn_rate:avg6h > 6 and game_slo:burn_rate:avg30m > 6
+            and count_over_time(game_slo:active_up[6h]) > 300
+          labels:
+            severity: warning
+          annotations:
+            summary: "Jogo fora do ar além do normal: error budget queimando a {{ $value | printf \"%.0f\" }}x"
+            description: "Mais de 6% das últimas 6 horas sem o jogo ativo respondendo (36 min ou mais), e ainda caindo agora. Nesse ritmo o budget de 28 dias acaba em menos de 5 dias."
+            action: "make status e, se o jogo estiver no ar, kubectl get events -A --sort-by=.lastTimestamp | tail -20 para ver trocas e restarts"
+        - alert: GameSLOBurnRateSlow
+          expr: |
+            game_slo:burn_rate:avg3d > 1 and game_slo:burn_rate:avg6h > 1
+            and count_over_time(game_slo:active_up[3d]) > 3600
+          labels:
+            severity: warning
+          annotations:
+            summary: "Disponibilidade do jogo abaixo da meta nos últimos 3 dias"
+            description: "Mais de 1% dos últimos 3 dias sem o jogo ativo respondendo. Não é urgente, mas o budget de 28 dias vai acabar se o ritmo continuar: quedas curtas e repetidas, troca de jogo demorando ou restart lento."
+            action: "No Grafana, painel SLO do dashboard AsunBoid: ver na linha do tempo quando o jogo caiu e cruzar com as trocas (git log --oneline -- platform/active-game.yaml)"
+        - alert: GameErrorBudgetExhausted
+          # Pelo menos 7 dias de histórico (336 janelas de 30 min) antes de declarar o budget esgotado
+          expr: |
+            game_slo:unavailable:ratio_avg28d > 0.01
+            and count_over_time(game_slo:unavailable:ratio_avg30m[28d:30m]) >= 336
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Error budget de 28 dias do jogo esgotado"
+            description: "O jogo ativo ficou fora mais de 1% do tempo em 28 dias. Pela política de docs/slo.md, mudanças de risco no jogo (mods novos, imagem nova, tuning) esperam até o budget voltar."
+            action: "Ver docs/slo.md (política de error budget) e escrever o postmortem do que gastou o budget em docs/postmortems/"

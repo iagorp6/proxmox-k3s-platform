@@ -277,4 +277,3 @@ spec:
           annotations:
             summary: "🏆 {{ $labels.player }} completou {{ $value | printf \"%.0f\" }} horas no servidor"
             description: "Tempo total jogado em {{ $labels.game }}."
-

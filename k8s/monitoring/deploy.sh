@@ -29,5 +29,5 @@ install kps   prometheus-community/kube-prometheus-stack kube-prometheus-stack v
 install loki  grafana/loki                               loki                  values-loki.yaml
 install alloy grafana/alloy                              alloy                 values-alloy.yaml
 
-kubectl apply -f alerts-homelab.yaml -f alerts-games.generated.yaml -f dashboard-asunboid.yaml -f externalsecrets.yaml
+kubectl apply -f alerts-homelab.yaml -f alerts-slo.yaml -f alerts-games.generated.yaml -f dashboard-asunboid.yaml -f externalsecrets.yaml
 echo "OK: stack de observabilidade aplicada"

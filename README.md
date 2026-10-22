@@ -110,7 +110,7 @@ k8s/external-secrets/  External Secrets Operator + ClusterSecretStore (AWS SSM)
 platform/              Active game, platform defaults and the shared game exporter library
 apps/games-bot/        Discord bot for self-service game switching (image built and scanned in CI)
 scripts/               Generators (games, dashboard, scaffold), game switch, restore drill, local CI runner
-docs/                  ADRs, DR runbook, restore drill records, Minecraft modpack installer
+docs/                  ADRs, SLO, postmortems, DR runbook, restore drill records, Minecraft modpack installer
 ```
 
 ---
@@ -202,7 +202,8 @@ Joins, leaves and the weekly summary work for every game; deaths and playtime mi
 
 The **AsunBoid** dashboard covers every game on the platform and reads top to bottom, from "is it up?" to "why?":
 
-- **Now:** server status, players online, 7-day availability (SLO), uptime, last backup, active alerts, and an availability strip showing every outage in the period.
+- **Now:** server status, players online, 7-day availability, uptime, last backup, active alerts, and an availability strip showing every outage in the period.
+- **SLO:** 28-day availability against the 99% objective, error budget left and burn rate over 30 minutes, 6 hours and 3 days ([docs/slo.md](docs/slo.md)).
 - **Players:** who is online now, players over time, a per-player session timeline, and a table with playtime (24h, 7d, 30d, all time), deaths and last seen.
 - **Game server resources:** memory against the container limit, CPU against the VM's vCPUs, unexpected restarts.
 - **Host hardware** (collapsed): SMART, ZFS pool, ECC errors, disk temperature, free space, host RAM.
@@ -224,6 +225,7 @@ The dashboard JSON is **generated** by `scripts/build-dashboard.py`, so it is re
 - **Mute windows per game:** a game declares `alerts.muteDuring: <time_interval>` in its `game.yaml`, its generated alerts carry a `mute` label, and Alertmanager silences that label during the window (the daily restart, for Project Zomboid). `render-games.py --check` fails if the window or its route does not exist.
 - **Inhibitions:** with the host down, disk/ZFS/ECC alerts stay silent; with a game down, its restart, memory and missing-metrics alerts stay silent.
 - **GitOps is watched too:** Argo CD and External Secrets export metrics, so an Application that stays Degraded, an auto-synced app that drifts from `main`, or an ExternalSecret that stops syncing from SSM raises a warning instead of waiting for someone to open the UI.
+- **SLO burn-rate alerts:** one SLO (the active game answers 99% of the time over 28 days, [docs/slo.md](docs/slo.md)) with multiwindow burn-rate alerts from the SRE Workbook: 6x over 6h and 30m, 1x over 3 days and 6h, and budget exhausted. Recording rules feed both the alerts and the dashboard, and promtool tests simulate outages, a normal game switch and a slow 3-day burn.
 - **Dead man's switch:** Alertmanager's always-firing `Watchdog` pings Healthchecks.io every minute. If the whole VM or host goes down, the external service notices the silence and alerts Discord.
 
 ---
@@ -273,7 +275,7 @@ Every push runs Terraform `fmt`/`validate`/`tflint` for both stacks, `ansible-li
 
 ## Engineering notes
 
-Real problems hit while building and operating this, and how they were solved.
+Real problems hit while building and operating this, and how they were solved. The incidents with player or monitoring impact have full blameless postmortems (timeline, root cause, action items) in [docs/postmortems/](docs/postmortems/).
 
 **UEFI boot loop on the HPE B140i.** The OS installed fine but the server always fell through to PXE. The embedded "Dynamic Smart Array" exposes only its own logical drives to UEFI. Switching the controller to AHCI and letting ZFS manage the disks fixed it.
 

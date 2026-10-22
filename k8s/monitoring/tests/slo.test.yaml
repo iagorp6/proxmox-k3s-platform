@@ -1,0 +1,117 @@
+# SLO do jogo ativo (alerts-slo.yaml, docs/slo.md)
+rule_files: [alerts-slo.yaml]
+evaluation_interval: 1m
+tests:
+  - name: SLI conta como fora quando não há jogo ativo ou o jogo ativo está sem exporter
+    interval: 1m
+    input_series:
+      # Prometheus também é StatefulSet: não pode contar como jogo
+      - series: 'kube_statefulset_replicas{namespace="monitoring",statefulset="prometheus-kps"}'
+        values: '1x30'
+      - series: 'kube_statefulset_replicas{namespace="terraria",statefulset="terraria"}'
+        values: '0x9 1x20'
+      - series: 'kube_statefulset_replicas{namespace="minecraft",statefulset="minecraft"}'
+        values: '1x9 0x20'
+      - series: 'game_up{game="minecraft"}'
+        values: '1x30'
+    promql_expr_test:
+      - expr: game_slo:active_up
+        eval_time: 5m
+        exp_samples:
+          - labels: 'game_slo:active_up'
+            value: 1
+      # Troca para o terraria, que ainda não tem exporter respondendo
+      - expr: game_slo:active_up
+        eval_time: 20m
+        exp_samples:
+          - labels: 'game_slo:active_up'
+            value: 0
+
+  - name: queda de 41 min dispara GameSLOBurnRateHigh e resolve quando o jogo volta
+    interval: 1m
+    input_series:
+      - series: 'kube_statefulset_replicas{namespace="minecraft",statefulset="minecraft"}'
+        values: '1x450'
+      - series: 'game_up{game="minecraft"}'
+        values: '1x359 0x40 1x50'      # fora de 6h00 a 6h40
+    alert_rule_test:
+      - eval_time: 6h40m
+        alertname: GameSLOBurnRateHigh
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "Jogo fora do ar além do normal: error budget queimando a 11x"
+              description: "Mais de 6% das últimas 6 horas sem o jogo ativo respondendo (36 min ou mais), e ainda caindo agora. Nesse ritmo o budget de 28 dias acaba em menos de 5 dias."
+              action: "make status e, se o jogo estiver no ar, kubectl get events -A --sort-by=.lastTimestamp | tail -20 para ver trocas e restarts"
+      # A janela de 6h ainda tem a queda, mas a de 30 min já está limpa
+      - eval_time: 7h20m
+        alertname: GameSLOBurnRateHigh
+        exp_alerts: []
+
+  - name: troca de jogo de 10 min não dispara GameSLOBurnRateHigh
+    interval: 1m
+    input_series:
+      - series: 'kube_statefulset_replicas{namespace="minecraft",statefulset="minecraft"}'
+        values: '1x400'
+      - series: 'game_up{game="minecraft"}'
+        values: '1x359 0x9 1x30'
+    alert_rule_test:
+      - eval_time: 6h10m
+        alertname: GameSLOBurnRateHigh
+        exp_alerts: []
+
+  - name: logo depois do deploy das regras, uma troca de jogo não dispara nada
+    interval: 1m
+    input_series:
+      - series: 'kube_statefulset_replicas{namespace="minecraft",statefulset="minecraft"}'
+        values: '1x40'
+      - series: 'game_up{game="minecraft"}'
+        values: '1x24 0x5 1x10'    # 30 min de histórico, 6 deles fora
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: GameSLOBurnRateHigh
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: GameSLOBurnRateSlow
+        exp_alerts: []
+
+  - name: quedas somando 1 h em 3 dias disparam GameSLOBurnRateSlow, mas ainda não GameErrorBudgetExhausted
+    interval: 1m
+    input_series:
+      - series: 'kube_statefulset_replicas{namespace="zomboid",statefulset="zomboid"}'
+        values: '1x4330'
+      - series: 'game_up{game="zomboid"}'
+        values: '1x1439 0x49 1x2799 0x9 1x30'   # 50 min fora no 2º dia e 10 min fora nas últimas 6h
+    alert_rule_test:
+      - eval_time: 72h
+        alertname: GameSLOBurnRateSlow
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "Disponibilidade do jogo abaixo da meta nos últimos 3 dias"
+              description: "Mais de 1% dos últimos 3 dias sem o jogo ativo respondendo. Não é urgente, mas o budget de 28 dias vai acabar se o ritmo continuar: quedas curtas e repetidas, troca de jogo demorando ou restart lento."
+              action: "No Grafana, painel SLO do dashboard AsunBoid: ver na linha do tempo quando o jogo caiu e cruzar com as trocas (git log --oneline -- platform/active-game.yaml)"
+      - eval_time: 72h
+        alertname: GameSLOBurnRateHigh
+        exp_alerts: []
+      # 1,4% de indisponibilidade, mas só 3 dias de histórico: cedo demais para falar em budget de 28 dias
+      - eval_time: 72h
+        alertname: GameErrorBudgetExhausted
+        exp_alerts: []
+
+  - name: mais de 1% fora com 7 dias de histórico dispara GameErrorBudgetExhausted
+    interval: 1m
+    input_series:
+      - series: 'kube_statefulset_replicas{namespace="zomboid",statefulset="zomboid"}'
+        values: '1x10300'
+      - series: 'game_up{game="zomboid"}'
+        values: '1x1439 0x149 1x8700'           # 2h30 fora no 2º dia: 1,5% de 7 dias
+    alert_rule_test:
+      - eval_time: 7d2h
+        alertname: GameErrorBudgetExhausted
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "Error budget de 28 dias do jogo esgotado"
+              description: "O jogo ativo ficou fora mais de 1% do tempo em 28 dias. Pela política de docs/slo.md, mudanças de risco no jogo (mods novos, imagem nova, tuning) esperam até o budget voltar."
+              action: "Ver docs/slo.md (política de error budget) e escrever o postmortem do que gastou o budget em docs/postmortems/"
