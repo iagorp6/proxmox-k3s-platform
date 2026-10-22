@@ -219,7 +219,7 @@ data:
         {
           "type": "stat",
           "title": "Disponibilidade (7 dias)",
-          "description": "SLO: % do tempo em que o jogo ativo respondeu nos últimos 7 dias. Trocas de jogo e o restart diário contam como indisponibilidade. Meta: 99%.",
+          "description": "% do tempo em que o jogo ativo respondeu nos últimos 7 dias. Trocas de jogo e o restart diário contam como indisponibilidade. O SLO oficial (28 dias, com error budget) fica na seção SLO.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -516,7 +516,7 @@ data:
         },
         {
           "type": "row",
-          "title": "Jogadores",
+          "title": "SLO: 99% do tempo no ar em 28 dias",
           "collapsed": false,
           "gridPos": {
             "x": 0,
@@ -528,6 +528,206 @@ data:
           "id": 9
         },
         {
+          "type": "stat",
+          "title": "Disponibilidade (28 dias)",
+          "description": "SLI do SLO: fração do tempo em que o jogo ativo respondeu ao exporter. Trocas, restart diário e reboot de patch contam como fora. Meta: 99%.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 11,
+            "w": 6,
+            "h": 6
+          },
+          "targets": [
+            {
+              "expr": "1 - game_slo:unavailable:ratio_avg28d",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.99
+                  },
+                  {
+                    "color": "green",
+                    "value": 0.995
+                  }
+                ]
+              },
+              "unit": "percentunit",
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "id": 10
+        },
+        {
+          "type": "stat",
+          "title": "Error budget restante",
+          "description": "Quanto sobra dos 1% de indisponibilidade permitidos em 28 dias (6h43min). Abaixo de 0, a política de docs/slo.md congela mudanças de risco no jogo.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 11,
+            "w": 6,
+            "h": 6
+          },
+          "targets": [
+            {
+              "expr": "1 - game_slo:unavailable:ratio_avg28d / 0.01",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0
+                  },
+                  {
+                    "color": "green",
+                    "value": 0.25
+                  }
+                ]
+              },
+              "unit": "percentunit",
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "id": 11
+        },
+        {
+          "type": "timeseries",
+          "title": "Burn rate do error budget",
+          "description": "Velocidade de consumo do budget: 1 = acaba em exatos 28 dias. GameSLOBurnRateHigh: acima de 6 em 6h e 30min. GameSLOBurnRateSlow: acima de 1 em 3 dias e 6h.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 11,
+            "w": 12,
+            "h": 6
+          },
+          "targets": [
+            {
+              "expr": "game_slo:burn_rate:avg30m",
+              "refId": "A",
+              "legendFormat": "30 min"
+            },
+            {
+              "expr": "game_slo:burn_rate:avg6h",
+              "refId": "B",
+              "legendFormat": "6 h"
+            },
+            {
+              "expr": "game_slo:burn_rate:avg3d",
+              "refId": "C",
+              "legendFormat": "3 dias"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "min": 0,
+              "decimals": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 6
+                  }
+                ]
+              },
+              "custom": {
+                "fillOpacity": 10,
+                "lineWidth": 2,
+                "thresholdsStyle": {
+                  "mode": "dashed"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "id": 12
+        },
+        {
+          "type": "row",
+          "title": "Jogadores",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 17,
+            "w": 24,
+            "h": 1
+          },
+          "panels": [],
+          "id": 13
+        },
+        {
           "type": "table",
           "title": "Online agora",
           "description": "Quem está conectado neste momento e quanto jogou nas últimas 24h.",
@@ -537,7 +737,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 11,
+            "y": 18,
             "w": 8,
             "h": 8
           },
@@ -629,7 +829,7 @@ data:
           "options": {
             "showHeader": true
           },
-          "id": 10
+          "id": 14
         },
         {
           "type": "timeseries",
@@ -641,7 +841,7 @@ data:
           },
           "gridPos": {
             "x": 8,
-            "y": 11,
+            "y": 18,
             "w": 16,
             "h": 8
           },
@@ -690,7 +890,7 @@ data:
               "mode": "multi"
             }
           },
-          "id": 11
+          "id": 15
         },
         {
           "type": "state-timeline",
@@ -702,7 +902,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 19,
+            "y": 26,
             "w": 24,
             "h": 7
           },
@@ -755,7 +955,7 @@ data:
               "mode": "single"
             }
           },
-          "id": 12
+          "id": 16
         },
         {
           "type": "table",
@@ -767,7 +967,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 26,
+            "y": 33,
             "w": 24,
             "h": 9
           },
@@ -976,7 +1176,7 @@ data:
               }
             ]
           },
-          "id": 13
+          "id": 17
         },
         {
           "type": "row",
@@ -984,12 +1184,12 @@ data:
           "collapsed": false,
           "gridPos": {
             "x": 0,
-            "y": 35,
+            "y": 42,
             "w": 24,
             "h": 1
           },
           "panels": [],
-          "id": 14
+          "id": 18
         },
         {
           "type": "timeseries",
@@ -1001,7 +1201,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 36,
+            "y": 43,
             "w": 10,
             "h": 8
           },
@@ -1067,7 +1267,7 @@ data:
               "mode": "multi"
             }
           },
-          "id": 15
+          "id": 19
         },
         {
           "type": "timeseries",
@@ -1079,7 +1279,7 @@ data:
           },
           "gridPos": {
             "x": 10,
-            "y": 36,
+            "y": 43,
             "w": 10,
             "h": 8
           },
@@ -1129,7 +1329,7 @@ data:
               "mode": "multi"
             }
           },
-          "id": 16
+          "id": 20
         },
         {
           "type": "stat",
@@ -1141,7 +1341,7 @@ data:
           },
           "gridPos": {
             "x": 20,
-            "y": 36,
+            "y": 43,
             "w": 4,
             "h": 8
           },
@@ -1197,7 +1397,7 @@ data:
               ]
             }
           },
-          "id": 17
+          "id": 21
         },
         {
           "type": "row",
@@ -1205,7 +1405,7 @@ data:
           "collapsed": true,
           "gridPos": {
             "x": 0,
-            "y": 44,
+            "y": 51,
             "w": 24,
             "h": 1
           },
@@ -1220,7 +1420,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 45,
+                "y": 52,
                 "w": 4,
                 "h": 4
               },
@@ -1277,7 +1477,7 @@ data:
                   ]
                 }
               },
-              "id": 19
+              "id": 23
             },
             {
               "type": "stat",
@@ -1289,7 +1489,7 @@ data:
               },
               "gridPos": {
                 "x": 4,
-                "y": 45,
+                "y": 52,
                 "w": 4,
                 "h": 4
               },
@@ -1346,7 +1546,7 @@ data:
                   ]
                 }
               },
-              "id": 20
+              "id": 24
             },
             {
               "type": "stat",
@@ -1358,7 +1558,7 @@ data:
               },
               "gridPos": {
                 "x": 8,
-                "y": 45,
+                "y": 52,
                 "w": 4,
                 "h": 4
               },
@@ -1415,7 +1615,7 @@ data:
                   ]
                 }
               },
-              "id": 21
+              "id": 25
             },
             {
               "type": "stat",
@@ -1427,7 +1627,7 @@ data:
               },
               "gridPos": {
                 "x": 12,
-                "y": 45,
+                "y": 52,
                 "w": 4,
                 "h": 4
               },
@@ -1472,7 +1672,7 @@ data:
                   ]
                 }
               },
-              "id": 22
+              "id": 26
             },
             {
               "type": "stat",
@@ -1484,7 +1684,7 @@ data:
               },
               "gridPos": {
                 "x": 16,
-                "y": 45,
+                "y": 52,
                 "w": 4,
                 "h": 4
               },
@@ -1530,7 +1730,7 @@ data:
                   ]
                 }
               },
-              "id": 23
+              "id": 27
             },
             {
               "type": "stat",
@@ -1542,7 +1742,7 @@ data:
               },
               "gridPos": {
                 "x": 20,
-                "y": 45,
+                "y": 52,
                 "w": 4,
                 "h": 4
               },
@@ -1588,10 +1788,10 @@ data:
                   ]
                 }
               },
-              "id": 24
+              "id": 28
             }
           ],
-          "id": 18
+          "id": 22
         },
         {
           "type": "row",
@@ -1599,7 +1799,7 @@ data:
           "collapsed": true,
           "gridPos": {
             "x": 0,
-            "y": 45,
+            "y": 52,
             "w": 24,
             "h": 1
           },
@@ -1614,7 +1814,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 46,
+                "y": 53,
                 "w": 24,
                 "h": 5
               },
@@ -1649,7 +1849,7 @@ data:
                   }
                 }
               ],
-              "id": 26
+              "id": 30
             },
             {
               "type": "logs",
@@ -1661,7 +1861,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 51,
+                "y": 58,
                 "w": 12,
                 "h": 10
               },
@@ -1677,7 +1877,7 @@ data:
                 "sortOrder": "Descending",
                 "enableLogDetails": true
               },
-              "id": 27
+              "id": 31
             },
             {
               "type": "logs",
@@ -1689,7 +1889,7 @@ data:
               },
               "gridPos": {
                 "x": 12,
-                "y": 51,
+                "y": 58,
                 "w": 12,
                 "h": 10
               },
@@ -1705,10 +1905,10 @@ data:
                 "sortOrder": "Descending",
                 "enableLogDetails": true
               },
-              "id": 28
+              "id": 32
             }
           ],
-          "id": 25
+          "id": 29
         }
       ]
     }
