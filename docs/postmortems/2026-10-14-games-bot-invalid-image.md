@@ -22,7 +22,7 @@ fixed it.
 |---|---|
 | 17:01 | #60 merged: image `f85fc5b11e57@` (digest missing) and a new `ADMIN_NAME` variable |
 | ~17:04 | Argo CD auto-syncs `platform`; `Recreate` terminates the old bot; the new pod fails with `InvalidImageName` |
-| (to confirm) | Panel noticed unresponsive |
+| between 17:04 and 18:05 | Panel noticed unresponsive (exact time not recorded) |
 | 18:05 | #61 merged with `f85fc5b11e57@sha256:3476a3a0...` |
 | ~18:06 | Argo CD syncs; the bot starts and redraws the panel |
 | 18:09 | #62 merged: CI fails on any image not pinned as `tag@sha256:<64 hex>` |

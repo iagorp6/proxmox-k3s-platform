@@ -1,6 +1,6 @@
 # Grafana OOMKilled 15 times in a day, silently
 
-- **Date:** before 2026-10-11 (exact date to confirm) · **Duration:** about a day of repeated restarts · **Severity:** monitoring degraded, no player impact
+- **Date:** 2026-10-01 to 2026-10-02 · **Duration:** about a day of repeated restarts, 13:31 to 13:34 the next day (America/Sao_Paulo) · **Severity:** monitoring degraded, no player impact
 - **Detected by:** chance, while working on the dashboard; no alert fired
 
 ## Summary
@@ -18,12 +18,16 @@ restarts of monitoring components.
 
 ## Timeline
 
+Times in America/Sao_Paulo, from the commit history. When the restarts were first noticed was not
+recorded; it was some time before the fix.
+
 | Time | Event |
 |---|---|
-| (to confirm) | Heavier dashboard version deployed |
-| same day | Grafana restarts 15 times, reason `OOMKilled` |
-| (to confirm) | Restart count noticed in `kubectl get pods -n monitoring` |
-| same day | Limit raised from measured usage; `ContainerOOMKilled` alert added |
+| 2026-10-01 13:31 | `48230c1`: AsunBoid dashboard v2 (plus Loki and Alloy) deployed |
+| next ~24h | Grafana restarts 15 times, reason `OOMKilled` |
+| 2026-10-02, before 13:34 | Restart count noticed in `kubectl get pods -n monitoring` |
+| 2026-10-02 13:34 | `d8ad4a4`: Grafana memory limit raised to 768Mi |
+| 2026-10-02 14:11 | `c299aee`: alerting review adds `ContainerOOMKilled` |
 
 ## Root cause
 
