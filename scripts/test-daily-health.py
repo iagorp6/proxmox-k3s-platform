@@ -38,6 +38,8 @@ def healthy():
         dh.VM_UPTIME: [sample(10 * 24 * H)],
         dh.HOST_SECURITY: [sample(0)],
         dh.HOST_REBOOT: [sample(0)],
+        dh.DISK_BUSY_P99: [sample(0.12, device="sdb"), sample(0.11, device="sda")],
+        dh.DISK_MIRROR_P99: [sample(0.21)],
     }
 
 
@@ -62,6 +64,7 @@ class DailyHealthTest(unittest.TestCase):
         self.assertEqual(self.field(e, "💾 Último backup"), "🟢 Minecraft · há 5 h")
         self.assertEqual(self.field(e, "⏱️ Host no ar"), "30 dias")
         self.assertEqual(self.field(e, "🩹 Patches do host"), "Em dia")
+        self.assertEqual(self.field(e, "💽 Discos do host (p99, 7 dias)"), "sda 11% · sdb 12%\nPior caso num mirror: 21%")
 
     def test_each_problem_is_listed(self):
         a = healthy()
@@ -106,6 +109,15 @@ class DailyHealthTest(unittest.TestCase):
         e = self.run_with(a)
         self.assertEqual(e["title"], "✅ Tudo OK no AsunBoid")
         self.assertEqual(self.field(e, "🩹 Patches do host"), "3 de segurança pendente(s) · reboot pendente")
+
+    def test_disk_load_is_informative_and_optional(self):
+        a = healthy()
+        a[dh.DISK_BUSY_P99] = [sample(0.95, device="sda"), sample(0.90, device="sdb")]
+        e = self.run_with(a)
+        self.assertEqual(e["title"], "✅ Tudo OK no AsunBoid")
+        a[dh.DISK_BUSY_P99] = []
+        e = self.run_with(a)
+        self.assertNotIn("💽 Discos do host (p99, 7 dias)", [f["name"] for f in e["fields"]])
 
     def test_prometheus_down_is_never_silence(self):
         original = dh.q

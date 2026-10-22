@@ -1,0 +1,91 @@
+# Benchmark dos discos do host com fio, para comparar o pool em stripe com um mirror (ADR 0005).
+# Rode com ninguém jogando: são uns 4 minutos de disco no limite, e a VM fica lenta nesse tempo.
+#   ansible-playbook playbooks/disk-bench.yml
+# O resultado vira métrica no textfile collector do node_exporter, com o label layout=stripe|mirror.
+# Cada layout tem o seu arquivo, então a rodada de antes e a de depois da conversão ficam lado a lado
+# no dashboard (seção Hardware do host, tabela "Benchmark dos discos").
+- name: Benchmark dos discos do host (fio)
+  hosts: proxmox
+  become: true
+  vars:
+    disk_bench_dataset: rpool/fiotest
+    disk_bench_dir: /rpool/fiotest
+    disk_bench_runtime: 60
+    disk_bench_textfile_dir: /var/lib/prometheus/node-exporter
+    # randwrite_sync: perfil do banco do K3s e do save do jogo (cada escrita espera o fsync)
+    # (a latência dele é a do fsync, que é quem espera o disco)
+    # seqwrite: save grande e restore do backup | randread: carregar o mundo e os chunks
+    disk_bench_tests:
+      - { name: randwrite_sync, rw: randwrite, dir: write, lat: sync, args: "--bs=4k --size=1G --ioengine=psync --fsync=1" }
+      - { name: seqwrite, rw: write, dir: write, lat: clat, args: "--bs=1M --size=4G --ioengine=psync --end_fsync=1" }
+      - { name: randread, rw: randread, dir: read, lat: clat, args: "--bs=4k --size=2G --ioengine=libaio --iodepth=16" }
+  tasks:
+    - name: Install fio
+      ansible.builtin.apt:
+        name: fio
+        state: present
+
+    - name: Read the pool layout
+      ansible.builtin.command: zpool list -v -H rpool
+      register: disk_bench_pool
+      changed_when: false
+
+    - name: Set the layout label
+      ansible.builtin.set_fact:
+        disk_bench_layout: >-
+          {{ 'mirror' if 'mirror-' in disk_bench_pool.stdout
+             else 'raidz' if 'raidz' in disk_bench_pool.stdout else 'stripe' }}
+
+    - name: Run fio on a scratch dataset
+      block:
+        # primarycache=metadata: as leituras vão ao disco, não ao ARC; compression=off: o fio mede disco, não CPU
+        - name: Create the scratch dataset
+          ansible.builtin.command: >-
+            zfs create -o primarycache=metadata -o compression=off
+            -o mountpoint={{ disk_bench_dir }} {{ disk_bench_dataset }}
+          args:
+            creates: "{{ disk_bench_dir }}"
+
+        - name: Run fio ({{ disk_bench_runtime }}s per test)
+          ansible.builtin.command: >-
+            fio --name={{ item.name }} --directory={{ disk_bench_dir }} --rw={{ item.rw }} {{ item.args }}
+            --runtime={{ disk_bench_runtime }} --time_based --group_reporting --output-format=json
+          loop: "{{ disk_bench_tests }}"
+          loop_control:
+            label: "{{ item.name }}"
+          register: disk_bench_runs
+          changed_when: false
+      always:
+        - name: Destroy the scratch dataset
+          ansible.builtin.command: zfs destroy {{ disk_bench_dataset }}
+          register: disk_bench_destroy
+          changed_when: disk_bench_destroy.rc == 0
+          failed_when: disk_bench_destroy.rc != 0 and 'does not exist' not in disk_bench_destroy.stderr
+
+    - name: Collect the results
+      ansible.builtin.set_fact:
+        disk_bench_results: >-
+          {{ disk_bench_results | default([]) + [{
+               'test': item.item.name,
+               'iops': (item.stdout | from_json).jobs[0][item.item.dir].iops,
+               'bw': (item.stdout | from_json).jobs[0][item.item.dir].bw_bytes,
+               'p99': ((item.stdout | from_json).jobs[0].sync.lat_ns if item.item.lat == 'sync'
+                       else (item.stdout | from_json).jobs[0][item.item.dir].clat_ns).percentile['99.000000'] / 1e9}] }}
+      loop: "{{ disk_bench_runs.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Write the results as metrics (textfile collector)
+      ansible.builtin.template:
+        src: disk-bench.prom.j2
+        dest: "{{ disk_bench_textfile_dir }}/homelab_disk_bench_{{ disk_bench_layout }}.prom"
+        mode: "0644"
+
+    - name: Show the results
+      ansible.builtin.debug:
+        msg: >-
+          {{ disk_bench_layout }} / {{ item.test }}: {{ item.iops | round | int }} IOPS,
+          {{ (item.bw / 1e6) | round(1) }} MB/s, p99 {{ (item.p99 * 1000) | round(1) }} ms
+      loop: "{{ disk_bench_results }}"
+      loop_control:
+        label: "{{ item.test }}"
