@@ -129,6 +129,7 @@ jobs:
           sudo apt-get install -y -qq python3-yaml >/dev/null
           python3 scripts/render-games.py --check
           bash scripts/check-minecraft-pin.sh
+          bash scripts/check-kubectl-pin.sh
       - name: Shared game exporter (fake RCON server and real sockets)
         run: python3 scripts/test-gameexporter.py
       - name: Unit tests (games-bot, switch-game in a temp git repo, daily health check)
