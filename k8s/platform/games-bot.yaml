@@ -6,6 +6,36 @@ metadata:
   name: games-bot
   namespace: platform
 ---
+# Fila e cooldown do painel sobrevivem a restart num ConfigMap que o próprio bot cria (fora do Git:
+# o selfHeal do app platform desfaria cada escrita). create não aceita resourceNames; o resto só nele.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: games-bot-state
+  namespace: platform
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["games-bot-state"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: games-bot-state
+  namespace: platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: games-bot-state
+subjects:
+  - kind: ServiceAccount
+    name: games-bot
+    namespace: platform
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
