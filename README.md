@@ -206,7 +206,7 @@ The **AsunBoid** dashboard covers every game on the platform and reads top to bo
 - **SLO:** 28-day availability against the 99% objective, error budget left and burn rate over 30 minutes, 6 hours and 3 days ([docs/slo.md](docs/slo.md)).
 - **Players:** who is online now, players over time, a per-player session timeline, and a table with playtime (24h, 7d, 30d, all time), deaths and last seen.
 - **Game server resources:** memory against the container limit, CPU against the VM's vCPUs, unexpected restarts.
-- **Host hardware** (collapsed): SMART, ZFS pool, ECC errors, disk temperature, free space, host RAM.
+- **Host hardware** (collapsed): SMART, ZFS pool, ECC errors, disk temperature, free space, host RAM, plus disk load (busy time, IOPS, write latency, 7-day p99 and the worst case for a mirror) and the results of `playbooks/disk-bench.yml` (fio, one row per test and pool layout) to compare the stripe with a mirror before and after.
 - **Logs and alerts** (collapsed): connection logs, warnings and errors, firing alerts.
 
 The dashboard JSON is **generated** by `scripts/build-dashboard.py`, so it is reviewable in a pull request; CI fails if the committed YAML drifts from the generator.

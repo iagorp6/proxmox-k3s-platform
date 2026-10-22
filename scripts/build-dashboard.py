@@ -260,6 +260,69 @@ host = [
        20, host_y, 4, 4, [prom('node_memory_MemAvailable_bytes{job="proxmox-node"} / node_memory_MemTotal_bytes{job="proxmox-node"}')],
        unit="percentunit", decimals=0, steps=th((RED, None), (ORANGE, 0.1), (GREEN, 0.2)), no_value="sem dados"),
 ]
+# Carga dos discos: no stripe cada disco recebe metade das escritas; num mirror, cada um recebe todas.
+# A soma da ocupação dos dois é o pior caso de um disco no mirror (as leituras continuam divididas).
+DISK = 'job="proxmox-node",device=~"sd[a-z]+"'
+BUSY = f"rate(node_disk_io_time_seconds_total{{{DISK}}}[5m])"
+WRITE_IOPS = f"sum(rate(node_disk_writes_completed_total{{{DISK}}}[5m]))"
+WRITE_BPS = f"sum(rate(node_disk_written_bytes_total{{{DISK}}}[5m]))"
+dy = host_y + 4
+host += [
+  {"type": "timeseries", "title": "Ocupação dos discos",
+   "description": "Fração do tempo em que cada disco esteve ocupado. Perto de 100% = fila e latência subindo.",
+   "datasource": DS, "gridPos": {"x": 0, "y": dy, "w": 8, "h": 7},
+   "targets": [prom(BUSY, legend="{{device}}")],
+   "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "custom": {"fillOpacity": 15, "lineWidth": 1}},
+                   "overrides": []},
+   "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}},
+  {"type": "timeseries", "title": "IOPS dos discos (soma)",
+   "description": "Operações por segundo somando os discos. No mirror, cada disco recebe todas as escritas.",
+   "datasource": DS, "gridPos": {"x": 8, "y": dy, "w": 8, "h": 7},
+   "targets": [prom(WRITE_IOPS, legend="escrita"),
+               prom(f"sum(rate(node_disk_reads_completed_total{{{DISK}}}[5m]))", ref="B", legend="leitura")],
+   "fieldConfig": {"defaults": {"unit": "iops", "min": 0, "custom": {"fillOpacity": 15, "lineWidth": 1}}, "overrides": []},
+   "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}},
+  {"type": "timeseries", "title": "Latência média de escrita",
+   "description": "Tempo médio de cada escrita por disco, incluindo a fila. Em HDD, poucos ms é normal.",
+   "datasource": DS, "gridPos": {"x": 16, "y": dy, "w": 8, "h": 7},
+   "targets": [prom(f"rate(node_disk_write_time_seconds_total{{{DISK}}}[5m])"
+                    f" / rate(node_disk_writes_completed_total{{{DISK}}}[5m])", legend="{{device}}")],
+   "fieldConfig": {"defaults": {"unit": "s", "min": 0, "custom": {"fillOpacity": 15, "lineWidth": 1}}, "overrides": []},
+   "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}},
+  stat("Pico de ocupação (p99, 7 dias)", "Maior p99 de ocupação entre os discos na última semana, no layout atual do pool.",
+       0, dy + 7, 6, 4, [prom(f"max(quantile_over_time(0.99, {BUSY}[7d:5m]))")],
+       unit="percentunit", decimals=0, steps=th((GREEN, None), (ORANGE, 0.5), (RED, 0.8)), no_value="sem dados"),
+  stat("Pior caso num mirror (p99, 7 dias)", "Soma da ocupação dos discos: o que um disco teria se fizesse o trabalho dos dois. Abaixo de 50%, trocar o stripe por mirror não pesa.",
+       6, dy + 7, 6, 4, [prom(f"quantile_over_time(0.99, sum({BUSY})[7d:5m])")],
+       unit="percentunit", decimals=0, steps=th((GREEN, None), (ORANGE, 0.5), (RED, 0.8)), no_value="sem dados"),
+  stat("Escritas (p99, 7 dias)", "IOPS de escrita somando os discos. Um HDD de 7200 rpm aguenta uns 100 a 150 IOPS aleatórios.",
+       12, dy + 7, 6, 4, [prom(f"quantile_over_time(0.99, {WRITE_IOPS}[7d:5m])")],
+       unit="iops", decimals=0, steps=th((GREEN, None), (ORANGE, 75), (RED, 120)), no_value="sem dados"),
+  stat("Vazão de escrita (p99, 7 dias)", "Bytes escritos por segundo somando os discos. Um HDD sustenta uns 150 MB/s sequenciais.",
+       18, dy + 7, 6, 4, [prom(f"quantile_over_time(0.99, {WRITE_BPS}[7d:5m])")],
+       unit="Bps", decimals=1, steps=th((GREEN, None), (ORANGE, 75e6), (RED, 120e6)), no_value="sem dados"),
+  {"type": "table", "title": "Benchmark dos discos (fio)",
+   "description": "Resultado de ansible-playbook playbooks/disk-bench.yml, uma linha por teste e layout do pool. Rode antes e depois de trocar o stripe por mirror para comparar.",
+   "datasource": DS, "gridPos": {"x": 0, "y": dy + 11, "w": 24, "h": 6},
+   "targets": [prom("homelab_disk_bench_iops", instant=True, fmt="table"),
+               prom("homelab_disk_bench_bytes_per_second", ref="B", instant=True, fmt="table"),
+               prom("homelab_disk_bench_latency_p99_seconds", ref="C", instant=True, fmt="table"),
+               prom("homelab_disk_bench_timestamp_seconds * 1000", ref="D", instant=True, fmt="table")],
+   "fieldConfig": {"defaults": {"noValue": "Ainda não rodou"}, "overrides": [
+       {"matcher": {"id": "byName", "options": "IOPS"}, "properties": [{"id": "unit", "value": "iops"}, {"id": "decimals", "value": 0}]},
+       {"matcher": {"id": "byName", "options": "Vazão"}, "properties": [{"id": "unit", "value": "Bps"}, {"id": "decimals", "value": 1}]},
+       {"matcher": {"id": "byName", "options": "Latência p99"}, "properties": [{"id": "unit", "value": "s"}]},
+       {"matcher": {"id": "byName", "options": "Medido em"}, "properties": [{"id": "unit", "value": "dateTimeAsLocal"}]}]},
+   "transformations": [
+       {"id": "merge", "options": {}},
+       {"id": "organize", "options": {
+           "excludeByName": {"Time": True, "__name__": True, "instance": True, "job": True},
+           "indexByName": {"test": 0, "layout": 1, "Value #A": 2, "Value #B": 3, "Value #C": 4, "Value #D": 5},
+           "renameByName": {"test": "Teste", "layout": "Pool", "Value #A": "IOPS", "Value #B": "Vazão",
+                            "Value #C": "Latência p99", "Value #D": "Medido em"}}},
+       {"id": "sortBy", "options": {"sort": [{"field": "Teste"}]}}],
+   "options": {"showHeader": True}},
+]
 P.append(row("Hardware do host (HPE DL20 Gen9)", y, collapsed=True, panels=host)); y += 1
 
 # ---------------- 5. Logs e alertas (recolhido) ----------------

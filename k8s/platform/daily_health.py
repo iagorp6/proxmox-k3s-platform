@@ -1,8 +1,8 @@
 """Checagem diária da plataforma no Discord (stdlib only): um "está tudo OK" por dia.
 
 Lê o Prometheus: alertas warning/critical disparando, jogo no ar, idade do último backup,
-espaço em disco, restarts de container nas últimas 24 h, uptime do host e da VM e patches
-pendentes no host. Se o Prometheus
+espaço em disco, restarts de container nas últimas 24 h, uptime do host e da VM, patches
+pendentes no host e a carga dos discos do host na semana. Se o Prometheus
 não responder, a falha também vai para o Discord: silêncio nunca significa "tudo OK".
 Com DRY_RUN=1 só imprime o que enviaria, sem postar no Discord (para testar o CronJob).
 """
@@ -35,6 +35,11 @@ RESTARTS = "sum by (namespace, pod) (increase(kube_pod_container_status_restarts
 HOST_UPTIME = 'time() - node_boot_time_seconds{job="proxmox-node"}'
 VM_UPTIME = 'time() - max(node_boot_time_seconds{job="node-exporter"})'
 HOST_SECURITY = 'sum(apt_upgrades_pending{job="proxmox-node", origin=~".*-security.*"})'
+# Carga dos discos do host (p99 da semana). A soma dos discos é o pior caso de um disco num mirror,
+# que recebe todas as escritas em vez de metade: o número que decide trocar o stripe por mirror.
+HOST_DISK_BUSY = 'rate(node_disk_io_time_seconds_total{job="proxmox-node", device=~"sd[a-z]+"}[5m])'
+DISK_BUSY_P99 = f"quantile_over_time(0.99, {HOST_DISK_BUSY}[7d:5m])"
+DISK_MIRROR_P99 = f"quantile_over_time(0.99, sum({HOST_DISK_BUSY})[7d:5m])"
 HOST_REBOOT = ('max(max(node_reboot_required{job="proxmox-node"})'
                ' or max(homelab_kernel_reboot_pending{job="proxmox-node"}))')
 
@@ -117,6 +122,13 @@ def build():
         n = round(val(security[0])) if security else 0
         fields.append({"name": "🩹 Patches do host", "value": (f"{n} de segurança pendente(s)" if n else "Em dia")
                        + (" · reboot pendente" if reboot and val(reboot[0]) > 0 else ""), "inline": True})
+
+    # Informativo: carga dos discos do host na semana (sem ponto de atenção, não há alerta para isso)
+    busy = sorted((r["metric"].get("device", "?"), val(r)) for r in q(DISK_BUSY_P99))
+    mirror = q(DISK_MIRROR_P99)
+    if busy:
+        fields.append({"name": "💽 Discos do host (p99, 7 dias)", "value": " · ".join(f"{d} {b:.0%}" for d, b in busy)
+                       + (f"\nPior caso num mirror: {val(mirror[0]):.0%}" if mirror else ""), "inline": False})
 
     return problems, fields
 

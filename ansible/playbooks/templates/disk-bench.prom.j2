@@ -1,0 +1,21 @@
+# Gerado por playbooks/disk-bench.yml. Uma rodada por layout do pool; rodar de novo sobrescreve.
+# HELP homelab_disk_bench_iops IOPS medidos pelo fio.
+# TYPE homelab_disk_bench_iops gauge
+{% for r in disk_bench_results %}
+homelab_disk_bench_iops{layout="{{ disk_bench_layout }}",test="{{ r.test }}"} {{ r.iops }}
+{% endfor %}
+# HELP homelab_disk_bench_bytes_per_second Vazão medida pelo fio.
+# TYPE homelab_disk_bench_bytes_per_second gauge
+{% for r in disk_bench_results %}
+homelab_disk_bench_bytes_per_second{layout="{{ disk_bench_layout }}",test="{{ r.test }}"} {{ r.bw }}
+{% endfor %}
+# HELP homelab_disk_bench_latency_p99_seconds Latência p99 por operação (do fsync no randwrite_sync, de conclusão nos outros).
+# TYPE homelab_disk_bench_latency_p99_seconds gauge
+{% for r in disk_bench_results %}
+homelab_disk_bench_latency_p99_seconds{layout="{{ disk_bench_layout }}",test="{{ r.test }}"} {{ r.p99 }}
+{% endfor %}
+# HELP homelab_disk_bench_timestamp_seconds Quando o teste rodou.
+# TYPE homelab_disk_bench_timestamp_seconds gauge
+{% for r in disk_bench_results %}
+homelab_disk_bench_timestamp_seconds{layout="{{ disk_bench_layout }}",test="{{ r.test }}"} {{ ansible_facts['date_time']['epoch'] }}
+{% endfor %}
