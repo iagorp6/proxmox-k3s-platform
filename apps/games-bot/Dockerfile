@@ -11,9 +11,12 @@ RUN curl -fsSLo /usr/local/bin/kubectl https://dl.k8s.io/release/v1.37.0/bin/lin
  && echo "6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  /usr/local/bin/kubectl" | sha256sum -c - \
  && chmod 0755 /usr/local/bin/kubectl
 
-COPY requirements.lock /tmp/requirements.lock
-RUN pip install --no-cache-dir --require-hashes --only-binary=:all: -r /tmp/requirements.lock \
- && rm /tmp/requirements.lock
+# O pip sai da imagem depois de instalar: o bot não precisa dele em runtime, e o SBOM que o pip traz
+# (pip-*.dist-info/sboms) lista o certifi vendorizado, que o Trivy reprova a cada CVE de CA (GHSA-6q48-6c7w-9gw2).
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --require-hashes --only-binary=:all: -r /tmp/requirements.txt \
+ && rm /tmp/requirements.txt \
+ && python -m pip uninstall -y pip
 
 COPY bot.py /app/bot.py
 RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin bot

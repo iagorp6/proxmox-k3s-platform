@@ -13,7 +13,7 @@ CRD_CATALOG='https://raw.githubusercontent.com/datreeio/CRDs-catalog/f1e7f6bc053
 
 # ---------- ferramentas (instala em ~/.local/bin se faltar) ----------
 ensure_tools() {
-  # tflint, kubeconform, trivy e promtool: mesmas versões e hashes do CI (reinstala se a versão local for outra)
+  # tflint, kubeconform, trivy, promtool e helm: mesmas versões e hashes do CI (reinstala se a versão local for outra)
   "$ROOT/scripts/install-ci-tools.sh" "$BIN" || { echo "ERRO: falha ao instalar as ferramentas do CI"; exit 2; }
   if ! command -v ansible-lint >/dev/null; then
     echo ">> instalando ansible-lint"
@@ -25,7 +25,7 @@ ensure_tools() {
   fi
   command -v shellcheck >/dev/null || { echo "ERRO: instale o shellcheck (sudo apt-get install -y shellcheck)"; exit 2; }
   local out tool
-  for tool in terraform tflint kubeconform trivy promtool ansible-lint shellcheck ruff; do
+  for tool in terraform tflint kubeconform trivy promtool helm ansible-lint shellcheck ruff; do
     out="$(tool_version "$tool" 2>&1 || true)"
     [[ "$out" =~ [0-9]+\.[0-9]+ ]] || { echo "ERRO: $tool não responde com a versão (instalação corrompida?)"; exit 2; }
   done
@@ -35,6 +35,7 @@ tool_version() {
   case "$1" in
     terraform)   terraform version ;;
     kubeconform) kubeconform -v ;;
+    helm)        helm version --short ;;
     *)           "$1" --version ;;
   esac
 }
@@ -77,6 +78,7 @@ k8s_check() {
   done
   bash scripts/test-new-game.sh "$CRD_CATALOG" || return 1
   python3 scripts/test-alerts.py || return 1
+  python3 scripts/check-charts.py "$CRD_CATALOG" || return 1
   cp k8s/monitoring/dashboard-asunboid.yaml /tmp/dashboard-committed.yaml
   python3 scripts/build-dashboard.py >/dev/null || return 1
   if ! cmp -s /tmp/dashboard-committed.yaml k8s/monitoring/dashboard-asunboid.yaml; then
@@ -94,8 +96,9 @@ scripts_check() {
 }
 
 security_check() {
+  # Misconfiguração HIGH/CRITICAL falha, exceto o que está justificado no .trivyignore.yaml
   trivy fs --quiet --scanners secret --exit-code 1 --no-progress . &&
-    trivy config --quiet --severity HIGH,CRITICAL --exit-code 0 . | tail -25
+    trivy config --quiet --severity HIGH,CRITICAL --exit-code 1 --ignorefile .trivyignore.yaml .
 }
 
 ensure_tools

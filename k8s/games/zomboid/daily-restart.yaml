@@ -53,10 +53,33 @@ spec:
         spec:
           serviceAccountName: zomboid-ops
           restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: restart
               image: curlimages/curl:latest@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
               command: ["/bin/sh", "-c"]
+              env:
+                - name: HOME          # cache do kubectl no emptyDir (root FS é read-only)
+                  value: /tmp
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
               args:
                 - |
                   set -e
@@ -75,3 +98,7 @@ spec:
                   sleep 60
                   $K -n zomboid rollout restart statefulset zomboid
                   echo "Restart solicitado"
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 128Mi

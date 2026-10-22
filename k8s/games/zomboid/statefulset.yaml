@@ -16,10 +16,17 @@ spec:
         app.kubernetes.io/name: zomboid   # usado pelos Services gerados; o selector do StatefulSet é imutável
     spec:
       terminationGracePeriodSeconds: 90
+      # Sem runAsNonRoot no pod: o install roda como root para o chown -R 1000:1000 do volume (dados de
+      # antes do servidor rodar como 1000). Server e exporter rodam como 1000.
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         - name: install
           image: steamcmd/steamcmd:latest@sha256:0855a0b03960dbf6da43fe4b1f36ec9def900c548688c694d2e6f8ee1a5189d6
           command: ["/bin/bash", "/scripts/install.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
           envFrom:
             - configMapRef:
                 name: zomboid-config
@@ -44,9 +51,12 @@ spec:
           image: steamcmd/steamcmd:latest@sha256:0855a0b03960dbf6da43fe4b1f36ec9def900c548688c694d2e6f8ee1a5189d6
           command: ["/bin/bash", "/scripts/start.sh"]
           securityContext:
+            runAsNonRoot: true
             runAsUser: 1000
             runAsGroup: 1000
             allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           envFrom:
             - configMapRef:
                 name: zomboid-config
@@ -98,10 +108,13 @@ spec:
           image: python:3.13-slim@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b
           command: ["python", "/exporter/exporter.py"]
           securityContext:
+            runAsNonRoot: true
             runAsUser: 1000
             runAsGroup: 1000
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: PZ_LOG_DIR
               value: /pz/data/Logs

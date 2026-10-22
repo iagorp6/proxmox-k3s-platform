@@ -68,9 +68,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install kubeconform e promtool (versão fixa, SHA-256 conferido)
+      - name: Install kubeconform, promtool e helm (versão fixa, SHA-256 conferido)
         run: |
-          bash scripts/install-ci-tools.sh "$HOME/bin" kubeconform promtool
+          bash scripts/install-ci-tools.sh "$HOME/bin" kubeconform promtool helm
           echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: Install PyYAML (leitura do catálogo de jogos)
         run: sudo apt-get install -y -qq python3-yaml >/dev/null
@@ -100,6 +100,8 @@ jobs:
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/f1e7f6bc0537bf0622ffe6e47dbaa85914fabbec/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             k8s/monitoring/alerts-homelab.yaml k8s/monitoring/alerts-games.generated.yaml k8s/monitoring/dashboard-asunboid.yaml \
             k8s/monitoring/externalsecrets.yaml k8s/argocd/root.yaml k8s/argocd/apps/*.yaml k8s/external-secrets/cluster-secret-store.yaml
+      - name: Third-party charts render with the repo values (helm template + kubeconform)
+        run: python3 scripts/check-charts.py 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/f1e7f6bc0537bf0622ffe6e47dbaa85914fabbec/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
       - name: Alert rules (anotações obrigatórias, promtool check e testes unitários)
         run: python3 scripts/test-alerts.py
       - name: Dashboard YAML in sync with generator
@@ -148,5 +150,5 @@ jobs:
           echo "$HOME/bin" >> "$GITHUB_PATH"
       - name: Secret scan (falha o build)
         run: trivy fs --scanners secret --exit-code 1 --no-progress .
-      - name: Misconfiguration report (informativo)
-        run: trivy config --severity HIGH,CRITICAL --exit-code 0 .
+      - name: Misconfiguration scan (falha em HIGH/CRITICAL fora das exceções do .trivyignore.yaml)
+        run: trivy config --severity HIGH,CRITICAL --exit-code 1 --ignorefile .trivyignore.yaml .
