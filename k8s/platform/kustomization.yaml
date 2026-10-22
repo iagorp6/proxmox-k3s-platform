@@ -10,6 +10,7 @@ resources:
   - daily-health.yaml
   - restic-check.yaml
   - games-bot.yaml
+  - networkpolicy.yaml
   - games-bot-rbac.generated.yaml   # gerado por scripts/render-games.py
 
 # Código Python versionado como arquivo; o Kustomize gera o ConfigMap

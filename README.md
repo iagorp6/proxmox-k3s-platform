@@ -254,6 +254,7 @@ Before each snapshot, an init container runs the game's `saveCommand` from the c
 - Kubernetes Secrets encrypted at rest and delivered by External Secrets; nothing secret in Git
 - Container images pinned by digest; chart, tool and action versions pinned
 - Game server and sidecars run as non-root; RCON reachable only inside the pod
+- NetworkPolicies (enforced by K3s's embedded controller): each game namespace accepts only its game ports and the Prometheus scrape on the metrics port, generated from `game.yaml`; the `platform` namespace accepts nothing. Egress stays open (Steam mods, S3, Discord)
 - CI fails on any committed secret (Trivy); environment-specific values live in git-ignored local files
 - The game VM sits in an isolated VLAN with no route to the internal network
 - OS patching: the VM installs security updates on its own (unattended-upgrades, security pockets only) and reboots only when a package asks for it, in a weekly Monday 04:30 window that saves the running game first and is muted in Alertmanager. The Proxmox host is patched by hand (`playbooks/pve-upgrade.yml`, optional reboot) because its reboot takes everything down; alerts fire when host security updates or a reboot have been pending for more than 7 days. K3s upgrades (`playbooks/k3s.yml`) save the games and take a ZFS snapshot of the VM on the host first, abort if the snapshot fails, and delete it once the node is Ready on the new version: a bad upgrade rolls back with one `qm rollback`

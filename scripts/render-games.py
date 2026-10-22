@@ -3,7 +3,7 @@
 
 Para cada jogo com status "active" e campo "namespace", grava:
   k8s/games/<jogo>/platform.generated.yaml  Service do jogo, métricas (Service + ServiceMonitor),
-                                            backup (ExternalSecret + CronJob restic)
+                                            NetworkPolicy de ingress, backup (ExternalSecret + CronJob restic)
   k8s/argocd/apps/<jogo>.yaml               Application do Argo CD (sync manual)
 E, para o conjunto desses jogos:
   k8s/monitoring/alerts-games.generated.yaml  alertas por jogo (fora do ar, sem resposta, sem métricas, restart, memória)
@@ -121,6 +121,19 @@ def render_game(g):
             "spec": {"selector": {"matchLabels": {"app.kubernetes.io/name": f"{name}-metrics"}},
                      "endpoints": [{"port": "metrics", "interval": "30s"}]},
         }]
+    # Ingress default-deny no namespace do jogo: entram só as portas do jogo (de qualquer origem: jogadores
+    # via ServiceLB, com ou sem externalTrafficPolicy Local) e o scrape do Prometheus na porta de métricas.
+    # Sondas são exec e exporters/RCON falam por localhost, então nada mais precisa entrar. Egress fica
+    # liberado (mods do Steam, restic no S3, DNS, API do Kubernetes).
+    ingress = [{"ports": [{"port": p.get("targetPort", p["name"]), "protocol": p["protocol"]} for p in g["ports"]]}]
+    if g.get("metrics"):
+        ingress.append({"from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "monitoring"}}}],
+                        "ports": [{"port": "metrics", "protocol": "TCP"}]})
+    docs.append({
+        "apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
+        "metadata": {"name": f"{name}-ingress", "namespace": ns},
+        "spec": {"podSelector": {}, "policyTypes": ["Ingress"], "ingress": ingress},
+    })
     b = g.get("backup")
     if b:
         keep = DEFAULTS["backupRetention"]

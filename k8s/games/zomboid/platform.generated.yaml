@@ -53,6 +53,29 @@ spec:
   - port: metrics
     interval: 30s
 ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: zomboid-ingress
+  namespace: zomboid
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - ports:
+    - port: game
+      protocol: UDP
+    - port: direct
+      protocol: UDP
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - port: metrics
+      protocol: TCP
+---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
