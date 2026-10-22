@@ -1,6 +1,6 @@
 # ADR 0007: Third-party Helm releases managed by Argo CD
 
-- Status: accepted
+- Status: accepted; manual sync superseded by [ADR 0009](0009-auto-sync-for-third-party-charts.md)
 - Date: 2026-10
 
 ## Context
