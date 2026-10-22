@@ -1,14 +1,14 @@
 # Project Zomboid blocked on an admin password prompt
 
-- **Date:** before 2026-10-11 (exact date to confirm) · **Duration:** about 1h · **Severity:** active game down
+- **Date:** 2026-10-02 · **Duration:** about 1h, ~08:13 to ~09:15 (America/Sao_Paulo) · **Severity:** active game down
 - **Detected by:** the game alert at the time (Zomboid-specific rule, since replaced by `GameUnresponsive`)
 
 ## Summary
 
-A hardening change removed the default admin account from the Zomboid server configuration. On the
-next start the server found no admin, asked for a password on standard input and waited. The container
-had no TTY, so nothing ever answered: the pod stayed `Running`, the JVM stayed alive, and no game was
-served. The fix was to pass the admin credentials on every start, from SSM.
+A hardening change stopped passing the admin credentials after the first boot, to keep the password
+out of the logs. On the next start of the existing world the server found no admin credentials, asked
+for a password on standard input and waited. The container had no TTY, so nothing ever answered: the
+pod stayed `Running`, the JVM stayed alive, and no game was served. The fix was to pass the admin credentials on every start, from SSM.
 
 ## Impact
 
@@ -17,12 +17,17 @@ that is ~15% of the 28-day error budget from one event.
 
 ## Timeline
 
+Times in America/Sao_Paulo, from the commit history. The start is inferred: it is the first change
+that recreated the pod after the latent bug shipped.
+
 | Time | Event |
 |---|---|
-| (to confirm) | Change removing the default admin is deployed; the server restarts |
-| +minutes | Server prints the admin password prompt and blocks; pod `Running`, no game port answering |
-| (to confirm) | Game alert fires (server not answering) |
-| ~+1h | Admin password passed at boot; server starts normally |
+| 2026-09-28 14:55 | `a65a38a`: the admin password is passed only on the first boot (to keep it out of the logs). Latent: nothing restarts the server with an existing world yet |
+| 2026-10-02 08:12 | `7839113` pins every image by digest; the Zomboid pod is recreated on the existing world |
+| ~08:13 | Server prints the admin password prompt and blocks; pod `Running`, no game port answering |
+| between 08:13 and 09:14 | Game alert fires (server not answering) |
+| 09:14 | `1a354a1`: admin password passed on every boot, `pzexe: arg:` lines filtered, container exits when the server dies |
+| ~09:15 | Server starts normally |
 
 ## Root cause
 

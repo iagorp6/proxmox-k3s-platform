@@ -11,11 +11,12 @@ that no alert caught, whatever its duration.
 | Date | Incident | Impact | Duration |
 |---|---|---|---|
 | 2026-10-14 | [Discord bot stuck in `InvalidImageName`](2026-10-14-games-bot-invalid-image.md) | Self-service game switch unavailable | ~1h |
-| before 2026-10-11 | [Zomboid blocked on an admin password prompt](zomboid-admin-prompt.md) | Zomboid down, pod showed `Running` | ~1h |
-| before 2026-10-11 | [Grafana OOMKilled 15 times in a day](grafana-oomkill.md) | Dashboards intermittently unavailable, no alert | ~1 day |
+| 2026-10-02 | [Zomboid blocked on an admin password prompt](zomboid-admin-prompt.md) | Zomboid down, pod showed `Running` | ~1h |
+| 2026-10-01 | [Grafana OOMKilled 15 times in a day](grafana-oomkill.md) | Dashboards intermittently unavailable, no alert | ~1 day |
 
-Incidents from before 2026-10-11 predate the current Git history (the repository was squashed into
-one initial commit), so their dates and clock times come from memory and are marked as such.
+Dates and clock times come from the commit and pull request history. When a moment left no trace
+(when someone noticed, when an alert fired), the timeline gives the window it falls in instead of a
+guess.
 
 ## Template
 
