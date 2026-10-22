@@ -216,7 +216,7 @@ spec:
             summary: "App {{ $labels.name }} do Argo CD está Degraded ou Missing"
             description: "O Argo CD aplicou o app, mas algum recurso dele não está saudável há 15 minutos."
             action: "kubectl -n argocd get application {{ $labels.name }} -o yaml | grep -B3 -A2 'status: Degraded\\|status: Missing'"
-        # Jogos e charts têm Sync manual: OutOfSync neles é o normal até alguém sincronizar
+        # Jogos têm Sync manual (o switch-game sincroniza): OutOfSync neles é o normal até a próxima troca
         - alert: ArgoAppOutOfSync
           expr: max by (name) (argocd_app_info{autosync_enabled="true",sync_status="OutOfSync"}) == 1
           for: 30m

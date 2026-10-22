@@ -23,10 +23,10 @@ plan: ## terraform plan nos dois stacks (Proxmox e AWS)
 > bash -c 'source ~/.proxmox.env && cd terraform && terraform plan'
 > cd terraform-aws && terraform plan
 
-deploy-monitoring: ## Break-glass: stack de observabilidade via Helm (no dia a dia é Sync no Argo CD)
+deploy-monitoring: ## Break-glass: stack de observabilidade via Helm (no dia a dia o Argo CD aplica no merge)
 > ./k8s/monitoring/deploy.sh
 
-deploy-eso: ## Break-glass: External Secrets via Helm (no dia a dia é Sync no Argo CD)
+deploy-eso: ## Break-glass: External Secrets via Helm (no dia a dia o Argo CD aplica no merge)
 > ./k8s/external-secrets/deploy.sh
 
 deploy-argocd: ## Instala/atualiza o Argo CD (único release fora do Argo)

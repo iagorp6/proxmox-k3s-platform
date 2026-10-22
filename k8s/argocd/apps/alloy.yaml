@@ -1,4 +1,4 @@
-# Alloy: coleta os logs dos pods e envia ao Loki. Sync MANUAL, como o kube-prometheus-stack (ADR 0007).
+# Alloy: coleta os logs dos pods e envia ao Loki. Sync automático, como o kube-prometheus-stack (ADR 0009).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -21,6 +21,15 @@ spec:
     server: https://kubernetes.default.svc
     namespace: monitoring
   syncPolicy:
+    # Auto-sync (ADR 0009): o CI já renderiza e valida o chart com estes values (check-charts.py).
+    # prune desligado: recurso que some numa versão nova do chart fica OutOfSync (ArgoAppOutOfSync avisa)
+    # e é removido num Sync manual com prune, olhando o que sai.
+    automated:
+      prune: false
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff: {duration: 30s, factor: 2, maxDuration: 5m}
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true

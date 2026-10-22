@@ -1,5 +1,5 @@
-# Prometheus, Alertmanager, Grafana e operator (ADR 0007). Sync MANUAL: atualização de chart
-# chega por PR do Renovate e entra no cluster quando alguém clica Sync, nunca sozinha.
+# Prometheus, Alertmanager, Grafana e operator (ADR 0007). Sync automático (ADR 0009): atualização de
+# chart chega por PR do Renovate e entra no cluster no merge, depois de passar no CI.
 # releaseName "kps" mantém os nomes dos recursos criados pelo antigo `helm upgrade --install kps`.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -31,6 +31,15 @@ spec:
       kind: ValidatingWebhookConfiguration
       jqPathExpressions: [".webhooks[]?.clientConfig.caBundle"]
   syncPolicy:
+    # Auto-sync (ADR 0009): o CI já renderiza e valida o chart com estes values (check-charts.py).
+    # prune desligado: recurso que some numa versão nova do chart fica OutOfSync (ArgoAppOutOfSync avisa)
+    # e é removido num Sync manual com prune, olhando o que sai.
+    automated:
+      prune: false
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff: {duration: 30s, factor: 2, maxDuration: 5m}
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true   # CRDs do operator passam do limite de 256 KiB da annotation do apply client-side

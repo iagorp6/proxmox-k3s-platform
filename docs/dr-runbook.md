@@ -99,14 +99,17 @@ kubectl get nodes                              # Ready
      --from-literal=sshPrivateKey="$(bw get notes "$ARGO_KEY_ITEM")"
    kubectl -n argocd label secret repo-proxmox-k3s-platform argocd.argoproj.io/secret-type=repository
    ```
-3. Root app: `kubectl apply -f k8s/argocd/root.yaml`. `platform` and `monitoring-config` sync on their
-   own; the rest is manual.
-4. In the Argo CD UI, Sync in this order and wait for Healthy each time:
-   `external-secrets`, then `kube-prometheus-stack`, `loki`, `alloy`.
+3. Root app: `kubectl apply -f k8s/argocd/root.yaml`. Everything except the games syncs on its own
+   ([ADR 0009](adr/0009-auto-sync-for-third-party-charts.md)); the games stay manual.
+4. Wait for the charts to converge: `kubectl -n argocd get applications -w` until
+   `external-secrets`, `kube-prometheus-stack`, `loki` and `alloy` are `Synced`/`Healthy`. The first
+   syncs retry with backoff while CRDs and webhooks from the other apps come up, so a few minutes of
+   `Degraded` or failed syncs is expected.
 5. Check that every ExternalSecret resolved: `kubectl get externalsecrets -A` (all `SecretSynced`).
-6. Now that the ServiceMonitor CRD exists, run `make deploy-argocd` again and Sync `external-secrets`
-   again: both charts skip their ServiceMonitor while the CRD is missing, and without them the
-   `gitops` alerts (Argo CD apps, ExternalSecrets) have no data and `ArgoCDMetricsMissing` fires.
+6. Now that the ServiceMonitor CRD exists, run `make deploy-argocd` again: the Argo CD chart skips
+   its ServiceMonitor while the CRD is missing, and without it the `gitops` alerts have no data and
+   `ArgoCDMetricsMissing` fires. `external-secrets` re-renders its own ServiceMonitor on the next
+   refresh, no action needed.
 
 ## 6. Game data (restic)
 
