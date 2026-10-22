@@ -1,5 +1,63 @@
+# Instala ou atualiza o K3s (single node). Num upgrade de versão, antes de tocar no binário: salva os
+# jogos, tira um snapshot ZFS da VM no host Proxmox e só segue se o snapshot existir. Com o node Ready
+# na versão nova, o snapshot é apagado (-e k3s_keep_snapshot=true para guardar).
+# Rollback, se o cluster não voltar direito (no host Proxmox; o nome sai no output e em qm listsnapshot):
+#   qm stop <vmid> && qm rollback <vmid> <snapshot> && qm start <vmid>
 - name: Install K3s (single node)
   hosts: k3s
   become: true
+  vars:
+    k3s_pve_host: "{{ groups['proxmox'][0] }}"
+    k3s_vmid: "{{ hostvars[k3s_pve_host].k3s_vm_id | default(100) }}"
+    k3s_keep_snapshot: false
+  pre_tasks:
+    - name: Read installed K3s version
+      ansible.builtin.command: "{{ k3s_install_dir }}/k3s --version"
+      register: k3s_installed
+      changed_when: false
+      failed_when: false
+
+    - name: Decide snapshot (only an existing install moving to another pinned version)
+      ansible.builtin.set_fact:
+        k3s_installed_version: "{{ (k3s_installed.stdout | regex_search('v[0-9][^ ]*')) if k3s_installed.rc == 0 else '' }}"
+        k3s_snapshot_name: "pre-k3s-{{ k3s_version | regex_replace('[^A-Za-z0-9]', '-') }}"
+
+    - name: Mark upgrade
+      ansible.builtin.set_fact:
+        k3s_needs_snapshot: "{{ k3s_installed_version | length > 0 and k3s_version | length > 0 and k3s_installed_version != k3s_version }}"
+
+    - name: Show plan
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'Upgrade ' ~ k3s_installed_version ~ ' -> ' ~ k3s_version ~ ': snapshot ' ~ k3s_snapshot_name
+             ~ ' da VM ' ~ k3s_vmid ~ ' antes' if k3s_needs_snapshot | bool else 'Sem troca de versão do K3s: sem snapshot' }}
+
+    - name: Save the games before the snapshot
+      ansible.builtin.command: /usr/local/sbin/homelab-patch-reboot --save-only
+      changed_when: true
+      when: k3s_needs_snapshot | bool
+
+    - name: Snapshot the VM on the Proxmox host (fails the run if the storage cannot snapshot)
+      ansible.builtin.command: >-
+        qm snapshot {{ k3s_vmid }} {{ k3s_snapshot_name }}
+        --description "Antes do upgrade do K3s para {{ k3s_version }} (playbooks/k3s.yml)"
+      delegate_to: "{{ k3s_pve_host }}"
+      register: k3s_snapshot
+      changed_when: true
+      failed_when: k3s_snapshot.rc != 0 and 'already exists' not in k3s_snapshot.stderr
+      when: k3s_needs_snapshot | bool
+
   roles:
     - k3s
+
+  post_tasks:
+    - name: Delete the snapshot (the role already waited for the node to be Ready)
+      ansible.builtin.command: qm delsnapshot {{ k3s_vmid }} {{ k3s_snapshot_name }}
+      delegate_to: "{{ k3s_pve_host }}"
+      changed_when: true
+      when: k3s_needs_snapshot | bool and not k3s_keep_snapshot | bool
+
+    - name: Kept snapshot
+      ansible.builtin.debug:
+        msg: "Snapshot {{ k3s_snapshot_name }} mantido. Para apagar, no host: qm delsnapshot {{ k3s_vmid }} {{ k3s_snapshot_name }}"
+      when: k3s_needs_snapshot | bool and k3s_keep_snapshot | bool
