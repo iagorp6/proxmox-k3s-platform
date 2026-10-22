@@ -131,6 +131,11 @@ jobs:
           bash scripts/check-minecraft-pin.sh
       - name: Shared game exporter (fake RCON server and real sockets)
         run: python3 scripts/test-gameexporter.py
+      - name: Unit tests (games-bot, switch-game in a temp git repo, daily health check)
+        run: |
+          python3 scripts/test-games-bot.py
+          python3 scripts/test-switch-game.py
+          python3 scripts/test-daily-health.py
       - name: shellcheck (todos os .sh versionados)
         run: git ls-files -z '*.sh' | xargs -0 shellcheck
       - name: Python syntax
