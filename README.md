@@ -320,7 +320,7 @@ A Budgets alarm fires above USD 1/month, and a CloudWatch alarm watches the size
 
 - [x] GitHub Actions to AWS via OIDC, used for weekly drift detection
 - [x] Migrate to the non-deprecated `proxmox_download_file` resource
-- [ ] Renovate running for image digests, chart versions and K3s (configured in `renovate.json`, app not installed yet)
+- [x] Renovate running for image digests, chart versions, K3s and kubectl (Mend app, weekly Monday PRs, [Dependency Dashboard](https://github.com/iagorp6/proxmox-k3s-platform/issues/100))
 - [x] Third-party Helm releases (monitoring, External Secrets) managed by Argo CD
 - [x] Automatic security patching on the VM, pending-patch alerts on the host
 - [ ] Timed full DR drill and published RTO (rebuild strategy in [ADR 0005](docs/adr/0005-host-recovery-by-rebuild.md))
