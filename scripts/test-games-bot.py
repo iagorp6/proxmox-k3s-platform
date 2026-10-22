@@ -111,8 +111,17 @@ class BotTest(unittest.TestCase):
         async def audit(text):
             self.audits.append(text)
         self.b.audit = audit
+        # kubectl falso para o ConfigMap de estado: responde pela fila de respostas, padrão sucesso vazio
+        self.kubectl, self.replies = [], []
+
+        async def sh(*cmd, timeout=120, cwd=None):
+            self.kubectl.append(cmd)
+            return self.replies.pop(0) if self.replies else (0, "")
+        self.saved_sh, bot.sh = bot.sh, sh
+        self.b.saved_state, self.b.restored = None, True
 
     def tearDown(self):
+        bot.sh = self.saved_sh
         for attr in ("switch", "audit"):
             self.b.__dict__.pop(attr, None)
 
@@ -273,6 +282,50 @@ class BotTest(unittest.TestCase):
         self.assertIn("✅ Mundo do Minecraft salvo", e.description)
         self.assertIn("⏳ Minecraft desligado...", e.description)
         self.assertEqual(e.color, bot.YELLOW)
+
+    # ------------------------------------------------------------ estado no ConfigMap
+
+    def test_state_round_trip(self):
+        since = bot.now().replace(microsecond=0)
+        bot.STATE.queue = {"game": "terraria", "user_id": 3, "who": "Eva", "since": since}
+        bot.STATE.cooldown_until = since + dt.timedelta(minutes=10)
+        text = bot.dump_state()
+        bot.STATE = bot.State()
+        bot.load_state(text)
+        self.assertEqual(bot.STATE.queue, {"game": "terraria", "user_id": 3, "who": "Eva", "since": since})
+        self.assertEqual(bot.STATE.cooldown_until, since + dt.timedelta(minutes=10))
+
+    def test_restore_brings_back_the_queue(self):
+        since = bot.now()
+        bot.STATE.queue = {"game": "zomboid", "user_id": 5, "who": "Gil", "since": since}
+        saved = bot.dump_state()
+        bot.STATE = bot.State()
+        self.b.restored = False
+        self.replies = [(0, saved)]
+        self.run_async(self.b.restore)
+        self.assertTrue(self.b.restored)
+        self.assertEqual(bot.STATE.queue["who"], "Gil")
+        self.assertEqual(self.kubectl[0][:6], ("kubectl", "-n", "platform", "get", "configmap", "games-bot-state"))
+
+    def test_api_down_on_restore_never_overwrites_the_saved_state(self):
+        self.b.restored = False
+        self.replies = [(1, "Unable to connect to the server"), (1, "Unable to connect to the server")]
+        bot.STATE.queue = None
+        self.run_async(self.b.persist)
+        self.assertFalse(self.b.restored)
+        self.assertTrue(all(c[3] == "get" for c in self.kubectl))   # nenhum patch ou create
+
+    def test_persist_only_writes_on_change_and_creates_when_missing(self):
+        bot.STATE.queue = {"game": "terraria", "user_id": 3, "who": "Eva", "since": bot.now()}
+        self.replies = [(1, 'Error from server (NotFound): configmaps "games-bot-state" not found'), (0, "")]
+        self.run_async(self.b.persist)
+        self.assertEqual([c[3] for c in self.kubectl], ["patch", "create"])
+        self.assertTrue(self.kubectl[1][-1].startswith("--from-literal=state="))
+        self.run_async(self.b.persist)               # nada mudou: nenhuma chamada nova
+        self.assertEqual(len(self.kubectl), 2)
+        bot.STATE.queue = None
+        self.run_async(self.b.persist)
+        self.assertEqual(self.kubectl[-1][3], "patch")
 
 
 if __name__ == "__main__":

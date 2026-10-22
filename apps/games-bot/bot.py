@@ -17,6 +17,8 @@ Configuração por variáveis de ambiente (todas com padrão, exceto o token):
   GAMES_CHANNEL, AUDIT_CHANNEL, PLAYERS_ROLE   nomes no Discord (games, alerts, Player)
   GAME_HOST            endereço mostrado no painel (opcional, fora do Git)
   ADMIN_NAME           a quem recorrer quando uma troca falha (padrão: "o admin")
+  STATE_CONFIGMAP      ConfigMap onde fila e cooldown sobrevivem a um restart (games-bot-state)
+  POD_NAMESPACE        namespace do bot, onde fica esse ConfigMap (platform)
 """
 import asyncio
 import datetime as dt
@@ -51,6 +53,8 @@ REFRESH_SECONDS = int(ENV("REFRESH_SECONDS", "60"))
 COOLDOWN = dt.timedelta(minutes=int(ENV("COOLDOWN_MINUTES", "10")))
 QUEUE_TTL = dt.timedelta(minutes=int(ENV("QUEUE_MINUTES", "30")))
 SWITCH_TIMEOUT = int(ENV("SWITCH_TIMEOUT_SECONDS", "1800"))
+STATE_CONFIGMAP = ENV("STATE_CONFIGMAP", "games-bot-state")
+NAMESPACE = ENV("POD_NAMESPACE", "platform")
 PANEL_TITLE = "🎮 Servidor de Jogos"
 # Chave pública ed25519 do github.com (docs.github.com, "GitHub's SSH key fingerprints")
 GITHUB_HOST_KEY = "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
@@ -203,6 +207,20 @@ class State:
 
 
 STATE = State()
+
+
+def dump_state():
+    """Fila e cooldown em JSON: o que precisa sobreviver a um restart do pod (troca em andamento não volta)."""
+    q = STATE.queue
+    return json.dumps({"queue": {**q, "since": q["since"].isoformat()} if q else None,
+                       "cooldown_until": STATE.cooldown_until.isoformat()}, sort_keys=True)
+
+
+def load_state(text):
+    data = json.loads(text)
+    q = data.get("queue")
+    STATE.queue = {**q, "since": dt.datetime.fromisoformat(q["since"])} if q else None
+    STATE.cooldown_until = dt.datetime.fromisoformat(data["cooldown_until"])
 
 
 def snapshot():
@@ -380,10 +398,13 @@ class GamesBot(discord.Client):
         self.games_ch = None
         self.audit_ch = None
         self.info = None
+        self.saved_state = None
+        self.restored = False
 
     async def setup_hook(self):
         prepare_ssh()
         await sync_repo()
+        await self.restore()
         self.info = await asyncio.to_thread(snapshot)
         self.add_view(Panel(self.info))     # cliques em painéis antigos continuam funcionando
         self.loop.create_task(self.refresher())
@@ -407,7 +428,46 @@ class GamesBot(discord.Client):
         await self.render()
         log.info("pronto: painel em #%s, auditoria em #%s", GAMES_CHANNEL, AUDIT_CHANNEL)
 
+    async def restore(self):
+        """Fila e cooldown do pod anterior. Pedido vencido sai na próxima volta do process_queue, com aviso."""
+        code, out = await sh("kubectl", "-n", NAMESPACE, "get", "configmap", STATE_CONFIGMAP,
+                             "-o", "jsonpath={.data.state}", timeout=20)
+        if code != 0 and "NotFound" not in out:
+            # API fora agora: tenta de novo no próximo persist, sem sobrescrever o que estiver salvo
+            log.warning("não consegui ler o estado salvo: %s", out.strip()[-200:])
+            return
+        self.restored = True
+        if code != 0 or not out.strip():
+            log.info("sem estado salvo")
+            return
+        try:
+            load_state(out)
+            self.saved_state = dump_state()
+            log.info("estado restaurado: fila %s", STATE.queue and STATE.queue["game"])
+        except (ValueError, KeyError, TypeError) as exc:
+            log.warning("estado salvo inválido, ignorado: %s", exc)
+
+    async def persist(self):
+        """Grava fila e cooldown no ConfigMap quando mudam. Falha só vira log: o painel segue funcionando."""
+        if not self.restored:
+            await self.restore()
+            if not self.restored:
+                return
+        text = dump_state()
+        if text == self.saved_state:
+            return
+        code, out = await sh("kubectl", "-n", NAMESPACE, "patch", "configmap", STATE_CONFIGMAP, "--type", "merge",
+                             "-p", json.dumps({"data": {"state": text}}), timeout=20)
+        if code != 0 and "NotFound" in out:
+            code, out = await sh("kubectl", "-n", NAMESPACE, "create", "configmap", STATE_CONFIGMAP,
+                                 f"--from-literal=state={text}", timeout=20)
+        if code == 0:
+            self.saved_state = text
+        else:
+            log.warning("estado não salvo: %s", out.strip()[-300:])
+
     async def render(self):
+        await self.persist()   # todo caminho que muda fila ou cooldown termina num render
         if self.games_ch is None or self.info is None:
             return
         embed, view = build_embed(self.info), Panel(self.info)
