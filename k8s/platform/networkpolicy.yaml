@@ -1,0 +1,11 @@
+# Nada no namespace platform recebe conexão: o games-bot só abre conexões (Discord, GitHub, Prometheus,
+# API do Kubernetes) e os CronJobs também. Default-deny de ingress; egress fica liberado.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: platform
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
