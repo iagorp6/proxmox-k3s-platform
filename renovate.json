@@ -4,7 +4,7 @@
     "Renovate cuida do que o Dependabot não enxerga: imagens fixadas por digest nos manifests,",
     "versões de chart (Applications do Argo CD e chart-version-argocd.txt) e a versão do K3s. Actions, providers do Terraform e o",
     "FROM do games-bot continuam no Dependabot (.github/dependabot.yml), por isso os managers ficam restritos.",
-    "Nada faz automerge: cada PR passa pelo CI e pela revisão, e nada muda no cluster sem Sync manual no Argo (exceto platform e monitoring-config)."
+    "Nada faz automerge: cada PR passa pelo CI e pela revisão. No merge, charts e configuração entram sozinhos (ADR 0009); jogos esperam o próximo switch-game ou um Sync manual."
   ],
   "extends": [
     "config:recommended",
@@ -81,6 +81,22 @@
       "depNameTemplate": "k3s-io/k3s",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\+k3s(?<build>\\d+)$"
+    },
+    {
+      "description": "kubectl baixado no hook de save (defaults.yaml -> manifests gerados), no daily-restart do Zomboid e na imagem do games-bot. O hash não é atualizado: o check-kubectl-pin.sh do CI falha com o comando que corrige",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^platform/defaults\\.yaml$/",
+        "/^apps/games-bot/Dockerfile$/",
+        "/^k8s/games/zomboid/daily-restart\\.yaml$/"
+      ],
+      "matchStrings": [
+        "kubectl:\\s*\\{\\s*version:\\s*(?<currentValue>v\\d+\\.\\d+\\.\\d+)",
+        "dl\\.k8s\\.io/release/(?<currentValue>v\\d+\\.\\d+\\.\\d+)/bin/linux/amd64/kubectl"
+      ],
+      "depNameTemplate": "kubectl",
+      "packageNameTemplate": "kubernetes/kubernetes",
+      "datasourceTemplate": "github-releases"
     }
   ],
   "packageRules": [
@@ -152,7 +168,7 @@
       ],
       "commitMessagePrefix": "charts:",
       "prBodyNotes": [
-        "Depois do merge: Sync manual do app no Argo CD (kube-prometheus-stack, loki, alloy ou external-secrets). Argo CD: `make deploy-argocd` no WSL."
+        "O merge aplica no cluster: o app do chart tem auto-sync (ADR 0009). Argo CD é a exceção: `make deploy-argocd` no WSL depois do merge."
       ]
     },
     {
@@ -184,6 +200,27 @@
       "commitMessagePrefix": "k3s:",
       "prBodyNotes": [
         "Upgrade do cluster: `ansible-playbook playbooks/k3s.yml` (em ansible/) no WSL, depois do merge."
+      ]
+    },
+    {
+      "description": "kubectl: só patch; minor sobe junto com o K3s (skew de versão), planejado à mão",
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "enabled": false,
+      "matchDepNames": [
+        "kubectl"
+      ]
+    },
+    {
+      "groupName": "kubectl",
+      "commitMessagePrefix": "kubectl:",
+      "prBodyNotes": [
+        "O CI fica vermelho no check-kubectl-pin.sh até o SHA-256 ser trocado: a mensagem do job traz o comando (git grep + sed + render-games.py). Depois do merge, a imagem do games-bot precisa ser publicada e o digest atualizado."
+      ],
+      "matchDepNames": [
+        "kubectl"
       ]
     }
   ]
