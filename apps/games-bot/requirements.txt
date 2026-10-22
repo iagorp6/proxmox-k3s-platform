@@ -1,6 +1,6 @@
-# Dependências do games-bot com hash (pip --require-hashes): só wheels cp313/manylinux x86_64.
-# Para atualizar: pip download --only-binary=:all: --platform manylinux_2_28_x86_64 --python-version 3.13 discord.py==<v> PyYAML==<v>
-# e recalcule os hashes (sha256sum *.whl).
+# Dependências do games-bot com hash (pip --require-hashes, só wheels: --only-binary no Dockerfile).
+# O Dependabot (ecossistema pip, .github/dependabot.yml) propõe as atualizações com os hashes novos,
+# num PR semanal agrupado. Python fica em 3.13 (cp313) até o FROM do Dockerfile mudar junto.
 aiohappyeyeballs==2.7.1 \
     --hash=sha256:9243213661e29250eb41368e5daa826fc017156c3b8a11440826b2e3ed376472
 aiohttp==3.14.5 \

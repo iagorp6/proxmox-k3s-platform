@@ -11,9 +11,9 @@ RUN curl -fsSLo /usr/local/bin/kubectl https://dl.k8s.io/release/v1.37.0/bin/lin
  && echo "6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  /usr/local/bin/kubectl" | sha256sum -c - \
  && chmod 0755 /usr/local/bin/kubectl
 
-COPY requirements.lock /tmp/requirements.lock
-RUN pip install --no-cache-dir --require-hashes --only-binary=:all: -r /tmp/requirements.lock \
- && rm /tmp/requirements.lock
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --require-hashes --only-binary=:all: -r /tmp/requirements.txt \
+ && rm /tmp/requirements.txt
 
 COPY bot.py /app/bot.py
 RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin bot

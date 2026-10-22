@@ -1,0 +1,36 @@
+# Exceções do scan de misconfiguração (trivy config, CI job "Security scan"). Cada uma é uma escolha
+# consciente, limitada aos arquivos onde vale e com o motivo ao lado. Qualquer achado HIGH ou CRITICAL
+# fora desta lista falha o build. Para aceitar um novo: adicione aqui com o motivo, no mesmo PR.
+misconfigurations:
+  - id: KSV-0053
+    paths:
+      - "k8s/games/*/platform.generated.yaml"
+      - "k8s/games/zomboid/daily-restart.yaml"
+      - "k8s/platform/games-bot-rbac.generated.yaml"
+    statement: >-
+      pods/exec é o mecanismo do save hook (backup), do restart diário com aviso no jogo e da troca de
+      jogo pelo bot: o comando vai para o FIFO /tmp/console do servidor. O Role é por namespace e, nos
+      gerados, restrito por resourceNames ao pod <jogo>-0.
+
+  - id: KSV-0014
+    paths:
+      - "k8s/games/*/statefulset.yaml"
+    statement: >-
+      Servidores de jogo (e o install/copy-server que preparam o volume) escrevem fora do volume de
+      dados: SteamCMD, TShock e a imagem do Minecraft gravam em HOME, /tmp e na própria instalação.
+      Sidecars e Jobs da plataforma rodam com root FS read-only.
+
+  - id: AWS-0132
+    paths:
+      - "terraform-aws/main.tf"
+      - "terraform-aws/state.tf"
+    statement: >-
+      SSE-S3 (AES256) em vez de KMS com chave gerenciada pelo cliente: o restic já cifra os backups do
+      lado do cliente, e uma CMK custaria USD 1/mês por chave num orçamento de USD 1/mês.
+
+  - id: AWS-0095
+    paths:
+      - "terraform-aws/alerts.tf"
+    statement: >-
+      O tópico SNS só leva o alarme de tamanho do bucket para o e-mail (sem dado sensível); criptografia
+      com KMS exigiria CMK e política de chave para o CloudWatch publicar.
