@@ -15,7 +15,7 @@ TRIVY_SHA256=c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f
 PROMTOOL_VERSION=3.15.0   # vem no pacote do Prometheus
 PROMTOOL_SHA256=2a542df32eac02ee17b9d844fb2aa1de00dafa5476579ba8a3ba862e9d572ea0
 HELM_VERSION=3.22.1       # só para o scripts/check-charts.py (helm template); o cluster usa o Helm do Argo CD
-HELM_SHA256=0000000000000000000000000000000000000000000000000000000000000000
+HELM_SHA256=896cf63684a42a723d61c980369d6e588330927deb13676ca0d85006dd6da0ea
 
 BIN="${1:?uso: $0 <diretório de destino> [tflint|kubeconform|trivy|promtool|helm]...}"
 shift
