@@ -36,6 +36,21 @@
           {{ 'mirror' if 'mirror-' in disk_bench_pool.stdout
              else 'raidz' if 'raidz' in disk_bench_pool.stdout else 'stripe' }}
 
+    # Se o caminho já existe, o fio rodaria fora do dataset de teste (com ARC e compressão do pool) e o
+    # destroy no fim não limparia nada: para antes de tocar em qualquer coisa
+    - name: Check that the scratch path is free
+      ansible.builtin.stat:
+        path: "{{ disk_bench_dir }}"
+      register: disk_bench_dir_stat
+
+    - name: Refuse to run over an existing path
+      ansible.builtin.assert:
+        that: not disk_bench_dir_stat.stat.exists
+        fail_msg: >-
+          {{ disk_bench_dir }} já existe no host. Confira com 'zfs list {{ disk_bench_dataset }}' e
+          'ls -la {{ disk_bench_dir }}', apague o que for de um teste anterior e rode de novo.
+        quiet: true
+
     - name: Run fio on a scratch dataset
       block:
         # primarycache=metadata: as leituras vão ao disco, não ao ARC; compression=off: o fio mede disco, não CPU
@@ -43,8 +58,7 @@
           ansible.builtin.command: >-
             zfs create -o primarycache=metadata -o compression=off
             -o mountpoint={{ disk_bench_dir }} {{ disk_bench_dataset }}
-          args:
-            creates: "{{ disk_bench_dir }}"
+          changed_when: true
 
         - name: Run fio ({{ disk_bench_runtime }}s per test)
           ansible.builtin.command: >-
