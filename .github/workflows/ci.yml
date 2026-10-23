@@ -36,6 +36,8 @@ jobs:
         run: terraform init -backend=false -input=false
       - name: terraform validate
         run: terraform validate -no-color
+      - name: terraform test (invariantes de segurança, providers mock, sem credencial)
+        run: if [ -d tests ]; then terraform test -no-color; else echo "sem tests/ em ${{ matrix.dir }}"; fi
       - name: Install tflint (versão fixa, SHA-256 conferido)
         run: |
           bash "$GITHUB_WORKSPACE/scripts/install-ci-tools.sh" "$HOME/bin" tflint

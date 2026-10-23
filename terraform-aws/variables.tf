@@ -40,4 +40,10 @@ variable "github_repository" {
   description = "Repositório no formato do sub OIDC (<owner>@<owner_id>/<repo>@<repo_id>) cujo main pode assumir a role de drift"
   type        = string
   default     = "iagorp6@108373479/proxmox-k3s-platform@1392447632"
+
+  validation {
+    # Sem curinga: o sub é comparado com StringEquals, e um * aqui abriria a role para outros repositórios
+    condition     = can(regex("^[A-Za-z0-9-]+@[0-9]+/[A-Za-z0-9._-]+@[0-9]+$", var.github_repository))
+    error_message = "github_repository precisa ser <owner>@<owner_id>/<repo>@<repo_id>, sem curinga."
+  }
 }
