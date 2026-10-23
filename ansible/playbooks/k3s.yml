@@ -3,6 +3,9 @@
 # na versão nova, o snapshot é apagado (-e k3s_keep_snapshot=true para guardar).
 # Rollback, se o cluster não voltar direito (no host Proxmox; o nome sai no output e em qm listsnapshot):
 #   qm stop <vmid> && qm rollback <vmid> <snapshot> && qm start <vmid>
+- name: Clone no main atualizado
+  ansible.builtin.import_playbook: require-main.yml
+
 - name: Install K3s (single node)
   hosts: k3s
   become: true

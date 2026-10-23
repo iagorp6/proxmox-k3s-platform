@@ -2,6 +2,9 @@
 # Os alertas HostSecurityUpdatesPending e HostRebootPending avisam quando é hora de rodar.
 #   ansible-playbook playbooks/pve-upgrade.yml                         # só atualiza os pacotes
 #   ansible-playbook playbooks/pve-upgrade.yml -e pve_upgrade_reboot=true  # salva os jogos e reinicia o host
+- name: Clone no main atualizado
+  ansible.builtin.import_playbook: require-main.yml
+
 - name: Upgrade do host Proxmox
   hosts: proxmox
   become: true

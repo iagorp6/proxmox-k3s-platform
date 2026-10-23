@@ -1,3 +1,6 @@
+- name: Clone no main atualizado
+  ansible.builtin.import_playbook: require-main.yml
+
 - name: Prometheus exporters on the Proxmox host (node, ZFS, EDAC, SMART)
   hosts: proxmox
   become: true

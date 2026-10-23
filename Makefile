@@ -2,10 +2,14 @@
 # Usa ">" como prefixo de receita (evita problemas de tab ao colar).
 .RECIPEPREFIX = >
 .DEFAULT_GOAL := help
-.PHONY: help ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game new-game restore-drill restore-game console status
+.PHONY: help require-main ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game new-game restore-drill restore-game console status
 
 help: ## Lista os alvos disponíveis
 > @grep -E '^[a-zA-Z_%-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+# Os alvos que aplicam algo dependem deste: param se o clone não está no main atualizado (FORCE=1 pula)
+require-main:
+> @./scripts/require-main.sh
 
 ci: ## Roda localmente todas as verificações do CI
 > ./scripts/ci-local.sh
@@ -16,20 +20,20 @@ ci-%: ## Roda um grupo do CI (terraform, ansible, kubernetes, scripts, security)
 dashboard: ## Regenera o dashboard do Grafana a partir do gerador
 > python3 scripts/build-dashboard.py
 
-secrets: ## Publica no AWS SSM os segredos do Bitwarden (exige BW_SESSION)
+secrets: require-main ## Publica no AWS SSM os segredos do Bitwarden (exige BW_SESSION)
 > ./scripts/push-secrets-to-ssm.sh
 
-plan: ## terraform plan nos dois stacks (Proxmox e AWS)
+plan: require-main ## terraform plan nos dois stacks (Proxmox e AWS)
 > bash -c 'source ~/.proxmox.env && cd terraform && terraform plan'
 > cd terraform-aws && terraform plan
 
-deploy-monitoring: ## Break-glass: stack de observabilidade via Helm (no dia a dia o Argo CD aplica no merge)
+deploy-monitoring: require-main ## Break-glass: stack de observabilidade via Helm (no dia a dia o Argo CD aplica no merge)
 > ./k8s/monitoring/deploy.sh
 
-deploy-eso: ## Break-glass: External Secrets via Helm (no dia a dia o Argo CD aplica no merge)
+deploy-eso: require-main ## Break-glass: External Secrets via Helm (no dia a dia o Argo CD aplica no merge)
 > ./k8s/external-secrets/deploy.sh
 
-deploy-argocd: ## Instala/atualiza o Argo CD (único release fora do Argo)
+deploy-argocd: require-main ## Instala/atualiza o Argo CD (único release fora do Argo)
 > ./k8s/argocd/deploy.sh
 
 switch-game: ## Troca o jogo ativo (ex.: make switch-game GAME=terraria)
@@ -39,10 +43,10 @@ switch-game: ## Troca o jogo ativo (ex.: make switch-game GAME=terraria)
 new-game: ## Esqueleto de jogo novo, status draft (ex.: make new-game GAME=valheim TITLE=Valheim IMAGE=repo:tag@sha256:... PORT=16261 PROTOCOL=UDP)
 > ./scripts/new-game.py $(GAME) --title "$(TITLE)" --image "$(IMAGE)" --port $(PORT) $(if $(PROTOCOL),--protocol $(PROTOCOL)) $(if $(MEMORY),--memory $(MEMORY)) $(if $(ICON),--icon "$(ICON)") $(if $(DRIVER),--driver $(DRIVER)) $(if $(RCON_PORT),--rcon-port $(RCON_PORT)) $(if $(PLAYERS_COMMAND),--players-command "$(PLAYERS_COMMAND)") $(if $(PLAYERS_REGEX),--players-regex '$(PLAYERS_REGEX)')
 
-restore-drill: ## Restaura o último backup num PVC temporário e mede o tempo (ex.: make restore-drill GAME=terraria RECORD=1)
+restore-drill: require-main ## Restaura o último backup num PVC temporário e mede o tempo (ex.: make restore-drill GAME=terraria RECORD=1)
 > ./scripts/restore-drill.py $(GAME) $(if $(RECORD),--record)
 
-restore-game: ## Restaura o último backup no volume do jogo, com o servidor parado (DR; ex.: make restore-game GAME=minecraft)
+restore-game: require-main ## Restaura o último backup no volume do jogo, com o servidor parado (DR; ex.: make restore-game GAME=minecraft)
 > ./scripts/restore-drill.py $(GAME) --live
 
 # CMD vai literal para o FIFO /tmp/console do container server (Zomboid e Terraria); a resposta sai no log

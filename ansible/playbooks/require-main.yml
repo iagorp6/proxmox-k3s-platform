@@ -1,0 +1,17 @@
+# Importado no topo de cada playbook: para antes de tocar em qualquer host se o clone não está no main
+# igual ao origin/main (scripts/require-main.sh, o mesmo dos alvos do make). Um clone velho rodou o
+# disk-bench sem as correções do dia em 23/10. FORCE=1 ansible-playbook ... pula a conferência.
+# hosts: all + run_once + delegate_to: localhost roda uma vez, na máquina do Ansible, mesmo com --limit.
+- name: Clone no main atualizado
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Run scripts/require-main.sh
+      ansible.builtin.command: "{{ playbook_dir }}/../../scripts/require-main.sh"
+      environment:
+        FORCE: "{{ lookup('ansible.builtin.env', 'FORCE') }}"
+      delegate_to: localhost
+      run_once: true
+      changed_when: false
+      check_mode: false
+      tags: [always]
