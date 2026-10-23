@@ -1,0 +1,37 @@
+# Arquivo separado do alerts-homelab.test.yaml: a janela do RestoreDrillStale é de 35 dias, e com
+# avaliação a cada 1m o promtool levaria minutos. Aqui séries e avaliação são de hora em hora.
+rule_files: [alerts-homelab.yaml]
+evaluation_interval: 1h
+tests:
+  - name: drill sem sucesso há mais de 35 dias ou CronJob que nunca passou dispara RestoreDrillStale; drill em dia e backup não
+    interval: 1h
+    input_series:
+      - series: 'kube_cronjob_status_last_successful_time{namespace="minecraft",cronjob="minecraft-restore-drill"}'
+        values: '0x900'             # passou no instante zero e nunca mais
+      - series: 'kube_cronjob_created{namespace="minecraft",cronjob="minecraft-restore-drill"}'
+        values: '0x900'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="terraria",cronjob="terraria-restore-drill"}'
+        values: '0+3600x900'        # sucesso sempre recente
+      - series: 'kube_cronjob_created{namespace="terraria",cronjob="terraria-restore-drill"}'
+        values: '0x900'
+      - series: 'kube_cronjob_created{namespace="zomboid",cronjob="zomboid-restore-drill"}'
+        values: '0x900'             # criado no instante zero, nunca passou
+      - series: 'kube_cronjob_status_last_successful_time{namespace="zomboid",cronjob="zomboid-backup"}'
+        values: '0x900'             # não é drill: fora do alerta (o BackupStale cuida)
+    alert_rule_test:
+      - eval_time: 34d
+        alertname: RestoreDrillStale
+        exp_alerts: []
+      - eval_time: 37d
+        alertname: RestoreDrillStale
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: minecraft, cronjob: minecraft-restore-drill}
+            exp_annotations:
+              summary: "Restore drill de minecraft sem sucesso há mais de 35 dias"
+              description: "O backup de minecraft não foi restaurado e conferido no último mês: não há prova de que ele volta."
+              action: "kubectl -n minecraft create job --from=cronjob/minecraft-restore-drill drill-manual && kubectl -n minecraft logs -f job/drill-manual"
+          - exp_labels: {severity: warning, namespace: zomboid, cronjob: zomboid-restore-drill}
+            exp_annotations:
+              summary: "Restore drill de zomboid sem sucesso há mais de 35 dias"
+              description: "O backup de zomboid não foi restaurado e conferido no último mês: não há prova de que ele volta."
+              action: "kubectl -n zomboid create job --from=cronjob/zomboid-restore-drill drill-manual && kubectl -n zomboid logs -f job/drill-manual"
