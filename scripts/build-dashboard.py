@@ -262,10 +262,18 @@ host = [
 ]
 # Carga dos discos: no stripe cada disco recebe metade das escritas; num mirror, cada um recebe todas.
 # A soma da ocupação dos dois é o pior caso de um disco no mirror (as leituras continuam divididas).
+# max by (device): uma série por disco mesmo quando um label do alvo muda (instance), senão a janela
+# de 7 dias mostra o mesmo disco duas vezes.
 DISK = 'job="proxmox-node",device=~"sd[a-z]+"'
-BUSY = f"rate(node_disk_io_time_seconds_total{{{DISK}}}[5m])"
-WRITE_IOPS = f"sum(rate(node_disk_writes_completed_total{{{DISK}}}[5m]))"
-WRITE_BPS = f"sum(rate(node_disk_written_bytes_total{{{DISK}}}[5m]))"
+
+
+def per_disk(metric):
+    return f"max by (device) (rate({metric}{{{DISK}}}[5m]))"
+
+
+BUSY = per_disk("node_disk_io_time_seconds_total")
+WRITE_IOPS = f'sum({per_disk("node_disk_writes_completed_total")})'
+WRITE_BPS = f'sum({per_disk("node_disk_written_bytes_total")})'
 dy = host_y + 4
 host += [
   {"type": "timeseries", "title": "Ocupação dos discos",
@@ -279,14 +287,14 @@ host += [
    "description": "Operações por segundo somando os discos. No mirror, cada disco recebe todas as escritas.",
    "datasource": DS, "gridPos": {"x": 8, "y": dy, "w": 8, "h": 7},
    "targets": [prom(WRITE_IOPS, legend="escrita"),
-               prom(f"sum(rate(node_disk_reads_completed_total{{{DISK}}}[5m]))", ref="B", legend="leitura")],
+               prom(f'sum({per_disk("node_disk_reads_completed_total")})', ref="B", legend="leitura")],
    "fieldConfig": {"defaults": {"unit": "iops", "min": 0, "custom": {"fillOpacity": 15, "lineWidth": 1}}, "overrides": []},
    "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}},
   {"type": "timeseries", "title": "Latência média de escrita",
    "description": "Tempo médio de cada escrita por disco, incluindo a fila. Em HDD, poucos ms é normal.",
    "datasource": DS, "gridPos": {"x": 16, "y": dy, "w": 8, "h": 7},
-   "targets": [prom(f"rate(node_disk_write_time_seconds_total{{{DISK}}}[5m])"
-                    f" / rate(node_disk_writes_completed_total{{{DISK}}}[5m])", legend="{{device}}")],
+   "targets": [prom(f'{per_disk("node_disk_write_time_seconds_total")} / {per_disk("node_disk_writes_completed_total")}',
+                    legend="{{device}}")],
    "fieldConfig": {"defaults": {"unit": "s", "min": 0, "custom": {"fillOpacity": 15, "lineWidth": 1}}, "overrides": []},
    "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}},
   stat("Pico de ocupação (p99, 7 dias)", "Maior p99 de ocupação entre os discos na última semana, no layout atual do pool.",

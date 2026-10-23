@@ -1806,7 +1806,7 @@ data:
               },
               "targets": [
                 {
-                  "expr": "rate(node_disk_io_time_seconds_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m])",
+                  "expr": "max by (device) (rate(node_disk_io_time_seconds_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]))",
                   "refId": "A",
                   "legendFormat": "{{device}}"
                 }
@@ -1850,12 +1850,12 @@ data:
               },
               "targets": [
                 {
-                  "expr": "sum(rate(node_disk_writes_completed_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]))",
+                  "expr": "sum(max by (device) (rate(node_disk_writes_completed_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m])))",
                   "refId": "A",
                   "legendFormat": "escrita"
                 },
                 {
-                  "expr": "sum(rate(node_disk_reads_completed_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]))",
+                  "expr": "sum(max by (device) (rate(node_disk_reads_completed_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m])))",
                   "refId": "B",
                   "legendFormat": "leitura"
                 }
@@ -1898,7 +1898,7 @@ data:
               },
               "targets": [
                 {
-                  "expr": "rate(node_disk_write_time_seconds_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]) / rate(node_disk_writes_completed_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m])",
+                  "expr": "max by (device) (rate(node_disk_write_time_seconds_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m])) / max by (device) (rate(node_disk_writes_completed_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]))",
                   "refId": "A",
                   "legendFormat": "{{device}}"
                 }
@@ -1941,7 +1941,7 @@ data:
               },
               "targets": [
                 {
-                  "expr": "max(quantile_over_time(0.99, rate(node_disk_io_time_seconds_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m])[7d:5m]))",
+                  "expr": "max(quantile_over_time(0.99, max by (device) (rate(node_disk_io_time_seconds_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]))[7d:5m]))",
                   "refId": "A"
                 }
               ],
@@ -1999,7 +1999,7 @@ data:
               },
               "targets": [
                 {
-                  "expr": "quantile_over_time(0.99, sum(rate(node_disk_io_time_seconds_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]))[7d:5m])",
+                  "expr": "quantile_over_time(0.99, sum(max by (device) (rate(node_disk_io_time_seconds_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m])))[7d:5m])",
                   "refId": "A"
                 }
               ],
@@ -2057,7 +2057,7 @@ data:
               },
               "targets": [
                 {
-                  "expr": "quantile_over_time(0.99, sum(rate(node_disk_writes_completed_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]))[7d:5m])",
+                  "expr": "quantile_over_time(0.99, sum(max by (device) (rate(node_disk_writes_completed_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m])))[7d:5m])",
                   "refId": "A"
                 }
               ],
@@ -2115,7 +2115,7 @@ data:
               },
               "targets": [
                 {
-                  "expr": "quantile_over_time(0.99, sum(rate(node_disk_written_bytes_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]))[7d:5m])",
+                  "expr": "quantile_over_time(0.99, sum(max by (device) (rate(node_disk_written_bytes_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m])))[7d:5m])",
                   "refId": "A"
                 }
               ],
