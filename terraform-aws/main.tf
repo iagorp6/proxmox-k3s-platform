@@ -52,7 +52,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
       days_after_initiation = 7
     }
   }
-  # O prune diário gera versões não correntes; elas expiram sozinhas e o custo fica limitado
+  # O prune semanal gera versões não correntes; elas expiram sozinhas e o custo fica limitado
   rule {
     id     = "expire-noncurrent-versions"
     status = "Enabled"

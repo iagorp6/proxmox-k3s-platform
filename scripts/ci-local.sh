@@ -58,6 +58,7 @@ tf_check() {
   terraform fmt -check -recursive -diff &&
     terraform init -backend=false -input=false >/dev/null &&
     terraform validate -no-color &&
+    { [[ ! -d tests ]] || terraform test -no-color; } &&
     tflint --init --config "$WORK/.tflint.hcl" >/dev/null &&
     tflint --config "$WORK/.tflint.hcl" --format compact
 }
