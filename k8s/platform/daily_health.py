@@ -37,7 +37,8 @@ VM_UPTIME = 'time() - max(node_boot_time_seconds{job="node-exporter"})'
 HOST_SECURITY = 'sum(apt_upgrades_pending{job="proxmox-node", origin=~".*-security.*"})'
 # Carga dos discos do host (p99 da semana). A soma dos discos é o pior caso de um disco num mirror,
 # que recebe todas as escritas em vez de metade: o número que decide trocar o stripe por mirror.
-HOST_DISK_BUSY = 'rate(node_disk_io_time_seconds_total{job="proxmox-node", device=~"sd[a-z]+"}[5m])'
+# max by (device): um valor por disco mesmo se um label do alvo (instance) mudou dentro da semana
+HOST_DISK_BUSY = 'max by (device) (rate(node_disk_io_time_seconds_total{job="proxmox-node", device=~"sd[a-z]+"}[5m]))'
 DISK_BUSY_P99 = f"quantile_over_time(0.99, {HOST_DISK_BUSY}[7d:5m])"
 DISK_MIRROR_P99 = f"quantile_over_time(0.99, sum({HOST_DISK_BUSY})[7d:5m])"
 HOST_REBOOT = ('max(max(node_reboot_required{job="proxmox-node"})'
