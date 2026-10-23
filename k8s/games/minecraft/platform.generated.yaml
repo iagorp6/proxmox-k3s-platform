@@ -212,6 +212,92 @@ spec:
             emptyDir:
               sizeLimit: 1Gi
 ---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: minecraft-restore-drill
+  namespace: minecraft
+spec:
+  schedule: 0 7 2 * *
+  timeZone: America/Sao_Paulo
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 3600
+      ttlSecondsAfterFinished: 259200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: minecraft-restore-drill
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: restic
+            image: restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
+            command:
+            - /bin/sh
+            - -c
+            args:
+            - |
+              trap 'rm -rf /restore/*' EXIT
+              set -eu
+              restic snapshots --tag minecraft --host minecraft --latest 1 --json > /tmp/snap.json
+              start=$(date +%s)
+              restic restore latest --tag minecraft --host minecraft --target /restore
+              end=$(date +%s)
+              [ -n "$(ls -A /restore/data/world 2>/dev/null)" ] || { echo "FALHA: /data/world vazio ou ausente"; exit 1; }
+              ls -d /restore/data/world/level.dat >/dev/null 2>&1 || { echo "FALHA: nada casa com data/world/level.dat"; exit 1; }
+              bytes=$(( $(du -sk /restore | cut -f1) * 1024 ))
+              files=$(find /restore -type f | wc -l)
+              snap=$(tr -d '\n' < /tmp/snap.json)
+              echo "RESULT {\"restore_seconds\": $((end - start)), \"bytes\": $bytes, \"files\": $files, \"snapshots\": $snap}"
+            envFrom:
+            - secretRef:
+                name: minecraft-backup
+            env:
+            - name: RESTIC_CACHE_DIR
+              value: /cache
+            - name: TMPDIR
+              value: /tmp
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                memory: 512Mi
+            volumeMounts:
+            - name: restore
+              mountPath: /restore
+            - name: cache
+              mountPath: /cache
+            - name: tmp
+              mountPath: /tmp
+          volumes:
+          - name: restore
+            emptyDir:
+              sizeLimit: 20Gi
+          - name: cache
+            emptyDir: {}
+          - name: tmp
+            emptyDir:
+              sizeLimit: 1Gi
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:

@@ -4,6 +4,7 @@
 Para cada jogo com status "active" e campo "namespace", grava:
   k8s/games/<jogo>/platform.generated.yaml  Service do jogo, métricas (Service + ServiceMonitor),
                                             NetworkPolicy de ingress, backup (ExternalSecret + CronJob restic)
+                                            e restore drill mensal (CronJob)
   k8s/argocd/apps/<jogo>.yaml               Application do Argo CD (sync manual)
 E, para o conjunto desses jogos:
   k8s/monitoring/alerts-games.generated.yaml  alertas por jogo (fora do ar, sem resposta, sem métricas, restart, memória)
@@ -12,17 +13,23 @@ E, para o conjunto desses jogos:
 O StatefulSet continua escrito à mão em cada jogo (é a parte realmente específica).
 Uso: python3 scripts/render-games.py [--check]   (--check falha se algo gerado estiver desatualizado)
 """
+import importlib.util
 import json
 import pathlib
 import re
 import shlex
 import sys
+import zlib
 
 import yaml
 
 import catalog
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+# O CronJob do drill mensal roda o mesmo script do make restore-drill (restore, checagens e linha RESULT)
+_spec = importlib.util.spec_from_file_location("restore_drill", ROOT / "scripts" / "restore-drill.py")
+restore_drill = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(restore_drill)
 DEFAULTS = yaml.safe_load((ROOT / "platform" / "defaults.yaml").read_text(encoding="utf-8"))
 ALERTMANAGER_VALUES = ROOT / "k8s" / "monitoring" / "values-kube-prometheus-stack.yaml"
 
@@ -95,6 +102,52 @@ def save_hook(g):
         "subjects": [{"kind": "ServiceAccount", "name": sa, "namespace": ns}],
     }]
     return container, sa, rbac
+
+
+def drill_cronjob(g):
+    """Restore drill mensal: o último snapshot volta num emptyDir e passa pelas checagens do catálogo.
+
+    Mesmo script do make restore-drill, sem tocar no PVC do jogo, então roda com o jogo no ar ou parado.
+    O dia do mês sai do nome do jogo (crc32), para os jogos não baixarem do S3 ao mesmo tempo. Falha cai
+    no KubeJobFailed; sem sucesso há mais de 35 dias, no RestoreDrillStale (alerts-homelab.yaml).
+    """
+    name, ns, uid = g["name"], g["namespace"], g.get("runAsUser", 1000)
+    target = restore_drill.TARGET
+    # O dado restaurado sai do disco do node ao fim, com sucesso ou falha (o Job fica para os logs)
+    script = f"trap 'rm -rf {target}/*' EXIT\n" + restore_drill.drill_script(g)
+    day = 1 + zlib.crc32(name.encode()) % 28
+    return {
+        "apiVersion": "batch/v1", "kind": "CronJob",
+        "metadata": {"name": f"{name}-restore-drill", "namespace": ns},
+        "spec": {
+            "schedule": f"0 7 {day} * *", "timeZone": "America/Sao_Paulo", "concurrencyPolicy": "Forbid",
+            "successfulJobsHistoryLimit": 1, "failedJobsHistoryLimit": 1,
+            "jobTemplate": {"spec": {"backoffLimit": 1, "activeDeadlineSeconds": 3600, "ttlSecondsAfterFinished": 259200,
+                                     "template": {"metadata": {"labels": {"app.kubernetes.io/name": f"{name}-restore-drill"}},
+                                                  "spec": {
+                "restartPolicy": "Never", "automountServiceAccountToken": False,
+                "securityContext": {"runAsNonRoot": True, "runAsUser": uid, "runAsGroup": uid,
+                                    "seccompProfile": {"type": "RuntimeDefault"}},
+                "containers": [{
+                    "name": "restic", "image": DEFAULTS["resticImage"],
+                    "command": ["/bin/sh", "-c"], "args": [script],
+                    "envFrom": [{"secretRef": {"name": f"{name}-backup"}}],
+                    "env": [{"name": "RESTIC_CACHE_DIR", "value": "/cache"}, {"name": "TMPDIR", "value": "/tmp"}],
+                    "securityContext": {"allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True,
+                                        "capabilities": {"drop": ["ALL"]}},
+                    "resources": {"requests": {"cpu": "100m", "memory": "128Mi"}, "limits": {"memory": "512Mi"}},
+                    "volumeMounts": [{"name": "restore", "mountPath": target},
+                                     {"name": "cache", "mountPath": "/cache"},
+                                     {"name": "tmp", "mountPath": "/tmp"}],
+                }],
+                # emptyDir com teto: um mundo maior que o teto é despejado (Evicted) e o drill falha, em vez
+                # de encher o disco da VM. Ajuste com backup.drillSize no game.yaml.
+                "volumes": [{"name": "restore", "emptyDir": {"sizeLimit": g["backup"].get("drillSize", "20Gi")}},
+                            {"name": "cache", "emptyDir": {}},
+                            {"name": "tmp", "emptyDir": {"sizeLimit": "1Gi"}}],
+            }}}},
+        },
+    }
 
 
 def render_game(g):
@@ -184,7 +237,7 @@ def render_game(g):
                                 {"name": "tmp", "emptyDir": {"sizeLimit": "1Gi"}}],
                 }}}},
             },
-        }] + (hook[2] if hook else [])
+        }, drill_cronjob(g)] + (hook[2] if hook else [])
     app = {
         "apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
         "metadata": {"name": name, "namespace": "argocd"},
