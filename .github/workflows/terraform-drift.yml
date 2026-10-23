@@ -92,6 +92,9 @@ jobs:
           # restic e External Secrets usam chave de longa duração. Falha com chave ativa mais velha que
           # MAX_DAYS ou com mais de uma chave no usuário. Rotação: docs/key-rotation.md
           # O log mostra só usuário, final do ID, data e status; o segredo nunca sai da AWS.
+          # pipefail: sem ele (o bash padrão do Actions é só -e), um erro da AWS dentro do laço
+          # sumiria no pipe do tee e o passo passaria sem ter conferido nada.
+          set -o pipefail
           users=$(terraform show -json | jq -r '.values.root_module.resources[]? | select(.type == "aws_iam_user") | .values.name')
           [ -n "$users" ] || { echo "ERRO: nenhum aws_iam_user no state do terraform-aws"; exit 1; }
           now=$(date +%s)
