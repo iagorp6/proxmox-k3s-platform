@@ -55,6 +55,16 @@
       when: disk_bench_leftover.rc == 0
       changed_when: true
 
+    # O zfs destroy não apaga um mountpoint definido explicitamente: sobra um diretório vazio.
+    # rmdir só remove diretório vazio, então um caminho com conteúdo continua parando no assert
+    - name: Remove an empty leftover mountpoint
+      ansible.builtin.command: rmdir {{ disk_bench_dir }}  # noqa: command-instead-of-module
+      args:
+        removes: "{{ disk_bench_dir }}"
+      register: disk_bench_rmdir
+      changed_when: disk_bench_rmdir.rc == 0
+      failed_when: false
+
     # Se o caminho já existe, o fio rodaria fora do dataset de teste (com ARC e compressão do pool) e o
     # destroy no fim não limparia nada: para antes de tocar em qualquer coisa
     - name: Check that the scratch path is free
@@ -94,6 +104,13 @@
           register: disk_bench_destroy
           changed_when: disk_bench_destroy.rc == 0
           failed_when: disk_bench_destroy.rc != 0 and 'does not exist' not in disk_bench_destroy.stderr
+
+        - name: Remove the empty mountpoint
+          ansible.builtin.command: rmdir {{ disk_bench_dir }}  # noqa: command-instead-of-module
+          args:
+            removes: "{{ disk_bench_dir }}"
+          when: disk_bench_destroy.rc == 0
+          changed_when: true
 
     - name: Collect the results
       ansible.builtin.set_fact:
