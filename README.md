@@ -123,7 +123,7 @@ docs/                  ADRs, SLO, postmortems, DR runbook, restore drill records
 4. **Helm** installs Argo CD, the only release that has to exist before GitOps can start.
 5. **Two bootstrap secrets** (the External Secrets AWS credential and the Argo CD deploy key) and one `kubectl apply` of the root app. Argo CD reconciles everything else, including the third-party charts (observability stack and External Secrets, pinned in their Applications, [ADR 0007](docs/adr/0007-helm-releases-under-argocd.md)), and External Secrets restores every Secret from SSM.
 
-Day-to-day tasks are wrapped in a `Makefile`: run `make help` to list them (`make ci` mirrors the GitHub Actions checks locally).
+Day-to-day tasks are wrapped in a `Makefile`: run `make help` to list them (`make ci` mirrors the GitHub Actions checks locally). Every target that applies something (`plan`, `secrets`, `deploy-*`, `restore-*`) and every Ansible playbook first runs `scripts/require-main.sh`, which stops with the fix when the clone is on another branch, has uncommitted changes to tracked files or is behind `origin/main` (`FORCE=1` skips it in an emergency).
 
 ---
 
@@ -298,6 +298,8 @@ Real problems hit while building and operating this, and how they were solved. T
 **Grafana was OOMKilled 15 times in a day, silently.** A heavier dashboard made it obvious: the memory limit had been too tight from the start, and no alert covered monitoring components. The limit was raised based on measured usage, and a cluster-wide `ContainerOOMKilled` alert now covers every workload.
 
 **A linter that passed without running.** A WSL crash during installation left the local `ansible-lint` as an empty file: it exited 0 and printed nothing, so local checks passed while CI failed. CI also drifted because it installed the latest linter on every run. Fixes: pin every tool version, and make the local runner smoke-test each tool before trusting its result.
+
+**Applying yesterday's repo.** Three times the laptop clone was on an old Dependabot branch or behind `origin/main`: a deploy applied old Helm values, `terraform init` missed a provider bump, and a benchmark ran without the morning's fixes. Each looked like a new bug. Every `make` target that applies something and every playbook now refuse to start from a stale clone.
 
 **Empty secrets.** A password-manager CLI returned nothing for a missing item, creating empty Secrets. Fail-fast guards came first; External Secrets with SSM as the source of truth removed the manual step entirely.
 

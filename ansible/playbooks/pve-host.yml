@@ -1,3 +1,6 @@
+- name: Clone no main atualizado
+  ansible.builtin.import_playbook: require-main.yml
+
 - name: Proxmox host baseline (SSH, ZFS ARC, datacenter firewall)
   hosts: proxmox
   become: true

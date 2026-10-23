@@ -1,3 +1,6 @@
+- name: Clone no main atualizado
+  ansible.builtin.import_playbook: require-main.yml
+
 - name: Patches de segurança automáticos na VM do K3s (reboot semanal só se precisar)
   hosts: k3s
   become: true

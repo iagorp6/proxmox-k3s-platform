@@ -4,6 +4,9 @@
 # O resultado vira métrica no textfile collector do node_exporter, com o label layout=stripe|mirror.
 # Cada layout tem o seu arquivo, então a rodada de antes e a de depois da conversão ficam lado a lado
 # no dashboard (seção Hardware do host, tabela "Benchmark dos discos").
+- name: Clone no main atualizado
+  ansible.builtin.import_playbook: require-main.yml
+
 - name: Benchmark dos discos do host (fio)
   hosts: proxmox
   become: true
