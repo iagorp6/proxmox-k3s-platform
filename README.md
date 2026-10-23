@@ -238,7 +238,7 @@ The dashboard JSON is **generated** by `scripts/build-dashboard.py`, so it is re
 | Built-in game backups | On start and on version change | Corrupted save, bad update |
 | restic → S3 | Daily, 7 daily + 4 weekly | Disk, VM or host loss |
 
-The backup bucket is versioned: restic needs `DeleteObject` to prune, so on its own the credential that writes backups could also erase them. With versioning, anything deleted or overwritten stays recoverable for 30 days, and the restic policy has no permission over object versions, versioning or lifecycle. A weekly `restic check` reads the repository metadata and a random 5% of the data packs, and a warning fires if it fails, so corruption shows up before a restore needs it.
+The backup bucket is versioned: restic needs `DeleteObject` to prune, so on its own the credential that writes backups could also erase them. With versioning, anything deleted or overwritten stays recoverable for 30 days, and the restic policy has no permission over object versions, versioning or lifecycle. Daily backups only run `forget`; a weekly job runs `prune` once (it takes an exclusive lock and rewrites packs in S3, so three prunes a day could hold the lock while the next game's backup waited) and then `restic check`, which reads the repository metadata and a random 5% of the data packs. A warning fires if either fails, so corruption shows up before a restore needs it.
 
 Before each snapshot, an init container runs the game's `saveCommand` from the catalog (`save-all flush` for Minecraft) through a ServiceAccount that may only `exec` into that one pod, so the world on disk is consistent when restic reads it. The `kubectl` binary it uses is verified against a SHA-256 pinned in `platform/defaults.yaml`. If the server is stopped, the backup takes the last save on disk.
 
@@ -248,7 +248,7 @@ Before each snapshot, an init container runs the game's `saveCommand` from the c
 
 ## Security
 
-- IAM users scoped to a single bucket (backup) and a single SSM path, read-only (secrets)
+- IAM users scoped to a single bucket (backup) and a single SSM path, read-only (secrets); their long-lived access keys are checked weekly and must be rotated before 180 days ([runbook](docs/key-rotation.md))
 - GitHub Actions reaches AWS through OIDC with a short-lived role, no stored keys; only `main` can assume it, and explicit denies keep it away from backup objects and game secrets
 - Terraform state bucket: versioned, encrypted, public access blocked, TLS-only, `prevent_destroy`, native S3 locking
 - Kubernetes Secrets encrypted at rest and delivered by External Secrets; nothing secret in Git
@@ -270,7 +270,7 @@ Every push runs Terraform `fmt`/`validate`/`tflint` for both stacks, `ansible-li
 - **Charts are checked before merge, which is when they deploy:** the observability, External Secrets and Argo CD charts only render in the cluster, so `scripts/check-charts.py` renders each one at its pinned version with the repository's values and validates the output, catching a broken value or an incompatible chart upgrade in the pull request.
 - **Alert rules are tested like code:** `promtool` validates every rule and runs unit tests with synthetic series (`k8s/monitoring/tests/`): a stopped game must not page, a missing backup must, and each alert must fire with the expected labels and text. A lint also fails the build if a `critical` or `warning` alert has no first-step action.
 - **The code that changes production is unit-tested:** stdlib `unittest`, no extra dependencies. The Discord bot's decisions (role check, players-online lock, cooldown, one-request queue with expiry, no two switches at once, switch steps) run against a minimal fake `discord` module; `switch-game.py` runs for real in a temporary Git repository with a local origin, checking the replica patches, the commit message, that only allowed paths are ever committed and every refusal; the daily health check is fed canned Prometheus answers, including a Prometheus outage that must become a message, never silence.
-- **Weekly drift detection:** `terraform-drift.yml` assumes a read-only AWS role via OIDC and runs `terraform plan` on `terraform-aws/`. It fails, and GitHub sends an e-mail, when AWS diverges from the code (a change made outside Terraform or a forgotten `apply`). The repository is public, so the job logs only the address and action of each changed resource, never values.
+- **Weekly drift detection:** `terraform-drift.yml` assumes a read-only AWS role via OIDC and runs `terraform plan` on `terraform-aws/`. It fails, and GitHub sends an e-mail, when AWS diverges from the code (a change made outside Terraform or a forgotten `apply`). The repository is public, so the job logs only the address and action of each changed resource, never values. The same run lists the access keys of the IAM users and fails when an active key is older than 180 days or a user has more than one key.
 - **Same checks locally:** `scripts/ci-local.sh` runs the identical checks on a clean copy of the tracked files (so local secrets cannot leak into the scan) and refuses to run if any tool fails a version smoke test.
 
 ---

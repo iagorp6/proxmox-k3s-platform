@@ -178,7 +178,7 @@ spec:
             - |
               set -e
               restic backup /data/data/Saves /data/data/db /data/data/Server --tag zomboid --host zomboid --retry-lock 10m
-              restic forget --tag zomboid --host zomboid --keep-daily 7 --keep-weekly 4 --prune --retry-lock 10m
+              restic forget --tag zomboid --host zomboid --keep-daily 7 --keep-weekly 4 --retry-lock 10m
               restic snapshots --tag zomboid --latest 1
             envFrom:
             - secretRef:

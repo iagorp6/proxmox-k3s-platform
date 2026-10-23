@@ -37,7 +37,7 @@ spec:
             summary: "Sem backup bem-sucedido de {{ $labels.namespace }} há mais de 26h"
             description: "O CronJob {{ $labels.cronjob }} não tem sucesso registrado nas últimas 26 horas."
             action: "kubectl -n {{ $labels.namespace }} create job --from=cronjob/{{ $labels.cronjob }} backup-manual"
-        # Verificação semanal do repositório (k8s/platform/restic-check.yaml): backup que não restaura não é backup
+        # Prune e verificação semanais do repositório (k8s/platform/restic-check.yaml): backup que não restaura não é backup
         - alert: ResticCheckFailed
           expr: |
             (
@@ -55,7 +55,7 @@ spec:
             severity: warning
           annotations:
             summary: "Verificação semanal do repositório restic falhou"
-            description: "O restic check não terminou com sucesso: pode haver pack ou índice corrompido no S3. Os backups diários seguem rodando, mas o restore pode falhar."
+            description: "O prune ou o restic check semanal não terminou com sucesso: pode haver pack ou índice corrompido no S3, ou o espaço de snapshots esquecidos não foi liberado. Os backups diários seguem rodando, mas o restore pode falhar."
             action: "kubectl -n platform logs job/$(kubectl -n platform get jobs -o name --sort-by=.metadata.creationTimestamp | grep restic-check | tail -1 | cut -d/ -f2) --tail=40"
         # Restore drill mensal de cada jogo (CronJob <jogo>-restore-drill, gerado pelo render-games.py).
         # Falha de uma execução cai no KubeJobFailed; aqui é o drill que parou de passar ou nunca passou.

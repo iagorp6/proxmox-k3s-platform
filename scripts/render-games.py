@@ -191,10 +191,12 @@ def render_game(g):
     if b:
         keep = DEFAULTS["backupRetention"]
         excludes = "".join(f" --exclude {e}" for e in b.get("exclude", []))
+        # Só forget: o prune (lock exclusivo, lê e reescreve packs no S3) roda uma vez por semana no
+        # restic-check (k8s/platform/restic-check.yaml), não três vezes por dia no repositório compartilhado
         script = (
             "set -e\n"
             f"restic backup {' '.join(b['paths'])}{excludes} --tag {name} --host {name} --retry-lock 10m\n"
-            f"restic forget --tag {name} --host {name} --keep-daily {keep['daily']} --keep-weekly {keep['weekly']} --prune --retry-lock 10m\n"
+            f"restic forget --tag {name} --host {name} --keep-daily {keep['daily']} --keep-weekly {keep['weekly']} --retry-lock 10m\n"
             f"restic snapshots --tag {name} --latest 1\n"
         )
         hook = save_hook(g) if g.get("switch", {}).get("saveCommand") else None
@@ -446,6 +448,31 @@ def memory_problems(games):
     return errors
 
 
+def port_name_problems(games):
+    """Service (targetPort) e NetworkPolicy apontam as portas pelo nome do game.yaml: o nome precisa existir
+    num containerPort do StatefulSet, com o mesmo protocolo. Senão o Service fica sem endpoint e a
+    NetworkPolicy bloqueia o jogador, os dois em silêncio."""
+    errors = []
+    for g in games:
+        if g["status"] != "active":
+            continue
+        path = ROOT / g["dir"] / "statefulset.yaml"
+        sts = [d for d in yaml.safe_load_all(path.read_text(encoding="utf-8")) if d and d.get("kind") == "StatefulSet"]
+        declared = [cp for d in sts for c in d["spec"]["template"]["spec"]["containers"] for cp in c.get("ports", [])]
+        by_name = {cp["name"]: cp for cp in declared if cp.get("name")}
+        by_number = {cp["containerPort"]: cp for cp in declared}
+        wanted = [(p.get("targetPort", p["name"]), p["protocol"]) for p in g["ports"]]
+        if g.get("metrics"):
+            wanted.append(("metrics", "TCP"))
+        for target, protocol in wanted:
+            cp = by_number.get(target) if isinstance(target, int) else by_name.get(target)
+            if cp is None:
+                errors.append(f"{g['dir']}/game.yaml: porta '{target}' não existe em nenhum containerPort de {g['dir']}/statefulset.yaml")
+            elif cp.get("protocol", "TCP") != protocol:
+                errors.append(f"{g['dir']}/game.yaml: porta '{target}' é {protocol} no catálogo e {cp.get('protocol', 'TCP')} no statefulset.yaml")
+    return errors
+
+
 def port_problems(games):
     """Jogo active só é alcançável nas portas que o VIP do FortiGate encaminha (publishedPorts)."""
     published = set(DEFAULTS["publishedPorts"])
@@ -457,7 +484,7 @@ def port_problems(games):
 def main():
     check = "--check" in sys.argv
     errors = (catalog.problems() + mute_problems(catalog.games()) + memory_problems(catalog.games())
-              + port_problems(catalog.games())
+              + port_problems(catalog.games()) + port_name_problems(catalog.games())
               + exporter_problems(catalog.load()))
     for key in ("resticImage", "curlImage"):
         if not IMAGE_REF.fullmatch(str(DEFAULTS[key])):

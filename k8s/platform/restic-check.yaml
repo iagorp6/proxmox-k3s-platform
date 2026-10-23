@@ -1,5 +1,7 @@
-# Verificação semanal do repositório restic (todos os jogos dividem o mesmo repositório no S3).
-# O backup diário só escreve e faz prune: corrupção em pack ou índice só apareceria no restore.
+# Manutenção semanal do repositório restic (todos os jogos dividem o mesmo repositório no S3).
+# O backup diário só escreve e marca snapshots velhos (forget). Aqui roda o prune, uma vez por semana
+# em vez de três por dia (lock exclusivo que atrasava o backup do jogo seguinte), e depois o check:
+# corrupção em pack ou índice só apareceria no restore.
 # --read-data-subset baixa 5% dos packs, sorteados a cada execução: em poucos meses o repositório
 # inteiro foi lido, e o egress do S3 fica em centavos. Falha vira o alerta ResticCheckFailed.
 apiVersion: external-secrets.io/v1
@@ -67,6 +69,7 @@ spec:
                 - |
                   set -e
                   restic snapshots --compact
+                  restic prune --retry-lock 30m
                   restic check --read-data-subset=5% --retry-lock 30m
               envFrom:
                 - secretRef:
