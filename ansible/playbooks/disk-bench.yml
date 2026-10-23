@@ -36,6 +36,25 @@
           {{ 'mirror' if 'mirror-' in disk_bench_pool.stdout
              else 'raidz' if 'raidz' in disk_bench_pool.stdout else 'stripe' }}
 
+    # Duas rodadas ao mesmo tempo dividem os discos e distorcem os números
+    - name: Refuse to run while another fio is running
+      ansible.builtin.command: pgrep -x fio
+      register: disk_bench_running
+      changed_when: false
+      failed_when: disk_bench_running.rc == 0
+
+    # Sobra de uma rodada interrompida (Ctrl+C pula o always): é o próprio dataset de teste, pode apagar
+    - name: Find a leftover scratch dataset
+      ansible.builtin.command: zfs list -H -o name {{ disk_bench_dataset }}
+      register: disk_bench_leftover
+      changed_when: false
+      failed_when: false
+
+    - name: Destroy the leftover scratch dataset
+      ansible.builtin.command: zfs destroy {{ disk_bench_dataset }}
+      when: disk_bench_leftover.rc == 0
+      changed_when: true
+
     # Se o caminho já existe, o fio rodaria fora do dataset de teste (com ARC e compressão do pool) e o
     # destroy no fim não limparia nada: para antes de tocar em qualquer coisa
     - name: Check that the scratch path is free
