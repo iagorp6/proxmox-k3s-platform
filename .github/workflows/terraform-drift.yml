@@ -39,6 +39,7 @@ jobs:
           terraform_version: "1.16.5"
           terraform_wrapper: false
       - name: Profile "homelab" assumindo a role com o token OIDC do run
+        id: profile
         env:
           ROLE_ARN: ${{ vars.AWS_DRIFT_ROLE_ARN }}
         run: |
@@ -82,3 +83,31 @@ jobs:
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
           exit 1
+      - name: Idade das chaves IAM (máximo 180 dias)
+        # Roda mesmo com drift no plan: os dois avisos são independentes
+        if: ${{ !cancelled() && steps.profile.outcome == 'success' }}
+        env:
+          MAX_DAYS: "180"
+        run: |
+          # restic e External Secrets usam chave de longa duração. Falha com chave ativa mais velha que
+          # MAX_DAYS ou com mais de uma chave no usuário. Rotação: docs/key-rotation.md
+          # O log mostra só usuário, final do ID, data e status; o segredo nunca sai da AWS.
+          users=$(terraform show -json | jq -r '.values.root_module.resources[]? | select(.type == "aws_iam_user") | .values.name')
+          [ -n "$users" ] || { echo "ERRO: nenhum aws_iam_user no state do terraform-aws"; exit 1; }
+          now=$(date +%s)
+          for u in $users; do
+            keys=$(aws --profile homelab iam list-access-keys --user-name "$u" --output json)
+            count=$(jq '.AccessKeyMetadata | length' <<<"$keys")
+            if [ "$count" -gt 1 ]; then
+              echo "::error::$u tem $count chaves de acesso (rotação pela metade ou chave criada fora do Terraform)"
+            fi
+            while read -r id created status; do
+              days=$(( (now - $(date -d "$created" +%s)) / 86400 ))
+              echo "$u  ...${id: -4}  criada em ${created%%T*}  ${days} dias  $status"
+              if [ "$status" = Active ] && [ "$days" -gt "$MAX_DAYS" ]; then
+                echo "::error::chave de $u com $days dias (máximo $MAX_DAYS): rotacione com docs/key-rotation.md"
+              fi
+            done < <(jq -r '.AccessKeyMetadata[] | "\(.AccessKeyId) \(.CreateDate) \(.Status)"' <<<"$keys")
+          done | tee "$RUNNER_TEMP/keys.log"
+          { echo "### Chaves IAM"; echo; echo '```'; cat "$RUNNER_TEMP/keys.log"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          ! grep -q '^::error::' "$RUNNER_TEMP/keys.log"

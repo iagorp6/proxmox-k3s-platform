@@ -275,7 +275,7 @@ tests:
           - exp_labels: {severity: warning, namespace: platform, cronjob: restic-check}
             exp_annotations:
               summary: "Verificação semanal do repositório restic falhou"
-              description: "O restic check não terminou com sucesso: pode haver pack ou índice corrompido no S3. Os backups diários seguem rodando, mas o restore pode falhar."
+              description: "O prune ou o restic check semanal não terminou com sucesso: pode haver pack ou índice corrompido no S3, ou o espaço de snapshots esquecidos não foi liberado. Os backups diários seguem rodando, mas o restore pode falhar."
               action: "kubectl -n platform logs job/$(kubectl -n platform get jobs -o name --sort-by=.metadata.creationTimestamp | grep restic-check | tail -1 | cut -d/ -f2) --tail=40"
   - name: restic check que terminou logo depois do agendamento não alerta
     interval: 1m

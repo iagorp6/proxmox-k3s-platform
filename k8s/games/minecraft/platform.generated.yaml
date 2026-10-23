@@ -171,7 +171,7 @@ spec:
             - |
               set -e
               restic backup /data/world --tag minecraft --host minecraft --retry-lock 10m
-              restic forget --tag minecraft --host minecraft --keep-daily 7 --keep-weekly 4 --prune --retry-lock 10m
+              restic forget --tag minecraft --host minecraft --keep-daily 7 --keep-weekly 4 --retry-lock 10m
               restic snapshots --tag minecraft --latest 1
             envFrom:
             - secretRef:
