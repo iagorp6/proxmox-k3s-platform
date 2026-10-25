@@ -5,7 +5,7 @@ metadata:
   name: zomboid
   namespace: zomboid
 spec:
-  replicas: 1
+  replicas: 0
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -13,4 +13,4 @@ metadata:
   name: zomboid-daily-restart
   namespace: zomboid
 spec:
-  suspend: false
+  suspend: true
