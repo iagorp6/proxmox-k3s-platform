@@ -138,6 +138,12 @@ alertmanager:
       # Com o host fora, alertas que dependem dele ficam mudos
       - source_matchers: ["alertname = HostDown"]
         target_matchers: ['alertname =~ "DiskSmartFailing|DiskReallocatedSectors|ZfsPoolNotOnline|EccUncorrectableErrors|EccCorrectableErrorsHigh|HostDiskSpaceLow"']
+      # Entrega ao Discord falhando (webhook apagado ou trocado): o Watchdog para de pingar o
+      # healthchecks.io, que avisa pela integração própria dele. Sem isso o dead man's switch seguia
+      # verde enquanto todo alerta falhava calado (o próprio AlertmanagerFailedToSendAlerts iria
+      # para o Discord quebrado).
+      - source_matchers: ["alertname = AlertmanagerFailedToSendAlerts", "integration = discord"]
+        target_matchers: ["alertname = Watchdog"]
       # Com o jogo fora do ar, restart, memória e métricas do mesmo jogo não importam
       - source_matchers: ["alertname = GameDown"]
         target_matchers: ['alertname =~ "GameRestarted|GameMemoryHigh|GameExporterMissing"']
