@@ -1413,7 +1413,7 @@ data:
             {
               "type": "stat",
               "title": "SMART dos discos",
-              "description": "Autoteste dos discos. FALHA = disco com falha prevista. No ZFS RAID0, perder um disco é perder o pool.",
+              "description": "Autoteste dos discos. FALHA = disco com falha prevista. O pool é um mirror: aguenta perder um disco, mas fica sem redundância até a troca.",
               "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
@@ -1482,7 +1482,7 @@ data:
             {
               "type": "stat",
               "title": "Pool ZFS",
-              "description": "Estado do pool de armazenamento (rpool).",
+              "description": "Estado do pool de armazenamento (rpool, mirror de 2 discos). DEGRADADO = um disco fora.",
               "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
@@ -1837,7 +1837,7 @@ data:
             {
               "type": "timeseries",
               "title": "IOPS dos discos (soma)",
-              "description": "Operações por segundo somando os discos. No mirror, cada disco recebe todas as escritas.",
+              "description": "Operações por segundo somando os discos. No mirror, cada escrita aparece duas vezes (vai para os dois discos).",
               "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
@@ -1928,7 +1928,7 @@ data:
             {
               "type": "stat",
               "title": "Pico de ocupação (p99, 7 dias)",
-              "description": "Maior p99 de ocupação entre os discos na última semana, no layout atual do pool.",
+              "description": "Maior p99 de ocupação entre os discos na última semana. Abaixo de 50%, o disco não é gargalo.",
               "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
@@ -1936,7 +1936,7 @@ data:
               "gridPos": {
                 "x": 0,
                 "y": 63,
-                "w": 6,
+                "w": 8,
                 "h": 4
               },
               "targets": [
@@ -1985,79 +1985,21 @@ data:
             },
             {
               "type": "stat",
-              "title": "Pior caso num mirror (p99, 7 dias)",
-              "description": "Soma da ocupação dos discos: o que um disco teria se fizesse o trabalho dos dois. Abaixo de 50%, trocar o stripe por mirror não pesa.",
+              "title": "Escritas por disco (p99, 7 dias)",
+              "description": "IOPS de escrita do disco mais carregado. Um HDD de 7200 rpm aguenta uns 100 a 150 IOPS aleatórios.",
               "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
               },
               "gridPos": {
-                "x": 6,
+                "x": 8,
                 "y": 63,
-                "w": 6,
+                "w": 8,
                 "h": 4
               },
               "targets": [
                 {
-                  "expr": "quantile_over_time(0.99, sum(max by (device) (rate(node_disk_io_time_seconds_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m])))[7d:5m])",
-                  "refId": "A"
-                }
-              ],
-              "fieldConfig": {
-                "defaults": {
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": null
-                      },
-                      {
-                        "color": "orange",
-                        "value": 0.5
-                      },
-                      {
-                        "color": "red",
-                        "value": 0.8
-                      }
-                    ]
-                  },
-                  "unit": "percentunit",
-                  "decimals": 0,
-                  "noValue": "sem dados"
-                },
-                "overrides": []
-              },
-              "options": {
-                "colorMode": "background",
-                "graphMode": "none",
-                "textMode": "value",
-                "justifyMode": "center",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ]
-                }
-              },
-              "id": 33
-            },
-            {
-              "type": "stat",
-              "title": "Escritas (p99, 7 dias)",
-              "description": "IOPS de escrita somando os discos. Um HDD de 7200 rpm aguenta uns 100 a 150 IOPS aleatórios.",
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-              },
-              "gridPos": {
-                "x": 12,
-                "y": 63,
-                "w": 6,
-                "h": 4
-              },
-              "targets": [
-                {
-                  "expr": "quantile_over_time(0.99, sum(max by (device) (rate(node_disk_writes_completed_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m])))[7d:5m])",
+                  "expr": "max(quantile_over_time(0.99, max by (device) (rate(node_disk_writes_completed_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]))[7d:5m]))",
                   "refId": "A"
                 }
               ],
@@ -2097,25 +2039,25 @@ data:
                   ]
                 }
               },
-              "id": 34
+              "id": 33
             },
             {
               "type": "stat",
-              "title": "Vazão de escrita (p99, 7 dias)",
-              "description": "Bytes escritos por segundo somando os discos. Um HDD sustenta uns 150 MB/s sequenciais.",
+              "title": "Vazão de escrita por disco (p99, 7 dias)",
+              "description": "Bytes escritos por segundo no disco mais carregado. Um HDD sustenta uns 150 MB/s sequenciais.",
               "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
               },
               "gridPos": {
-                "x": 18,
+                "x": 16,
                 "y": 63,
-                "w": 6,
+                "w": 8,
                 "h": 4
               },
               "targets": [
                 {
-                  "expr": "quantile_over_time(0.99, sum(max by (device) (rate(node_disk_written_bytes_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m])))[7d:5m])",
+                  "expr": "max(quantile_over_time(0.99, max by (device) (rate(node_disk_written_bytes_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]))[7d:5m]))",
                   "refId": "A"
                 }
               ],
@@ -2155,12 +2097,12 @@ data:
                   ]
                 }
               },
-              "id": 35
+              "id": 34
             },
             {
               "type": "table",
               "title": "Benchmark dos discos (fio)",
-              "description": "Resultado de ansible-playbook playbooks/disk-bench.yml, uma linha por teste e layout do pool. Rode antes e depois de trocar o stripe por mirror para comparar.",
+              "description": "Resultado de ansible-playbook playbooks/disk-bench.yml, uma linha por teste e layout do pool. O layout=stripe é de antes da conversão para mirror (26/10/2026).",
               "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
@@ -2306,7 +2248,7 @@ data:
               "options": {
                 "showHeader": true
               },
-              "id": 36
+              "id": 35
             }
           ],
           "id": 22
@@ -2367,7 +2309,7 @@ data:
                   }
                 }
               ],
-              "id": 38
+              "id": 37
             },
             {
               "type": "logs",
@@ -2395,7 +2337,7 @@ data:
                 "sortOrder": "Descending",
                 "enableLogDetails": true
               },
-              "id": 39
+              "id": 38
             },
             {
               "type": "logs",
@@ -2423,10 +2365,10 @@ data:
                 "sortOrder": "Descending",
                 "enableLogDetails": true
               },
-              "id": 40
+              "id": 39
             }
           ],
-          "id": 37
+          "id": 36
         }
       ]
     }

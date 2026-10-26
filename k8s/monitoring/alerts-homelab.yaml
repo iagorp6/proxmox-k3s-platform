@@ -95,8 +95,8 @@ spec:
             severity: critical
           annotations:
             summary: "SMART reprovado no disco {{ $labels.device }}"
-            description: "Falha prevista. No ZFS RAID0, perder um disco é perder o pool inteiro."
-            action: "Rodar um backup manual agora e planejar a troca do disco."
+            description: "Falha prevista. O pool é um mirror: se o disco morrer, o pool segue no outro, mas sem redundância até a troca."
+            action: "Rodar um backup manual agora e trocar o disco seguindo docs/disk-replacement.md."
         - alert: DiskReallocatedSectors
           expr: smartctl_device_attribute{attribute_name="Reallocated_Sector_Ct",attribute_value_type="raw"} > 0
           for: 30m
@@ -113,8 +113,8 @@ spec:
             severity: critical
           annotations:
             summary: "Pool ZFS {{ $labels.zpool }} em estado {{ $labels.state }}"
-            description: "O pool não está ONLINE."
-            action: "ssh no host e rodar zpool status -x"
+            description: "O pool não está ONLINE. DEGRADED no mirror = um disco fora: tudo funciona, mas o próximo disco perdido é o pool inteiro."
+            action: "ssh no host, zpool status -x, e trocar o disco seguindo docs/disk-replacement.md."
         - alert: EccUncorrectableErrors
           expr: increase(node_edac_uncorrectable_errors_total[1h]) > 0
           labels:

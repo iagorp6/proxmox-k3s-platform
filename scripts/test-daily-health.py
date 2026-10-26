@@ -39,7 +39,6 @@ def healthy():
         dh.HOST_SECURITY: [sample(0)],
         dh.HOST_REBOOT: [sample(0)],
         dh.DISK_BUSY_P99: [sample(0.12, device="sdb"), sample(0.11, device="sda")],
-        dh.DISK_MIRROR_P99: [sample(0.21)],
     }
 
 
@@ -64,7 +63,7 @@ class DailyHealthTest(unittest.TestCase):
         self.assertEqual(self.field(e, "💾 Último backup"), "🟢 Minecraft · há 5 h")
         self.assertEqual(self.field(e, "⏱️ Host no ar"), "30 dias")
         self.assertEqual(self.field(e, "🩹 Patches do host"), "Em dia")
-        self.assertEqual(self.field(e, "💽 Discos do host (p99, 7 dias)"), "sda 11% · sdb 12%\nPior caso num mirror: 21%")
+        self.assertEqual(self.field(e, "💽 Discos do host (p99, 7 dias)"), "sda 11% · sdb 12%")
 
     def test_each_problem_is_listed(self):
         a = healthy()

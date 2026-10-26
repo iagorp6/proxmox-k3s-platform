@@ -39,7 +39,7 @@ flowchart TB
     subgraph corp["Corporate network"]
         fw["Enterprise firewall<br/>VIP + DDNS + policy routing"]
         subgraph vlan["Isolated VLAN"]
-            subgraph pve["Proxmox VE · HPE DL20 Gen9 · ZFS"]
+            subgraph pve["Proxmox VE · HPE DL20 Gen9 · ZFS mirror"]
                 hostexp["node_exporter<br/>smartctl_exporter"]
                 subgraph vm["VM k3s-01 · Ubuntu · cloud-init"]
                     argo["Argo CD"]
@@ -81,7 +81,7 @@ flowchart TB
 
 | Layer | Tools |
 |---|---|
-| Hardware | HPE ProLiant DL20 Gen9, Xeon E3-1220 v5, 24 GB ECC, 2x HDD (ZFS) |
+| Hardware | HPE ProLiant DL20 Gen9, Xeon E3-1220 v5, 24 GB ECC, 2x 1 TB HDD (ZFS mirror) |
 | Virtualization | Proxmox VE |
 | Provisioning | Terraform (`bpg/proxmox`, `hashicorp/aws`), cloud-init, remote state on S3 |
 | Configuration | Ansible (roles: `k3s`, `gameserver_net`, `host_exporters`, `pve_host`, `auto_updates`) |
@@ -206,7 +206,7 @@ The **AsunBoid** dashboard covers every game on the platform and reads top to bo
 - **SLO:** 28-day availability against the 99% objective, error budget left and burn rate over 30 minutes, 6 hours and 3 days ([docs/slo.md](docs/slo.md)).
 - **Players:** who is online now, players over time, a per-player session timeline, and a table with playtime (24h, 7d, 30d, all time), deaths and last seen.
 - **Game server resources:** memory against the container limit, CPU against the VM's vCPUs, unexpected restarts.
-- **Host hardware** (collapsed): SMART, ZFS pool, ECC errors, disk temperature, free space, host RAM, plus disk load (busy time, IOPS, write latency, 7-day p99 and the worst case for a mirror) and the results of `playbooks/disk-bench.yml` (fio, one row per test and pool layout) to compare the stripe with a mirror before and after.
+- **Host hardware** (collapsed): SMART, ZFS pool, ECC errors, disk temperature, free space, host RAM, plus disk load (busy time, IOPS, write latency, 7-day p99 of the busiest disk) and the results of `playbooks/disk-bench.yml` (fio, one row per test and pool layout: the old stripe and the current mirror).
 - **Logs and alerts** (collapsed): connection logs, warnings and errors, firing alerts.
 
 The dashboard JSON is **generated** by `scripts/build-dashboard.py`, so it is reviewable in a pull request; CI fails if the committed YAML drifts from the generator.
@@ -236,7 +236,8 @@ The dashboard JSON is **generated** by `scripts/build-dashboard.py`, so it is re
 |---|---|---|
 | In-game autosave | Every 10 minutes | Server crash |
 | Built-in game backups | On start and on version change | Corrupted save, bad update |
-| restic → S3 | Daily, 7 daily + 4 weekly | Disk, VM or host loss |
+| ZFS mirror on the host | Continuous | One failed disk ([replacement](docs/disk-replacement.md)) |
+| restic → S3 | Daily, 7 daily + 4 weekly | Both disks, VM or host loss |
 
 The backup bucket is versioned: restic needs `DeleteObject` to prune, so on its own the credential that writes backups could also erase them. With versioning, anything deleted or overwritten stays recoverable for 30 days, and the restic policy has no permission over object versions, versioning or lifecycle. Daily backups only run `forget`; a weekly job runs `prune` once (it takes an exclusive lock and rewrites packs in S3, so three prunes a day could hold the lock while the next game's backup waited) and then `restic check`, which reads the repository metadata and a random 5% of the data packs. A warning fires if either fails, so corruption shows up before a restore needs it.
 
@@ -288,6 +289,8 @@ Real problems hit while building and operating this, and how they were solved. T
 
 **CGNAT and asymmetric routing.** Inbound traffic arrived through one ISP while replies left through another behind CGNAT. A policy route keeps the game ports symmetric.
 
+**Stripe to mirror without a reinstall.** The host was installed on a two-disk ZFS stripe, and the plan was to fix it during a full rebuild. OpenZFS device removal made it a live operation of a few minutes: `zpool remove` evacuated one disk onto the other (13.9 GB in 2 minutes) and `zpool attach` mirrored it back, with the game server running. The disk-load panels and a fio benchmark captured before and after showed the cost: sequential writes dropped from 179 to 145 MB/s and the fsync p99 doubled (40 to 79 ms), while random reads were unchanged. With the disks idle over 80% of the time, that was worth trading for surviving a disk failure ([ADR 0005](docs/adr/0005-host-recovery-by-rebuild.md)).
+
 **"Loading the world" never finished.** Packet captures showed large UDP packets retransmitted forever: fragments were dropped on the path. The game's RakNet transport negotiates MTU at connect time, so an `iptables` length match drops oversized handshake probes and forces a smaller MTU. Codified in the `gameserver_net` role.
 
 **A "harmless" hardening took the server down for an hour.** Removing the default admin account looked like a security win, but the server requires it at startup and, when missing, blocks on an interactive prompt with no TTY. The pod stayed `Running` with no game. The alert fired; the fix was to always pass the admin password at boot (from SSM), filter launcher arguments from logs, and restructure the entrypoint so the container exits when the game does.
@@ -327,7 +330,7 @@ A Budgets alarm fires above USD 1/month, and a CloudWatch alarm watches the size
 - [x] Third-party Helm releases (monitoring, External Secrets) managed by Argo CD
 - [x] Automatic security patching on the VM, pending-patch alerts on the host
 - [ ] Timed full DR drill and published RTO (rebuild strategy in [ADR 0005](docs/adr/0005-host-recovery-by-rebuild.md))
-- [ ] Reinstall the host on a ZFS mirror during the DR drill
+- [x] Host pool on a ZFS mirror, converted in place (`zpool remove` + `zpool attach`, no reinstall); [disk replacement](docs/disk-replacement.md) documented
 - [ ] Custom game-server image built in CI
 
 ---

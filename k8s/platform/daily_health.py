@@ -35,12 +35,11 @@ RESTARTS = "sum by (namespace, pod) (increase(kube_pod_container_status_restarts
 HOST_UPTIME = 'time() - node_boot_time_seconds{job="proxmox-node"}'
 VM_UPTIME = 'time() - max(node_boot_time_seconds{job="node-exporter"})'
 HOST_SECURITY = 'sum(apt_upgrades_pending{job="proxmox-node", origin=~".*-security.*"})'
-# Carga dos discos do host (p99 da semana). A soma dos discos é o pior caso de um disco num mirror,
-# que recebe todas as escritas em vez de metade: o número que decide trocar o stripe por mirror.
+# Carga dos discos do host (p99 da semana). No mirror os dois recebem as mesmas escritas, então os
+# valores ficam parecidos; um disco bem mais ocupado que o outro costuma ser um disco ficando lento.
 # max by (device): um valor por disco mesmo se um label do alvo (instance) mudou dentro da semana
 HOST_DISK_BUSY = 'max by (device) (rate(node_disk_io_time_seconds_total{job="proxmox-node", device=~"sd[a-z]+"}[5m]))'
 DISK_BUSY_P99 = f"quantile_over_time(0.99, {HOST_DISK_BUSY}[7d:5m])"
-DISK_MIRROR_P99 = f"quantile_over_time(0.99, sum({HOST_DISK_BUSY})[7d:5m])"
 HOST_REBOOT = ('max(max(node_reboot_required{job="proxmox-node"})'
                ' or max(homelab_kernel_reboot_pending{job="proxmox-node"}))')
 
@@ -126,10 +125,9 @@ def build():
 
     # Informativo: carga dos discos do host na semana (sem ponto de atenção, não há alerta para isso)
     busy = sorted((r["metric"].get("device", "?"), val(r)) for r in q(DISK_BUSY_P99))
-    mirror = q(DISK_MIRROR_P99)
     if busy:
-        fields.append({"name": "💽 Discos do host (p99, 7 dias)", "value": " · ".join(f"{d} {b:.0%}" for d, b in busy)
-                       + (f"\nPior caso num mirror: {val(mirror[0]):.0%}" if mirror else ""), "inline": False})
+        fields.append({"name": "💽 Discos do host (p99, 7 dias)", "value": " · ".join(f"{d} {b:.0%}" for d, b in busy),
+                       "inline": False})
 
     return problems, fields
 
