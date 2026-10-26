@@ -7,7 +7,7 @@ metadata:
   name: kube-prometheus-stack
   namespace: argocd
 spec:
-  project: default
+  project: monitoring
   sources:
     - repoURL: https://prometheus-community.github.io/helm-charts
       chart: kube-prometheus-stack
@@ -41,6 +41,5 @@ spec:
       limit: 5
       backoff: {duration: 30s, factor: 2, maxDuration: 5m}
     syncOptions:
-      - CreateNamespace=true
       - ServerSideApply=true   # CRDs do operator passam do limite de 256 KiB da annotation do apply client-side
       - RespectIgnoreDifferences=true

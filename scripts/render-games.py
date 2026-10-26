@@ -5,8 +5,10 @@ Para cada jogo com status "active" e campo "namespace", grava:
   k8s/games/<jogo>/platform.generated.yaml  Service do jogo, métricas (Service + ServiceMonitor),
                                             NetworkPolicy de ingress, backup (ExternalSecret + CronJob restic)
                                             e restore drill mensal (CronJob)
-  k8s/argocd/apps/<jogo>.yaml               Application do Argo CD (sync manual)
+  k8s/argocd/apps/<jogo>.yaml               Application do Argo CD (sync manual, AppProject games)
 E, para o conjunto desses jogos:
+  k8s/argocd/guardrails.generated.yaml        Namespaces com Pod Security e os AppProjects platform,
+                                              monitoring e games (aplicado à mão: make guardrails)
   k8s/monitoring/alerts-games.generated.yaml  alertas por jogo (fora do ar, sem resposta, sem métricas, restart, memória)
   k8s/platform/games-bot-rbac.generated.yaml  RBAC do bot de troca de jogo em cada namespace (ADR 0006)
   k8s/platform/games.generated.json           nome e ícone de cada jogo (resumo semanal no Discord)
@@ -150,6 +152,36 @@ def drill_cronjob(g):
     }
 
 
+# Faixas que um pod de jogo não alcança: rede da casa e do rack (host Proxmox, FortiGate, outras
+# máquinas), rede de pods e services do K3s, CGNAT e link-local. A internet pública continua aberta.
+PRIVATE_RANGES = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "169.254.0.0/16"]
+# API do Kubernetes: o service kubernetes (10.43.0.1:443) vira <IP do node>:6443 no DNAT, antes da
+# NetworkPolicy, e o IP do node é privado. Liberar a porta 6443 em qualquer destino evita fixar o IP
+# do node num repositório público; nada além do kube-apiserver escuta nela.
+KUBE_API_PORT = 6443
+
+
+def egress_policy(name, ns):
+    """Egress do namespace do jogo: DNS do cluster, API do Kubernetes e internet sem as faixas privadas.
+
+    Os jogos ficam expostos na internet e rodam mods de terceiros (Workshop, Modrinth): um servidor
+    comprometido não chega ao host Proxmox, à GUI do FortiGate nem aos outros namespaces. Quem precisa
+    de cada regra: DNS (todos), API (hook de save do backup, kubectl exec), internet (Steam e mods no
+    servidor, restic no S3, download do kubectl no hook).
+    """
+    return {
+        "apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
+        "metadata": {"name": f"{name}-egress", "namespace": ns},
+        "spec": {"podSelector": {}, "policyTypes": ["Egress"], "egress": [
+            {"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
+                     "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}],
+             "ports": [{"port": 53, "protocol": "UDP"}, {"port": 53, "protocol": "TCP"}]},
+            {"ports": [{"port": KUBE_API_PORT, "protocol": "TCP"}]},
+            {"to": [{"ipBlock": {"cidr": "0.0.0.0/0", "except": PRIVATE_RANGES}}]},
+        ]},
+    }
+
+
 def render_game(g):
     name, ns = g["name"], g["namespace"]
     uid = g.get("runAsUser", 1000)
@@ -176,17 +208,16 @@ def render_game(g):
         }]
     # Ingress default-deny no namespace do jogo: entram só as portas do jogo (de qualquer origem: jogadores
     # via ServiceLB, com ou sem externalTrafficPolicy Local) e o scrape do Prometheus na porta de métricas.
-    # Sondas são exec e exporters/RCON falam por localhost, então nada mais precisa entrar. Egress fica
-    # liberado (mods do Steam, restic no S3, DNS, API do Kubernetes).
+    # Sondas são exec e exporters/RCON falam por localhost, então nada mais precisa entrar.
     ingress = [{"ports": [{"port": p.get("targetPort", p["name"]), "protocol": p["protocol"]} for p in g["ports"]]}]
     if g.get("metrics"):
         ingress.append({"from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "monitoring"}}}],
                         "ports": [{"port": "metrics", "protocol": "TCP"}]})
-    docs.append({
+    docs += ([{
         "apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
         "metadata": {"name": f"{name}-ingress", "namespace": ns},
         "spec": {"podSelector": {}, "policyTypes": ["Ingress"], "ingress": ingress},
-    })
+    }, egress_policy(name, ns)])
     b = g.get("backup")
     if b:
         keep = DEFAULTS["backupRetention"]
@@ -243,7 +274,7 @@ def render_game(g):
     app = {
         "apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
         "metadata": {"name": name, "namespace": "argocd"},
-        "spec": {"project": "default",
+        "spec": {"project": "games",
                  "source": {"repoURL": DEFAULTS["repoURL"], "targetRevision": "main", "path": f"k8s/games/{name}"},
                  "destination": {"server": "https://kubernetes.default.svc", "namespace": ns}},
     }
@@ -398,6 +429,92 @@ def render_bot_rbac(games):
     return {ROOT / "k8s" / "platform" / "games-bot-rbac.generated.yaml": dump(docs)}
 
 
+# Pod Security Admission por namespace. restricted onde os pods já cumprem (non-root, sem escalada,
+# drop ALL, seccomp); monitoring é privileged porque o node-exporter e o Alloy leem o host (hostPath,
+# hostNetwork, hostPID). Jogos: podSecurity do game.yaml (padrão restricted).
+INFRA_NAMESPACES = {"platform": "restricted", "external-secrets": "restricted", "monitoring": "privileged"}
+POD_SECURITY = ("restricted", "baseline", "privileged")
+IN_CLUSTER = "https://kubernetes.default.svc"
+CHART_REPOS = {
+    "platform": ["https://charts.external-secrets.io"],
+    "monitoring": ["https://prometheus-community.github.io/helm-charts", "https://grafana.github.io/helm-charts"],
+}
+# Recursos de cluster que cada grupo instala (CRDs, RBAC e webhooks dos charts). Namespace não entra:
+# os namespaces e os labels de Pod Security vêm só deste arquivo, que o autosync não altera.
+CLUSTER_KINDS = {
+    "platform": [("apiextensions.k8s.io", "CustomResourceDefinition"), ("rbac.authorization.k8s.io", "ClusterRole"),
+                 ("rbac.authorization.k8s.io", "ClusterRoleBinding"),
+                 ("admissionregistration.k8s.io", "ValidatingWebhookConfiguration"),
+                 ("external-secrets.io", "ClusterSecretStore")],
+    "monitoring": [("apiextensions.k8s.io", "CustomResourceDefinition"), ("rbac.authorization.k8s.io", "ClusterRole"),
+                   ("rbac.authorization.k8s.io", "ClusterRoleBinding"),
+                   ("admissionregistration.k8s.io", "MutatingWebhookConfiguration"),
+                   ("admissionregistration.k8s.io", "ValidatingWebhookConfiguration")],
+    "games": [],
+}
+# Nenhum projeto cria Applications ou AppProjects: isso é só do root (projeto bootstrap, root.yaml)
+NO_ARGO = [{"group": "argoproj.io", "kind": k} for k in ("Application", "ApplicationSet", "AppProject")]
+
+
+def pod_security_labels(level):
+    labels = {"pod-security.kubernetes.io/enforce": level}
+    if level == "baseline":
+        # Avisa no apply (warn) e registra no audit o que ainda impede o restricted
+        labels.update({"pod-security.kubernetes.io/warn": "restricted", "pod-security.kubernetes.io/audit": "restricted"})
+    return labels
+
+
+def render_guardrails(games):
+    """Namespaces (com Pod Security) e AppProjects: o limite do que um commit no main consegue aplicar.
+
+    Fica fora do autosync de propósito: o root (projeto bootstrap) só cria Applications, então um push
+    no main (Renovate, deploy key do games-bot) não muda projeto, namespace nem label de Pod Security.
+    Aplicado à mão com make guardrails (também no make deploy-argocd). O check-guardrails.py do CI
+    confere que cada Application cabe no projeto dela.
+    """
+    game_ns = sorted(g["namespace"] for g in games)
+    levels = {**INFRA_NAMESPACES, **{g["namespace"]: g.get("podSecurity", "restricted") for g in games}}
+    docs = [{
+        "apiVersion": "v1", "kind": "Namespace",
+        "metadata": {"name": ns, "labels": pod_security_labels(level),
+                     # Saiu dos manifests dos apps: o Argo não apaga o namespace ao deixar de gerenciá-lo
+                     "annotations": {"argocd.argoproj.io/sync-options": "Prune=false"}},
+    } for ns, level in sorted(levels.items())]
+    destinations = {
+        # games-bot (k8s/platform) tem Role no argocd e em cada jogo
+        "platform": ["platform", "external-secrets", "argocd", *game_ns],
+        # o kube-prometheus-stack cria Services de scrape (CoreDNS, kubelet) no kube-system
+        "monitoring": ["monitoring", "kube-system"],
+        "games": game_ns,
+    }
+    descriptions = {
+        "platform": "Plataforma (games-bot, CronJobs, resumo) e External Secrets",
+        "monitoring": "Prometheus, Alertmanager, Grafana, Loki e Alloy",
+        "games": "Um Application por jogo do catálogo (sync manual, scripts/switch-game.py)",
+    }
+    for name in ("platform", "monitoring", "games"):
+        docs.append({
+            "apiVersion": "argoproj.io/v1alpha1", "kind": "AppProject",
+            "metadata": {"name": name, "namespace": "argocd"},
+            "spec": {
+                "description": descriptions[name],
+                "sourceRepos": [DEFAULTS["repoURL"], *CHART_REPOS.get(name, [])],
+                "destinations": [{"server": IN_CLUSTER, "namespace": ns} for ns in destinations[name]],
+                "clusterResourceWhitelist": [{"group": g, "kind": k} for g, k in CLUSTER_KINDS[name]],
+                "namespaceResourceBlacklist": NO_ARGO,
+            },
+        })
+    return {ROOT / "k8s" / "argocd" / "guardrails.generated.yaml":
+            HEADER.replace("a partir de game.yaml", "a partir do catálogo de jogos")
+            + "# Aplicado à mão (make guardrails), fora do autosync: veja render_guardrails no gerador.\n"
+            + dump(docs)[len(HEADER):]}
+
+
+def pod_security_problems(games):
+    return [f"{g['dir']}/game.yaml: podSecurity '{g['podSecurity']}' inválido (use {', '.join(POD_SECURITY)})"
+            for g in games if g.get("podSecurity", "restricted") not in POD_SECURITY]
+
+
 def render_games_json(games):
     """Nome e ícone por jogo para o resumo semanal (ConfigMap weekly-summary), sem lista escrita à mão."""
     data = {g["name"]: {"title": g["displayName"], "icon": g.get("icon", "🎮")} for g in games}
@@ -485,7 +602,7 @@ def main():
     check = "--check" in sys.argv
     errors = (catalog.problems() + mute_problems(catalog.games()) + memory_problems(catalog.games())
               + port_problems(catalog.games()) + port_name_problems(catalog.games())
-              + exporter_problems(catalog.load()))
+              + exporter_problems(catalog.load()) + pod_security_problems(catalog.games()))
     for key in ("resticImage", "curlImage"):
         if not IMAGE_REF.fullmatch(str(DEFAULTS[key])):
             errors.append(f"platform/defaults.yaml: {key} sem tag e digest válidos (use repo:tag@sha256:<64 hex>)")
@@ -519,6 +636,7 @@ def main():
     if generated:
         outputs.update(render_alerts(generated))
     outputs.update(render_bot_rbac(catalog.games()))
+    outputs.update(render_guardrails(catalog.games()))
     outputs.update(render_games_json(catalog.games()))
     outputs.update(render_shared_exporters(catalog.load()))
     stale = []

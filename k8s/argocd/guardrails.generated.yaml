@@ -1,0 +1,159 @@
+# Gerado por scripts/render-games.py a partir do catálogo de jogos: não edite à mão.
+# Aplicado à mão (make guardrails), fora do autosync: veja render_guardrails no gerador.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-secrets
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: minecraft
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: terraria
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zomboid
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: Plataforma (games-bot, CronJobs, resumo) e External Secrets
+  sourceRepos:
+  - git@github.com:iagorp6/proxmox-k3s-platform.git
+  - https://charts.external-secrets.io
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: platform
+  - server: https://kubernetes.default.svc
+    namespace: external-secrets
+  - server: https://kubernetes.default.svc
+    namespace: argocd
+  - server: https://kubernetes.default.svc
+    namespace: minecraft
+  - server: https://kubernetes.default.svc
+    namespace: terraria
+  - server: https://kubernetes.default.svc
+    namespace: zomboid
+  clusterResourceWhitelist:
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+  - group: admissionregistration.k8s.io
+    kind: ValidatingWebhookConfiguration
+  - group: external-secrets.io
+    kind: ClusterSecretStore
+  namespaceResourceBlacklist:
+  - group: argoproj.io
+    kind: Application
+  - group: argoproj.io
+    kind: ApplicationSet
+  - group: argoproj.io
+    kind: AppProject
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  description: Prometheus, Alertmanager, Grafana, Loki e Alloy
+  sourceRepos:
+  - git@github.com:iagorp6/proxmox-k3s-platform.git
+  - https://prometheus-community.github.io/helm-charts
+  - https://grafana.github.io/helm-charts
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: monitoring
+  - server: https://kubernetes.default.svc
+    namespace: kube-system
+  clusterResourceWhitelist:
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+  - group: admissionregistration.k8s.io
+    kind: MutatingWebhookConfiguration
+  - group: admissionregistration.k8s.io
+    kind: ValidatingWebhookConfiguration
+  namespaceResourceBlacklist:
+  - group: argoproj.io
+    kind: Application
+  - group: argoproj.io
+    kind: ApplicationSet
+  - group: argoproj.io
+    kind: AppProject
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: games
+  namespace: argocd
+spec:
+  description: Um Application por jogo do catálogo (sync manual, scripts/switch-game.py)
+  sourceRepos:
+  - git@github.com:iagorp6/proxmox-k3s-platform.git
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: minecraft
+  - server: https://kubernetes.default.svc
+    namespace: terraria
+  - server: https://kubernetes.default.svc
+    namespace: zomboid
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+  - group: argoproj.io
+    kind: Application
+  - group: argoproj.io
+    kind: ApplicationSet
+  - group: argoproj.io
+    kind: AppProject

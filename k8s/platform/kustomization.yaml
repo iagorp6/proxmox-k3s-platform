@@ -4,7 +4,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - namespace.yaml
   - externalsecrets.yaml
   - weekly-summary.yaml
   - daily-health.yaml

@@ -14,3 +14,5 @@ helm upgrade --install argocd argo/argo-cd \
   --namespace argocd --create-namespace \
   --version "${VERSION}" -f values-argocd.yaml \
   --wait --timeout 15m
+# Namespaces, AppProjects e root: o que limita o autosync não vem do próprio autosync
+./apply-guardrails.sh

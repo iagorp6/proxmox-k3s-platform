@@ -2,7 +2,7 @@
 # Usa ">" como prefixo de receita (evita problemas de tab ao colar).
 .RECIPEPREFIX = >
 .DEFAULT_GOAL := help
-.PHONY: help require-main ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game new-game restore-drill restore-game console status sync-game host-status
+.PHONY: help require-main ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game new-game restore-drill restore-game console status sync-game host-status guardrails
 
 help: ## Lista os alvos disponíveis
 > @grep -E '^[a-zA-Z_%-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -35,6 +35,9 @@ deploy-eso: require-main ## Break-glass: External Secrets via Helm (no dia a dia
 
 deploy-argocd: require-main ## Instala/atualiza o Argo CD (único release fora do Argo)
 > ./k8s/argocd/deploy.sh
+
+guardrails: require-main ## Namespaces com Pod Security, AppProjects e app raiz (fora do autosync; rode após jogo novo)
+> ./k8s/argocd/apply-guardrails.sh
 
 switch-game: ## Troca o jogo ativo (ex.: make switch-game GAME=terraria)
 > ./scripts/switch-game.py $(GAME)

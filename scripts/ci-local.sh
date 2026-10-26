@@ -71,7 +71,7 @@ k8s_check() {
   done
   kubeconform -strict -summary -schema-location default -schema-location "$CRD_CATALOG" \
     k8s/monitoring/alerts-homelab.yaml k8s/monitoring/alerts-slo.yaml k8s/monitoring/alerts-games.generated.yaml k8s/monitoring/dashboard-asunboid.yaml k8s/monitoring/externalsecrets.yaml \
-    k8s/argocd/root.yaml k8s/argocd/apps/*.yaml k8s/external-secrets/cluster-secret-store.yaml || return 1
+    k8s/argocd/root.yaml k8s/argocd/guardrails.generated.yaml k8s/argocd/apps/*.yaml k8s/external-secrets/cluster-secret-store.yaml || return 1
   local game
   for game in $(python3 scripts/catalog.py backups); do   # manifests do restore drill de cada jogo com backup
     python3 scripts/restore-drill.py "$game" --dry-run | kubeconform -strict -summary -schema-location default || return 1
@@ -79,6 +79,7 @@ k8s_check() {
   done
   bash scripts/test-new-game.sh "$CRD_CATALOG" || return 1
   python3 scripts/test-alerts.py || return 1
+  python3 scripts/check-guardrails.py || return 1
   python3 scripts/check-charts.py "$CRD_CATALOG" || return 1
   cp k8s/monitoring/dashboard-asunboid.yaml /tmp/dashboard-committed.yaml
   python3 scripts/build-dashboard.py >/dev/null || return 1
