@@ -27,10 +27,3 @@ misconfigurations:
     statement: >-
       SSE-S3 (AES256) em vez de KMS com chave gerenciada pelo cliente: o restic já cifra os backups do
       lado do cliente, e uma CMK custaria USD 1/mês por chave num orçamento de USD 1/mês.
-
-  - id: AWS-0095
-    paths:
-      - "terraform-aws/alerts.tf"
-    statement: >-
-      O tópico SNS só leva o alarme de tamanho do bucket para o e-mail (sem dado sensível); criptografia
-      com KMS exigiria CMK e política de chave para o CloudWatch publicar.

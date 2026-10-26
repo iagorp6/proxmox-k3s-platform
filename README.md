@@ -318,7 +318,7 @@ Real problems hit while building and operating this, and how they were solved. T
 | Healthchecks.io, GitHub Actions, Dependabot | free tier |
 | Hardware | recycled |
 
-A Budgets alarm fires above USD 1/month, and a CloudWatch alarm watches the size of the backup bucket, which is what drives the bill.
+A Budgets alarm fires above USD 1/month. The size of the restic repository, which is what drives the bill, is checked every week by the `restic-check` CronJob and alerts on Discord above 15 GiB (`ResticCheckFailed`).
 
 ---
 

@@ -2,7 +2,8 @@ name: Terraform drift (aws)
 
 # terraform plan do terraform-aws com credencial temporária via OIDC (github-oidc.tf), sem chave
 # guardada no GitHub. Falha quando a AWS diverge do código (mudança fora do Terraform ou apply
-# esquecido), e o GitHub avisa por e-mail. Roda só no main: a role não aceita token de PR.
+# esquecido) ou chave IAM velha, e avisa no Discord (secret DISCORD_WEBHOOK_URL, o mesmo webhook do
+# Alertmanager). Roda só no main: a role não aceita token de PR.
 # O repositório é público, então o log mostra só endereço e ação de cada recurso, nunca valores.
 on:
   schedule:
@@ -114,3 +115,17 @@ jobs:
           done | tee "$RUNNER_TEMP/keys.log"
           { echo "### Chaves IAM"; echo; echo '```'; cat "$RUNNER_TEMP/keys.log"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           ! grep -q '^::error::' "$RUNNER_TEMP/keys.log"
+      - name: Aviso no Discord
+        if: ${{ failure() }}
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Sem o secret, fica só o e-mail padrão do GitHub
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "::warning::secret DISCORD_WEBHOOK_URL não configurado, sem aviso no Discord"
+            exit 0
+          fi
+          jq -n --arg url "$RUN_URL" \
+            '{content: "🟠 **Terraform drift (aws) falhou**: drift no terraform-aws, chave IAM velha ou erro no plan. Detalhes no resumo do run: \($url)"}' |
+            curl -sSf -H 'Content-Type: application/json' --data-binary @- "$DISCORD_WEBHOOK_URL" -o /dev/null
