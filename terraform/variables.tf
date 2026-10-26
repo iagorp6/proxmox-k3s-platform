@@ -67,9 +67,11 @@ variable "vm_memory_mb" {
 }
 
 variable "vm_disk_gb" {
+  # Só pode crescer (o provider redimensiona no lugar, sem reboot). Zvol thin no pool: o espaço
+  # só é usado quando gravado. 200 GB cabem Prometheus, Loki, ~5 jogos e o emptyDir do restore drill.
   description = "Tamanho do disco de sistema"
   type        = number
-  default     = 80
+  default     = 200
 }
 
 variable "vm_ip" {
