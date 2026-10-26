@@ -146,6 +146,45 @@ P.append({"type": "timeseries", "title": "Burn rate do error budget",
           "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}})
 y += 6
 
+# ---------------- Restore drills ----------------
+# Evidência de que o backup volta: o Job do drill some em 3 dias e o log no Loki em 7, mas as séries do
+# kube-state-metrics ficam 30 dias no Prometheus. Pega o drill mensal (<jogo>-restore-drill-<n>, do
+# CronJob) e o manual do make restore-drill (<jogo>-restore-drill); o --live (restore-live) fica de fora.
+# completion_time só existe em Job que terminou com sucesso.
+DRILL_JOBS = 'job_name=~".+-restore-drill(-[0-9]+)?"'
+DRILL_AGE = (f"min by (namespace) (time() - max by (namespace) (last_over_time(kube_job_status_completion_time{{{DRILL_JOBS}}}[30d]))"
+             ' or time() - max by (namespace) (kube_cronjob_status_last_successful_time{cronjob=~".+-restore-drill"}))')
+P.append(row("Restore drills", y)); y += 1
+P += [
+  stat("Último restore testado", "Tempo desde o último restore drill que passou em cada jogo (mensal automático ou make restore-drill). Acima de 35 dias dispara o RestoreDrillStale.",
+       0, y, 8, 6, [prom(DRILL_AGE, legend="{{namespace}}")],
+       unit="dtdurations", steps=th((GREEN, None), (ORANGE, 30 * 86400), (RED, 35 * 86400)), no_value="nenhum drill ainda"),
+  {"type": "table", "title": "Restore drills (30 dias)",
+   "description": "Cada execução do drill: restaura o último snapshot do S3 num volume temporário e confere os arquivos do catálogo. Duração = do início do Job ao mundo conferido.",
+   "datasource": DS, "gridPos": {"x": 8, "y": y, "w": 16, "h": 6},
+   "targets": [prom(f"max by (namespace, job_name) (last_over_time(kube_job_status_succeeded{{{DRILL_JOBS}}}[30d]))", instant=True, fmt="table"),
+               prom(f"max by (namespace, job_name) (last_over_time(kube_job_status_completion_time{{{DRILL_JOBS}}}[30d])"
+                    f" - last_over_time(kube_job_status_start_time{{{DRILL_JOBS}}}[30d]))", ref="B", instant=True, fmt="table"),
+               prom(f"max by (namespace, job_name) (last_over_time(kube_job_status_start_time{{{DRILL_JOBS}}}[30d])) * 1000",
+                    ref="C", instant=True, fmt="table")],
+   "fieldConfig": {"defaults": {"noValue": "Nenhum drill nos últimos 30 dias"}, "overrides": [
+       {"matcher": {"id": "byName", "options": "Resultado"},
+        "properties": [{"id": "mappings", "value": vmap([("0", "FALHOU", RED), ("1", "OK", GREEN)])},
+                       {"id": "custom.cellOptions", "value": {"type": "color-background"}}]},
+       {"matcher": {"id": "byName", "options": "Duração"}, "properties": [{"id": "unit", "value": "s"}]},
+       {"matcher": {"id": "byName", "options": "Início"}, "properties": [{"id": "unit", "value": "dateTimeAsLocal"}]}]},
+   "transformations": [
+       {"id": "merge", "options": {}},
+       {"id": "organize", "options": {
+           "excludeByName": {"Time": True},
+           "indexByName": {"namespace": 0, "Value #C": 1, "Value #A": 2, "Value #B": 3, "job_name": 4},
+           "renameByName": {"namespace": "Jogo", "job_name": "Job", "Value #A": "Resultado",
+                            "Value #B": "Duração", "Value #C": "Início"}}},
+       {"id": "sortBy", "options": {"sort": [{"field": "Início", "desc": True}]}}],
+   "options": {"showHeader": True}},
+]
+y += 6
+
 # ---------------- 2. Jogadores ----------------
 P.append(row("Jogadores", y)); y += 1
 game_col = {"matcher": {"id": "byName", "options": "Jogo"},

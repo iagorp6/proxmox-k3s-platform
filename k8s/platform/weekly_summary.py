@@ -26,6 +26,12 @@ HOURS_7D = "sum by (game, player) (count_over_time(game_player_online[7d])) * 30
 PEAK_7D = "max_over_time((sum(game_players_online) or vector(0))[7d:1m])"
 AVAIL_7D = "avg_over_time((max(game_up) or vector(0))[7d:5m])"
 DEATHS_7D = "sum by (player) (increase(game_player_deaths_total{game=\"zomboid\"}[7d]))"
+# Idade do último restore drill que passou, por jogo (mesma conta do painel "Último restore testado"):
+# Job do drill mensal ou do make restore-drill nos 30 dias do Prometheus, senão o CronJob
+DRILL_JOBS = 'job_name=~".+-restore-drill(-[0-9]+)?"'
+DRILL_AGE = (f"min by (namespace) (time() - max by (namespace) (last_over_time(kube_job_status_completion_time{{{DRILL_JOBS}}}[30d]))"
+             ' or time() - max by (namespace) (kube_cronjob_status_last_successful_time{cronjob=~".+-restore-drill"}))')
+DRILL_MAX_DAYS = 35   # mesmo limite do alerta RestoreDrillStale
 
 
 def q(expr):
@@ -76,6 +82,10 @@ def build():
     fields.append({"name": "🏆 Ranking da semana", "value": "\n".join(ranking_lines) or "Ninguém jogou nesta semana.", "inline": False})
     if deaths:
         fields.append({"name": "💀 Mortes no Zomboid", "value": "\n".join(f"**{p}** · {n}x" for p, n in deaths), "inline": False})
+    drills = sorted((r["metric"].get("namespace", "?"), float(r["value"][1])) for r in q(DRILL_AGE))
+    fields.append({"name": "🧪 Backups testados (restore drill)", "value": "\n".join(
+        f"{'✅' if age <= DRILL_MAX_DAYS * 86400 else '⚠️'} {TITLES.get(g, g)} · há {age / 86400:.0f} dia(s)"
+        for g, age in drills) or "Nenhum restore testado ainda.", "inline": False})
     fields.append({"name": "🟢 Servidor no ar", "value": f"{availability * 100:.2f}% do tempo", "inline": True})
 
     end = datetime.now(BRT)

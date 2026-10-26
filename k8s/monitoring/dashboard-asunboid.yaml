@@ -716,7 +716,7 @@ data:
         },
         {
           "type": "row",
-          "title": "Jogadores",
+          "title": "Restore drills",
           "collapsed": false,
           "gridPos": {
             "x": 0,
@@ -728,6 +728,220 @@ data:
           "id": 13
         },
         {
+          "type": "stat",
+          "title": "Último restore testado",
+          "description": "Tempo desde o último restore drill que passou em cada jogo (mensal automático ou make restore-drill). Acima de 35 dias dispara o RestoreDrillStale.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 18,
+            "w": 8,
+            "h": 6
+          },
+          "targets": [
+            {
+              "expr": "min by (namespace) (time() - max by (namespace) (last_over_time(kube_job_status_completion_time{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d])) or time() - max by (namespace) (kube_cronjob_status_last_successful_time{cronjob=~\".+-restore-drill\"}))",
+              "refId": "A",
+              "legendFormat": "{{namespace}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 2592000
+                  },
+                  {
+                    "color": "red",
+                    "value": 3024000
+                  }
+                ]
+              },
+              "unit": "dtdurations",
+              "noValue": "nenhum drill ainda"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "id": 14
+        },
+        {
+          "type": "table",
+          "title": "Restore drills (30 dias)",
+          "description": "Cada execução do drill: restaura o último snapshot do S3 num volume temporário e confere os arquivos do catálogo. Duração = do início do Job ao mundo conferido.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 18,
+            "w": 16,
+            "h": 6
+          },
+          "targets": [
+            {
+              "expr": "max by (namespace, job_name) (last_over_time(kube_job_status_succeeded{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d]))",
+              "refId": "A",
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "expr": "max by (namespace, job_name) (last_over_time(kube_job_status_completion_time{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d]) - last_over_time(kube_job_status_start_time{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d]))",
+              "refId": "B",
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "expr": "max by (namespace, job_name) (last_over_time(kube_job_status_start_time{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d])) * 1000",
+              "refId": "C",
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "Nenhum drill nos últimos 30 dias"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Resultado"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "0": {
+                            "text": "FALHOU",
+                            "color": "red",
+                            "index": 0
+                          },
+                          "1": {
+                            "text": "OK",
+                            "color": "green",
+                            "index": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Duração"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Início"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dateTimeAsLocal"
+                  }
+                ]
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "indexByName": {
+                  "namespace": 0,
+                  "Value #C": 1,
+                  "Value #A": 2,
+                  "Value #B": 3,
+                  "job_name": 4
+                },
+                "renameByName": {
+                  "namespace": "Jogo",
+                  "job_name": "Job",
+                  "Value #A": "Resultado",
+                  "Value #B": "Duração",
+                  "Value #C": "Início"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Início",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "showHeader": true
+          },
+          "id": 15
+        },
+        {
+          "type": "row",
+          "title": "Jogadores",
+          "collapsed": false,
+          "gridPos": {
+            "x": 0,
+            "y": 24,
+            "w": 24,
+            "h": 1
+          },
+          "panels": [],
+          "id": 16
+        },
+        {
           "type": "table",
           "title": "Online agora",
           "description": "Quem está conectado neste momento e quanto jogou nas últimas 24h.",
@@ -737,7 +951,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 18,
+            "y": 25,
             "w": 8,
             "h": 8
           },
@@ -829,7 +1043,7 @@ data:
           "options": {
             "showHeader": true
           },
-          "id": 14
+          "id": 17
         },
         {
           "type": "timeseries",
@@ -841,7 +1055,7 @@ data:
           },
           "gridPos": {
             "x": 8,
-            "y": 18,
+            "y": 25,
             "w": 16,
             "h": 8
           },
@@ -890,7 +1104,7 @@ data:
               "mode": "multi"
             }
           },
-          "id": 15
+          "id": 18
         },
         {
           "type": "state-timeline",
@@ -902,7 +1116,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 26,
+            "y": 33,
             "w": 24,
             "h": 7
           },
@@ -955,7 +1169,7 @@ data:
               "mode": "single"
             }
           },
-          "id": 16
+          "id": 19
         },
         {
           "type": "table",
@@ -967,7 +1181,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 33,
+            "y": 40,
             "w": 24,
             "h": 9
           },
@@ -1176,7 +1390,7 @@ data:
               }
             ]
           },
-          "id": 17
+          "id": 20
         },
         {
           "type": "row",
@@ -1184,12 +1398,12 @@ data:
           "collapsed": false,
           "gridPos": {
             "x": 0,
-            "y": 42,
+            "y": 49,
             "w": 24,
             "h": 1
           },
           "panels": [],
-          "id": 18
+          "id": 21
         },
         {
           "type": "timeseries",
@@ -1201,7 +1415,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 43,
+            "y": 50,
             "w": 10,
             "h": 8
           },
@@ -1267,7 +1481,7 @@ data:
               "mode": "multi"
             }
           },
-          "id": 19
+          "id": 22
         },
         {
           "type": "timeseries",
@@ -1279,7 +1493,7 @@ data:
           },
           "gridPos": {
             "x": 10,
-            "y": 43,
+            "y": 50,
             "w": 10,
             "h": 8
           },
@@ -1329,7 +1543,7 @@ data:
               "mode": "multi"
             }
           },
-          "id": 20
+          "id": 23
         },
         {
           "type": "stat",
@@ -1341,7 +1555,7 @@ data:
           },
           "gridPos": {
             "x": 20,
-            "y": 43,
+            "y": 50,
             "w": 4,
             "h": 8
           },
@@ -1397,7 +1611,7 @@ data:
               ]
             }
           },
-          "id": 21
+          "id": 24
         },
         {
           "type": "row",
@@ -1405,7 +1619,7 @@ data:
           "collapsed": true,
           "gridPos": {
             "x": 0,
-            "y": 51,
+            "y": 58,
             "w": 24,
             "h": 1
           },
@@ -1420,7 +1634,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 52,
+                "y": 59,
                 "w": 4,
                 "h": 4
               },
@@ -1477,7 +1691,7 @@ data:
                   ]
                 }
               },
-              "id": 23
+              "id": 26
             },
             {
               "type": "stat",
@@ -1489,7 +1703,7 @@ data:
               },
               "gridPos": {
                 "x": 4,
-                "y": 52,
+                "y": 59,
                 "w": 4,
                 "h": 4
               },
@@ -1546,7 +1760,7 @@ data:
                   ]
                 }
               },
-              "id": 24
+              "id": 27
             },
             {
               "type": "stat",
@@ -1558,7 +1772,7 @@ data:
               },
               "gridPos": {
                 "x": 8,
-                "y": 52,
+                "y": 59,
                 "w": 4,
                 "h": 4
               },
@@ -1615,7 +1829,7 @@ data:
                   ]
                 }
               },
-              "id": 25
+              "id": 28
             },
             {
               "type": "stat",
@@ -1627,7 +1841,7 @@ data:
               },
               "gridPos": {
                 "x": 12,
-                "y": 52,
+                "y": 59,
                 "w": 4,
                 "h": 4
               },
@@ -1672,7 +1886,7 @@ data:
                   ]
                 }
               },
-              "id": 26
+              "id": 29
             },
             {
               "type": "stat",
@@ -1684,7 +1898,7 @@ data:
               },
               "gridPos": {
                 "x": 16,
-                "y": 52,
+                "y": 59,
                 "w": 4,
                 "h": 4
               },
@@ -1730,7 +1944,7 @@ data:
                   ]
                 }
               },
-              "id": 27
+              "id": 30
             },
             {
               "type": "stat",
@@ -1742,7 +1956,7 @@ data:
               },
               "gridPos": {
                 "x": 20,
-                "y": 52,
+                "y": 59,
                 "w": 4,
                 "h": 4
               },
@@ -1788,7 +2002,7 @@ data:
                   ]
                 }
               },
-              "id": 28
+              "id": 31
             },
             {
               "type": "timeseries",
@@ -1800,7 +2014,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 56,
+                "y": 63,
                 "w": 8,
                 "h": 7
               },
@@ -1832,7 +2046,7 @@ data:
                   "mode": "multi"
                 }
               },
-              "id": 29
+              "id": 32
             },
             {
               "type": "timeseries",
@@ -1844,7 +2058,7 @@ data:
               },
               "gridPos": {
                 "x": 8,
-                "y": 56,
+                "y": 63,
                 "w": 8,
                 "h": 7
               },
@@ -1880,7 +2094,7 @@ data:
                   "mode": "multi"
                 }
               },
-              "id": 30
+              "id": 33
             },
             {
               "type": "timeseries",
@@ -1892,7 +2106,7 @@ data:
               },
               "gridPos": {
                 "x": 16,
-                "y": 56,
+                "y": 63,
                 "w": 8,
                 "h": 7
               },
@@ -1923,7 +2137,7 @@ data:
                   "mode": "multi"
                 }
               },
-              "id": 31
+              "id": 34
             },
             {
               "type": "stat",
@@ -1935,7 +2149,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 63,
+                "y": 70,
                 "w": 8,
                 "h": 4
               },
@@ -1981,7 +2195,7 @@ data:
                   ]
                 }
               },
-              "id": 32
+              "id": 35
             },
             {
               "type": "stat",
@@ -1993,7 +2207,7 @@ data:
               },
               "gridPos": {
                 "x": 8,
-                "y": 63,
+                "y": 70,
                 "w": 8,
                 "h": 4
               },
@@ -2039,7 +2253,7 @@ data:
                   ]
                 }
               },
-              "id": 33
+              "id": 36
             },
             {
               "type": "stat",
@@ -2051,7 +2265,7 @@ data:
               },
               "gridPos": {
                 "x": 16,
-                "y": 63,
+                "y": 70,
                 "w": 8,
                 "h": 4
               },
@@ -2097,7 +2311,7 @@ data:
                   ]
                 }
               },
-              "id": 34
+              "id": 37
             },
             {
               "type": "stat",
@@ -2109,7 +2323,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 67,
+                "y": 74,
                 "w": 12,
                 "h": 4
               },
@@ -2166,7 +2380,7 @@ data:
                   ]
                 }
               },
-              "id": 35
+              "id": 38
             },
             {
               "type": "stat",
@@ -2178,7 +2392,7 @@ data:
               },
               "gridPos": {
                 "x": 12,
-                "y": 67,
+                "y": 74,
                 "w": 12,
                 "h": 4
               },
@@ -2224,7 +2438,7 @@ data:
                   ]
                 }
               },
-              "id": 36
+              "id": 39
             },
             {
               "type": "table",
@@ -2236,7 +2450,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 71,
+                "y": 78,
                 "w": 24,
                 "h": 6
               },
@@ -2375,10 +2589,10 @@ data:
               "options": {
                 "showHeader": true
               },
-              "id": 37
+              "id": 40
             }
           ],
-          "id": 22
+          "id": 25
         },
         {
           "type": "row",
@@ -2386,7 +2600,7 @@ data:
           "collapsed": true,
           "gridPos": {
             "x": 0,
-            "y": 52,
+            "y": 59,
             "w": 24,
             "h": 1
           },
@@ -2401,7 +2615,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 53,
+                "y": 60,
                 "w": 24,
                 "h": 5
               },
@@ -2436,7 +2650,7 @@ data:
                   }
                 }
               ],
-              "id": 39
+              "id": 42
             },
             {
               "type": "logs",
@@ -2448,7 +2662,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 58,
+                "y": 65,
                 "w": 12,
                 "h": 10
               },
@@ -2464,7 +2678,7 @@ data:
                 "sortOrder": "Descending",
                 "enableLogDetails": true
               },
-              "id": 40
+              "id": 43
             },
             {
               "type": "logs",
@@ -2476,7 +2690,7 @@ data:
               },
               "gridPos": {
                 "x": 12,
-                "y": 58,
+                "y": 65,
                 "w": 12,
                 "h": 10
               },
@@ -2492,10 +2706,10 @@ data:
                 "sortOrder": "Descending",
                 "enableLogDetails": true
               },
-              "id": 41
+              "id": 44
             }
           ],
-          "id": 38
+          "id": 41
         }
       ]
     }
