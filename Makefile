@@ -2,7 +2,7 @@
 # Usa ">" como prefixo de receita (evita problemas de tab ao colar).
 .RECIPEPREFIX = >
 .DEFAULT_GOAL := help
-.PHONY: help require-main ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game new-game restore-drill restore-game console status
+.PHONY: help require-main ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game new-game restore-drill restore-game console status sync-game host-status
 
 help: ## Lista os alvos disponíveis
 > @grep -E '^[a-zA-Z_%-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -39,6 +39,11 @@ deploy-argocd: require-main ## Instala/atualiza o Argo CD (único release fora d
 switch-game: ## Troca o jogo ativo (ex.: make switch-game GAME=terraria)
 > ./scripts/switch-game.py $(GAME)
 
+# Em vez do Sync pela UI do Argo: confere jogadores e salva antes, como a troca
+sync-game: ## Aplica no jogo o que mudou no main, sem trocar (whitelist, imagem; ex.: make sync-game GAME=minecraft)
+> $(if $(GAME),,$(error uso: make sync-game GAME=minecraft))
+> ./scripts/switch-game.py $(GAME) --resync
+
 # PLAYERS_REGEX com $ precisa virar $$ no make; com regex complexa, chame scripts/new-game.py direto
 new-game: ## Esqueleto de jogo novo, status draft (ex.: make new-game GAME=valheim TITLE=Valheim IMAGE=repo:tag@sha256:... PORT=16261 PROTOCOL=UDP)
 > ./scripts/new-game.py $(GAME) --title "$(TITLE)" --image "$(IMAGE)" --port $(PORT) $(if $(PROTOCOL),--protocol $(PROTOCOL)) $(if $(MEMORY),--memory $(MEMORY)) $(if $(ICON),--icon "$(ICON)") $(if $(DRIVER),--driver $(DRIVER)) $(if $(RCON_PORT),--rcon-port $(RCON_PORT)) $(if $(PLAYERS_COMMAND),--players-command "$(PLAYERS_COMMAND)") $(if $(PLAYERS_REGEX),--players-regex '$(PLAYERS_REGEX)')
@@ -57,3 +62,6 @@ console: ## Comando no console do servidor (ex.: make console GAME=zomboid CMD='
 
 status: ## Estado da plataforma (jogo ativo, réplicas, alertas)
 > ./scripts/platform-status.sh
+
+host-status: ## Estado do host Proxmox, só leitura (pool, scrub, SMART, kernel, patches, ESPs)
+> cd ansible && ansible-playbook playbooks/host-status.yml

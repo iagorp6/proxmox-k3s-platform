@@ -3,8 +3,9 @@
 
 Cada teste roda o main() de verdade num repositório git temporário com um "origin" local: confere
 os patches de réplicas, o commit (mensagem e só os arquivos permitidos), o push e as recusas
-(jogadores online, contagem indisponível, árvore suja, arquivo fora do ALLOWED_PATHS). kubectl e
-Argo CD ficam de fora: players_online, save_world e apply_switch são trocados por fakes.
+(jogadores online, contagem indisponível, árvore suja, arquivo fora do ALLOWED_PATHS), e o --resync
+(make sync-game). kubectl e Argo CD ficam de fora: players_online, save_world, apply_switch,
+out_of_sync e sync_game são trocados por fakes.
 Uso: python3 scripts/test-switch-game.py
 """
 import contextlib
@@ -65,7 +66,8 @@ class SwitchGameTest(unittest.TestCase):
         git(self.repo, "push", "-q", "-u", "origin", "main")
 
         self.saved = {k: getattr(sw, k) for k in ("ROOT", "ACTIVE_FILE", "GAMES", "players_online",
-                                                    "save_world", "apply_switch", "notify")}
+                                                    "save_world", "apply_switch", "notify",
+                                                    "out_of_sync", "sync_game")}
         sw.ROOT, sw.ACTIVE_FILE = self.repo, self.repo / "platform" / "active-game.yaml"
         sw.GAMES = {"minecraft": game("minecraft", "k8s/games/minecraft", ["minecraft-backup"]),
                     "terraria": game("terraria", "k8s/games/terraria")}
@@ -74,6 +76,9 @@ class SwitchGameTest(unittest.TestCase):
         sw.save_world = lambda g: self.saves.append(g["sts"])
         sw.apply_switch = lambda prev, target, sha: self.applied.append((prev, target, sha))
         sw.notify = lambda *a, **kw: None
+        self.drift, self.synced = True, []
+        sw.out_of_sync = lambda g: self.drift
+        sw.sync_game = lambda g, sha, running: self.synced.append((g["app"], sha, running))
 
     def tearDown(self):
         for k, v in self.saved.items():
@@ -176,6 +181,38 @@ class SwitchGameTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("Nada a fazer", out)
         self.assertEqual(self.commits(), 1)
+
+    def test_resync_checks_players_saves_and_syncs_head_without_commit(self):
+        code, out = self.main("minecraft", "--no-notify", "--resync")
+        self.assertEqual(code, 0)
+        self.assertEqual(self.commits(), 1)
+        self.assertEqual(self.saves, ["minecraft"])
+        self.assertEqual(self.synced, [("minecraft", git(self.repo, "rev-parse", "HEAD"), True)])
+        self.assertEqual(self.applied, [])
+
+    def test_resync_with_players_online_is_refused(self):
+        self.players = 1
+        self.assertIn("1 jogador(es) online em minecraft", self.refused("minecraft", "--no-notify", "--resync"))
+        self.assertEqual((self.saves, self.synced), ([], []))
+
+    def test_resync_already_synced_does_not_touch_the_server(self):
+        self.drift, self.players = False, 3
+        code, out = self.main("minecraft", "--no-notify", "--resync")
+        self.assertEqual(code, 0)
+        self.assertIn("já está sincronizado", out)
+        self.assertEqual((self.saves, self.synced), ([], []))
+
+    def test_resync_of_a_stopped_game_skips_players_and_save(self):
+        self.players = 3
+        code, _ = self.main("terraria", "--no-notify", "--resync")
+        self.assertEqual(code, 0)
+        self.assertEqual(self.saves, [])
+        self.assertEqual(self.synced, [("terraria", git(self.repo, "rev-parse", "HEAD"), False)])
+
+    def test_resync_refuses_dirty_tree(self):
+        (self.repo / "README.md").write_text("rascunho\n", encoding="utf-8")
+        self.assertIn("mudanças não commitadas", self.refused("minecraft", "--no-notify", "--resync"))
+        self.assertEqual(self.synced, [])
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ Uso como comando:
   scripts/catalog.py dirs        diretórios kustomize dos jogos, um por linha
   scripts/catalog.py workloads   "<namespace> <statefulset>" por linha
   scripts/catalog.py backups     jogos com backup (restore drill), um por linha
+  scripts/catalog.py idle-cronjobs  "<namespace> <cronjob>" suspensos com o jogo parado (switch.suspendWhenIdle)
   scripts/catalog.py check       valida o catálogo e o platform/active-game.yaml
 Jogos com status "draft" (recém-criados pelo scripts/new-game.py) ficam fora de tudo até virarem "active".
 """
@@ -80,6 +81,9 @@ def main():
         print("\n".join(g["dir"] for g in games()))
     elif cmd == "workloads":
         print("\n".join(f"{g['namespace']} {g['name']}" for g in games()))
+    elif cmd == "idle-cronjobs":
+        print("\n".join(f"{g['namespace']} {cj}" for g in games()
+                        for cj in (g.get("switch") or {}).get("suspendWhenIdle", [])))
     elif cmd == "backups":
         print("\n".join(g["name"] for g in games() if g.get("backup")))
     elif cmd == "check":
