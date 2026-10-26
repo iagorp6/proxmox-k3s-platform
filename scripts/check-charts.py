@@ -87,7 +87,7 @@ def main():
         if check.returncode != 0:
             failed.append(f"{name}: kubeconform reprovou o chart renderizado\n{(check.stdout + check.stderr).strip()}")
         if project:
-            docs = [d for d in yaml.safe_load_all(rendered.stdout) if d]
+            docs = guardrails.load_docs(rendered.stdout)
             problems = (guardrails.project_violations(name, projects.get(project, {}), docs, ns)
                         + guardrails.namespace_violations(name, docs, ns, levels))
             if problems:

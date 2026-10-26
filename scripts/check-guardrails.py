@@ -39,8 +39,20 @@ RESTRICTED_VOLUMES = {"configMap", "csi", "downwardAPI", "emptyDir", "ephemeral"
                       "projected", "secret"}
 
 
+class Loader(yaml.SafeLoader):
+    """SafeLoader que lê `=` como texto: no YAML 1.1 do PyYAML ele é a tag !!value, sem construtor, e os
+    CRDs dos charts têm `- =` em enums (o Kubernetes lê YAML 1.2, onde é só uma string)."""
+
+
+Loader.add_constructor("tag:yaml.org,2002:value", Loader.construct_yaml_str)
+
+
+def load_docs(text):
+    return [d for d in yaml.load_all(text, Loader=Loader) if d]
+
+
 def load_yaml(path):
-    return [d for d in yaml.safe_load_all(path.read_text(encoding="utf-8")) if d]
+    return load_docs(path.read_text(encoding="utf-8"))
 
 
 def guardrails():
@@ -71,7 +83,7 @@ def render_source(src):
         out = subprocess.run(["kubectl", "kustomize", str(path)], capture_output=True, text=True)
         if out.returncode != 0:
             raise RuntimeError(f"kubectl kustomize {src['path']} falhou: {out.stderr.strip()}")
-        return [d for d in yaml.safe_load_all(out.stdout) if d]
+        return load_docs(out.stdout)
     include = expand_braces((src.get("directory") or {}).get("include", "*.yaml"))
     files = sorted(f for f in path.glob("*.yaml") if any(fnmatch.fnmatch(f.name, pat) for pat in include))
     return [d for f in files for d in load_yaml(f)]
@@ -186,7 +198,7 @@ def drill_docs(game):
                              capture_output=True, text=True)
         if out.returncode != 0:
             raise RuntimeError(f"restore-drill.py {game} {' '.join(extra)} --dry-run falhou: {out.stderr.strip()}")
-        docs += [d for d in yaml.safe_load_all(out.stdout) if d]
+        docs += load_docs(out.stdout)
     return docs
 
 
