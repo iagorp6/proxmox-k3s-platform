@@ -39,6 +39,8 @@ def healthy():
         dh.HOST_SECURITY: [sample(0)],
         dh.HOST_REBOOT: [sample(0)],
         dh.DISK_BUSY_P99: [sample(0.12, device="sdb"), sample(0.11, device="sda")],
+        dh.ZFS_SCRUB_AGE: [sample(14 * 24 * H)],
+        dh.ZFS_ERRORS: [sample(0)],
     }
 
 
@@ -117,6 +119,18 @@ class DailyHealthTest(unittest.TestCase):
         a[dh.DISK_BUSY_P99] = []
         e = self.run_with(a)
         self.assertNotIn("💽 Discos do host (p99, 7 dias)", [f["name"] for f in e["fields"]])
+
+    def test_zfs_scrub_and_errors_are_informative_and_optional(self):
+        e = self.run_with(healthy())
+        self.assertEqual(self.field(e, "🧽 ZFS"), "scrub há 14 dias · sem erros")
+        a = healthy()
+        a[dh.ZFS_ERRORS] = [sample(3)]
+        e = self.run_with(a)
+        self.assertEqual(e["title"], "✅ Tudo OK no AsunBoid")
+        self.assertEqual(self.field(e, "🧽 ZFS"), "scrub há 14 dias · 3 erro(s) nos discos")
+        a[dh.ZFS_SCRUB_AGE], a[dh.ZFS_ERRORS] = [], []
+        e = self.run_with(a)
+        self.assertNotIn("🧽 ZFS", [f["name"] for f in e["fields"]])
 
     def test_prometheus_down_is_never_silence(self):
         original = dh.q

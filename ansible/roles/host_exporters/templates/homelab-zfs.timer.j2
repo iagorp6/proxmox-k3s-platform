@@ -1,0 +1,9 @@
+[Unit]
+Description=Atualiza as métricas de erros e scrub do ZFS
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target

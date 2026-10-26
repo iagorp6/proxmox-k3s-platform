@@ -8,7 +8,8 @@ Replace a disk when:
 
 - `DiskSmartFailing` fires (SMART predicts a failure), or
 - `DiskReallocatedSectors` keeps growing, or
-- `ZfsPoolNotOnline` fires with `DEGRADED`, or `zpool status` shows READ/WRITE/CKSUM errors on one disk.
+- `ZfsPoolNotOnline` fires with `DEGRADED`, or `ZfsVdevErrors` keeps coming back after a `zpool clear` and a scrub
+  (READ/WRITE/CKSUM errors on one disk), or `ZfsDataErrors` fires.
 
 Each disk has the layout the Proxmox installer creates: `part1` BIOS boot, `part2` the ESP (kept in sync by
 `proxmox-boot-tool`, so either disk boots the host alone) and `part3` the `rpool` member. The new disk needs the same
@@ -86,4 +87,5 @@ If the server ever fails to boot from the new disk alone, check the UEFI boot or
 - `zpool status -x` says `all pools are healthy`.
 - A scrub is clean: `zpool scrub -w rpool && zpool status rpool`.
 - Grafana **AsunBoid**, host row: pool ONLINE, SMART OK for both disks, and both disks with similar busy time.
-- `ZfsPoolNotOnline` and the SMART alerts are resolved in Discord.
+- `ZfsPoolNotOnline`, `ZfsVdevErrors` and the SMART alerts are resolved in Discord (run `zpool clear rpool` if the
+  old disk left error counters behind).
