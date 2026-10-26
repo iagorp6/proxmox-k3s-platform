@@ -6,7 +6,10 @@ echo "== jogo ativo (Git): $(grep -oP '^active:\s*\K\S+' "$ROOT/platform/active-
 while read -r ns sts; do   # jogos lidos do catálogo (k8s/**/game.yaml)
   kubectl -n "$ns" get sts "$sts" -o jsonpath="   $sts: réplicas={.spec.replicas} prontas={.status.readyReplicas}{'\n'}"
 done < <(python3 "$ROOT/scripts/catalog.py" workloads)
-kubectl -n zomboid get cronjob zomboid-daily-restart -o jsonpath='   restart diário do Zomboid suspenso: {.spec.suspend}{"\n"}'
+while read -r ns cj; do   # CronJobs que a troca suspende com o jogo parado (ex.: restart diário)
+  [ -n "$cj" ] || continue
+  kubectl -n "$ns" get cronjob "$cj" -o jsonpath="   $cj suspenso: {.spec.suspend}{'\n'}"
+done < <(python3 "$ROOT/scripts/catalog.py" idle-cronjobs)
 echo "== alertas disparados (fora Watchdog e jogadores):"
 kubectl -n monitoring port-forward svc/kps-kube-prometheus-stack-prometheus 9091:9090 >/dev/null 2>&1 &
 PF=$!

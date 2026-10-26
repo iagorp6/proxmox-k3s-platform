@@ -1,0 +1,53 @@
+# Estado do host Proxmox, só leitura (make host-status): pool, último scan, SMART, kernel, patches,
+# ESPs e os timers das métricas. Junta numa execução os comandos ad-hoc que antes iam um por um.
+# Cada comando tem timeout de 30 s: um disco ou o zpool travado vira uma linha de erro, não um
+# terminal parado (como o zpool wait de 26/10). Nada aqui altera o host.
+- name: Estado do host Proxmox
+  hosts: proxmox
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Collect host status (read-only)
+      ansible.builtin.shell: |
+        set -uo pipefail
+        # stderr vai direto para a saída: o aviso de falha do t aparece mesmo com um grep no pipe
+        exec 2>&1
+        t() { timeout 30 "$@" 2>&1 || echo "  (falhou ou passou de 30 s: $*)" >&2; }
+        echo "== host"
+        t uptime
+        t free -h | sed -n 2p
+        echo "== pool"
+        t zpool status -x
+        t zpool list -H -o name,size,alloc,free,capacity,health
+        t zpool status | grep -E '^ *(scan|remove):|^errors:'
+        t zpool status | awk '/NAME +STATE/,/^$/' | sed '/^$/d'
+        echo "== último scrub iniciado (zpool history)"
+        t zpool history | grep -E 'zpool scrub( -w)? [a-z]' | tail -n 1
+        echo "== SMART"
+        attrs='overall-health|Reallocated_Sector_Ct|Current_Pending_Sector|Offline_Uncorrectable|Power_On_Hours|Temperature_Celsius'
+        for d in /dev/disk/by-id/ata-*; do
+          case "$d" in *-part*) continue ;; esac
+          [ -e "$d" ] || continue
+          echo "${d##*/}"
+          # smartctl usa o código de saída como máscara de avisos: só o 124 (timeout) é falha aqui
+          timeout 30 smartctl -H -A "$d" | grep -E "$attrs" | sed 's/^/  /'
+          [ "${PIPESTATUS[0]}" -ne 124 ] || echo "  (smartctl passou de 30 s)"
+        done
+        echo "== kernel"
+        echo "em uso: $(uname -r) | mais novo instalado: $(find /lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n 1)"
+        echo "== patches pendentes (cache do apt atual, sem apt update)"
+        pending=$(t apt-get -s dist-upgrade | grep '^Inst ')
+        echo "total: $(grep -c . <<<"$pending") | segurança: $(grep -c -- '-security' <<<"$pending")"
+        echo "== ESPs (proxmox-boot-tool)"
+        t proxmox-boot-tool status | grep -vE '^Re-executing|^System currently booted'
+        echo "== timers das métricas"
+        t systemctl list-timers 'homelab-*' 'prometheus-node-exporter-*' --no-pager | sed '/^$/,$d'
+      args:
+        executable: /bin/bash
+      register: host_status
+      changed_when: false
+      timeout: 600
+
+    - name: Show host status
+      ansible.builtin.debug:
+        msg: "{{ host_status.stdout_lines }}"

@@ -14,6 +14,9 @@ Uso:
   scripts/switch-game.py <jogo> --requester NOME --require-player-count
                                              usado pelo games-bot (ADR 0006): registra quem pediu
                                              no commit e recusa a troca sem contagem de jogadores
+  scripts/switch-game.py <jogo> --resync     não troca: aplica no jogo o que mudou no main (whitelist,
+                                             imagem), com a mesma checagem de jogadores e o save antes
+                                             do Sync no Argo CD (make sync-game)
 
 Configuração local (.env.local, fora do Git) ou variáveis de ambiente (games-bot): GAME_HOST
 (endereço que os jogadores usam), DISCORD_ROLE_ID (cargo mencionado quando o jogo fica pronto;
@@ -180,6 +183,21 @@ def argo_sync(app, revision):
     sys.exit(f"ERRO: timeout esperando o sync de {app}")
 
 
+def out_of_sync(g):
+    """Atualiza o app no Argo CD e diz se o cluster está diferente do Git."""
+    run(["kubectl", "-n", "argocd", "annotate", "application", g["app"],
+         "argocd.argoproj.io/refresh=hard", "--overwrite"])
+    time.sleep(5)
+    r = run(["kubectl", "-n", "argocd", "get", "application", g["app"], "-o", "jsonpath={.status.sync.status}"])
+    return r.stdout.strip() != "Synced"
+
+
+def sync_game(g, sha, running):
+    argo_sync(g["app"], sha)
+    if running:
+        run(["kubectl", "-n", g["ns"], "rollout", "status", f"statefulset/{g['sts']}", "--timeout=1200s"], capture=False)
+
+
 def apply_switch(previous, target, sha):
     if previous in GAMES:
         print(f"Parando {previous}...")
@@ -195,6 +213,54 @@ def apply_switch(previous, target, sha):
     run(["kubectl", "-n", g["ns"], "rollout", "status", f"statefulset/{g['sts']}", "--timeout=1200s"], capture=False)
 
 
+def prepare_repo():
+    if run(["git", "status", "--porcelain"]).stdout.strip():
+        sys.exit("ERRO: há mudanças não commitadas no repositório; commite ou descarte antes.")
+    if run(["git", "rev-parse", "--abbrev-ref", "HEAD"]).stdout.strip() != "main":
+        sys.exit("ERRO: rode a troca a partir do branch main.")
+    run(["git", "pull", "--ff-only"])
+
+
+def check_players(name, a):
+    """Sai com erro se houver gente jogando (ou sem contagem, no games-bot); senão manda salvar o mundo."""
+    n = players_online(GAMES[name])
+    if n is None and a.require_player_count and not a.force:
+        sys.exit(f"ERRO: não consegui contar os jogadores de {name}; troca recusada.")
+    if n is None:
+        print(f"  AVISO: contagem de jogadores indisponível para {name}")
+    elif n > 0 and not a.force:
+        sys.exit(f"ERRO: {n} jogador(es) online em {name}. Use --force para trocar mesmo assim.")
+    else:
+        print(f"  jogadores online em {name}: {n}")
+    save_world(GAMES[name])
+
+
+def resync(name, a, send):
+    """Sync do jogo com o main sem trocar o ativo. Sem diferença no Argo, não mexe no servidor."""
+    g = GAMES[name]
+    prepare_repo()
+    sha = run(["git", "rev-parse", "HEAD"]).stdout.strip()
+    if not out_of_sync(g):
+        print(f"Nada a fazer: {g['app']} já está sincronizado com o main.")
+        return 0
+    active = name == current_active()
+    if active:
+        check_players(name, a)
+        send(f"🔁 Atualizando {g['title']}",
+             "Aplicando uma atualização no servidor; ele pode reiniciar e voltar em alguns minutos.", COLOR_INFO)
+    try:
+        sync_game(g, sha, active)
+    except SystemExit as exc:
+        if active:
+            send(f"⚠️ A atualização de {g['title']} não terminou",
+                 "Algo deu errado. O administrador já foi avisado pelo terminal.", COLOR_FAIL)
+        raise exc
+    if active:
+        send(f"🎮 {g['title']} está no ar!", "Atualização aplicada. Use o endereço de sempre.", COLOR_OK)
+    print(f"OK: {name} sincronizado com {sha[:7]}.")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("game", choices=sorted(GAMES))
@@ -204,32 +270,24 @@ def main():
     ap.add_argument("--requester", help="quem pediu a troca (vai na mensagem do commit)")
     ap.add_argument("--require-player-count", action="store_true",
                     help="recusa a troca se não der para contar os jogadores do jogo atual")
+    ap.add_argument("--resync", action="store_true",
+                    help="não troca: sincroniza o jogo com o main (checa jogadores e salva antes)")
     a = ap.parse_args()
     requester = " ".join((a.requester or "").split())[:40]
+    send = (lambda *args, **kw: None) if a.no_notify else notify
+    if a.resync:
+        return resync(a.game, a, send)
 
     target, previous = a.game, current_active()
     print(f"Jogo ativo: {previous or '(nenhum)'} -> {target}")
     if target == previous and not a.dry_run:
-        print("Nada a fazer: esse jogo já é o ativo.")
+        print(f"Nada a fazer: esse jogo já é o ativo. Para aplicar mudanças do main nele: make sync-game GAME={target}")
         return 0
 
     if not a.dry_run:
-        if run(["git", "status", "--porcelain"]).stdout.strip():
-            sys.exit("ERRO: há mudanças não commitadas no repositório; commite ou descarte antes.")
-        if run(["git", "rev-parse", "--abbrev-ref", "HEAD"]).stdout.strip() != "main":
-            sys.exit("ERRO: rode a troca a partir do branch main.")
-        run(["git", "pull", "--ff-only"])
+        prepare_repo()
         if previous in GAMES:
-            n = players_online(GAMES[previous])
-            if n is None and a.require_player_count and not a.force:
-                sys.exit(f"ERRO: não consegui contar os jogadores de {previous}; troca recusada.")
-            if n is None:
-                print(f"  AVISO: contagem de jogadores indisponível para {previous}")
-            elif n > 0 and not a.force:
-                sys.exit(f"ERRO: {n} jogador(es) online em {previous}. Use --force para trocar mesmo assim.")
-            else:
-                print(f"  jogadores online em {previous}: {n}")
-            save_world(GAMES[previous])
+            check_players(previous, a)
 
     written = [write_patch(name, target) for name in GAMES]
     ACTIVE_FILE.parent.mkdir(exist_ok=True)
@@ -257,7 +315,6 @@ def main():
 
     t_name = GAMES[target]["title"]
     p_name = GAMES[previous]["title"] if previous in GAMES else "nenhum"
-    send = (lambda *args, **kw: None) if a.no_notify else notify
     send(f"🔄 Trocando de {p_name} para {t_name}",
          "O servidor fica indisponível por alguns minutos. Aviso aqui quando estiver pronto.", COLOR_INFO)
     started = time.time()
