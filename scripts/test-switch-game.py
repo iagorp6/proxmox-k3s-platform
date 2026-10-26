@@ -10,6 +10,7 @@ Uso: python3 scripts/test-switch-game.py
 import contextlib
 import importlib.util
 import io
+import os
 import pathlib
 import subprocess
 import sys
@@ -17,6 +18,11 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+# Sem manutenção automática do git nos repositórios temporários: o git novo do runner a dispara
+# destacada (em segundo plano) depois de commit/push, ela escreve em objects/pack enquanto o tearDown
+# apaga o diretório e o teste falha com "Directory not empty". Vale também para os git do script testado.
+os.environ.update({"GIT_CONFIG_COUNT": "2", "GIT_CONFIG_KEY_0": "maintenance.auto", "GIT_CONFIG_VALUE_0": "false",
+                   "GIT_CONFIG_KEY_1": "gc.auto", "GIT_CONFIG_VALUE_1": "0"})
 sys.path.insert(0, str(ROOT / "scripts"))
 spec = importlib.util.spec_from_file_location("switch_game", ROOT / "scripts" / "switch-game.py")
 sw = importlib.util.module_from_spec(spec)

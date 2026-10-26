@@ -15,6 +15,11 @@ import tempfile
 import unittest
 
 SCRIPT = pathlib.Path(__file__).resolve().parent / "require-main.sh"
+# Sem manutenção automática do git nos repositórios temporários: o git novo do runner a dispara
+# destacada (em segundo plano) depois de commit/push, ela escreve em objects/pack enquanto o tearDown
+# apaga o diretório e o teste falha com "Directory not empty". Vale também para os git do script testado.
+os.environ.update({"GIT_CONFIG_COUNT": "2", "GIT_CONFIG_KEY_0": "maintenance.auto", "GIT_CONFIG_VALUE_0": "false",
+                   "GIT_CONFIG_KEY_1": "gc.auto", "GIT_CONFIG_VALUE_1": "0"})
 
 
 def git(cwd, *args):
