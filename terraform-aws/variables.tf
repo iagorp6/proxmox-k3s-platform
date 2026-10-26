@@ -21,12 +21,6 @@ variable "budget_limit_usd" {
   default     = "1"
 }
 
-variable "backup_size_alert_gb" {
-  description = "Tamanho do bucket de backup (GB) a partir do qual o alarme dispara"
-  type        = number
-  default     = 15
-}
-
 variable "backup_noncurrent_days" {
   description = "Dias que um objeto apagado ou sobrescrito no bucket de backup continua recuperável (versão não corrente)"
   type        = number

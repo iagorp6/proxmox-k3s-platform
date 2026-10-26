@@ -3,7 +3,11 @@
 # em vez de três por dia (lock exclusivo que atrasava o backup do jogo seguinte), e depois o check:
 # corrupção em pack ou índice só apareceria no restore.
 # --read-data-subset baixa 5% dos packs, sorteados a cada execução: em poucos meses o repositório
-# inteiro foi lido, e o egress do S3 fica em centavos. Falha vira o alerta ResticCheckFailed.
+# inteiro foi lido, e o egress do S3 fica em centavos.
+# Por último confere o tamanho do repositório contra REPO_SIZE_LIMIT_GB: é o que gera custo no S3, e
+# substitui o alarme do CloudWatch (o e-mail do SNS expirava sem confirmação e quebrava o drift).
+# O bucket guarda ainda as versões não correntes por backup_noncurrent_days, então fica um pouco acima.
+# Qualquer falha vira o alerta ResticCheckFailed no Discord.
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -71,6 +75,11 @@ spec:
                   restic snapshots --compact
                   restic prune --retry-lock 30m
                   restic check --read-data-subset=5% --retry-lock 30m
+                  size=$(restic stats --mode raw-data --json --retry-lock 30m | sed -n 's/.*"total_size":\([0-9]*\).*/\1/p')
+                  [ -n "$size" ] || { echo "ERRO: não consegui ler o tamanho do repositório"; exit 1; }
+                  limit=$((REPO_SIZE_LIMIT_GB * 1024 * 1024 * 1024))
+                  echo "repositório: $((size / 1048576)) MiB (limite ${REPO_SIZE_LIMIT_GB} GiB)"
+                  [ "$size" -le "$limit" ] || { echo "ERRO: repositório acima de ${REPO_SIZE_LIMIT_GB} GiB: confira o forget/prune ou suba o limite"; exit 1; }
               envFrom:
                 - secretRef:
                     name: restic-check
@@ -79,6 +88,8 @@ spec:
                   value: /cache
                 - name: TMPDIR
                   value: /tmp
+                - name: REPO_SIZE_LIMIT_GB
+                  value: "15"
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true

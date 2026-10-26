@@ -275,7 +275,7 @@ tests:
           - exp_labels: {severity: warning, namespace: platform, cronjob: restic-check}
             exp_annotations:
               summary: "Verificação semanal do repositório restic falhou"
-              description: "O prune ou o restic check semanal não terminou com sucesso: pode haver pack ou índice corrompido no S3, ou o espaço de snapshots esquecidos não foi liberado. Os backups diários seguem rodando, mas o restore pode falhar."
+              description: "O prune, o restic check ou a conferência de tamanho semanal não terminou com sucesso: pode haver pack ou índice corrompido no S3, o espaço de snapshots esquecidos não foi liberado, ou o repositório passou do limite de tamanho (REPO_SIZE_LIMIT_GB, o que pesa na conta da AWS). Os backups diários seguem rodando, mas o restore pode falhar."
               action: "kubectl -n platform logs job/$(kubectl -n platform get jobs -o name --sort-by=.metadata.creationTimestamp | grep restic-check | tail -1 | cut -d/ -f2) --tail=40"
   - name: restic check que terminou logo depois do agendamento não alerta
     interval: 1m

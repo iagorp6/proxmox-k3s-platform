@@ -21,9 +21,6 @@ mock_provider "aws" {
     target = aws_s3_bucket.tfstate
     values = { arn = "arn:aws:s3:::tfstate-test", id = "tfstate-test" }
   }
-  mock_resource "aws_sns_topic" {
-    defaults = { arn = "arn:aws:sns:sa-east-1:123456789012:alerts" }
-  }
   mock_resource "aws_iam_openid_connect_provider" {
     defaults = { arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com" }
   }
