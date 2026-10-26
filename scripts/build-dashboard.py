@@ -241,10 +241,10 @@ y += 8
 # ---------------- 4. Host (recolhido) ----------------
 host_y = y + 1
 host = [
-  stat("SMART dos discos", "Autoteste dos discos. FALHA = disco com falha prevista. No ZFS RAID0, perder um disco é perder o pool.",
+  stat("SMART dos discos", "Autoteste dos discos. FALHA = disco com falha prevista. O pool é um mirror: aguenta perder um disco, mas fica sem redundância até a troca.",
        0, host_y, 4, 4, [prom("min(smartctl_device_smart_status)")],
        mappings=vmap([("0", "FALHA", RED), ("1", "OK", GREEN)]), steps=th((RED, None), (GREEN, 1)), no_value="sem dados"),
-  stat("Pool ZFS", "Estado do pool de armazenamento (rpool).",
+  stat("Pool ZFS", "Estado do pool de armazenamento (rpool, mirror de 2 discos). DEGRADADO = um disco fora.",
        4, host_y, 4, 4, [prom('max(node_zfs_zpool_state{zpool="rpool",state="online"})')],
        mappings=vmap([("0", "DEGRADADO", RED), ("1", "ONLINE", GREEN)]), steps=th((RED, None), (GREEN, 1)), no_value="sem dados"),
   stat("Erros de memória ECC (24h)", "Erros detectados pela memória ECC. Alguns corrigidos são toleráveis; não corrigidos exigem ação.",
@@ -260,8 +260,8 @@ host = [
        20, host_y, 4, 4, [prom('node_memory_MemAvailable_bytes{job="proxmox-node"} / node_memory_MemTotal_bytes{job="proxmox-node"}')],
        unit="percentunit", decimals=0, steps=th((RED, None), (ORANGE, 0.1), (GREEN, 0.2)), no_value="sem dados"),
 ]
-# Carga dos discos: no stripe cada disco recebe metade das escritas; num mirror, cada um recebe todas.
-# A soma da ocupação dos dois é o pior caso de um disco no mirror (as leituras continuam divididas).
+# Carga dos discos: no mirror cada disco recebe todas as escritas (as leituras se dividem), então os
+# painéis de pico olham o disco mais carregado, não a soma, que contaria cada escrita duas vezes.
 # max by (device): uma série por disco mesmo quando um label do alvo muda (instance), senão a janela
 # de 7 dias mostra o mesmo disco duas vezes.
 DISK = 'job="proxmox-node",device=~"sd[a-z]+"'
@@ -273,7 +273,6 @@ def per_disk(metric):
 
 BUSY = per_disk("node_disk_io_time_seconds_total")
 WRITE_IOPS = f'sum({per_disk("node_disk_writes_completed_total")})'
-WRITE_BPS = f'sum({per_disk("node_disk_written_bytes_total")})'
 dy = host_y + 4
 host += [
   {"type": "timeseries", "title": "Ocupação dos discos",
@@ -284,7 +283,7 @@ host += [
                    "overrides": []},
    "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}},
   {"type": "timeseries", "title": "IOPS dos discos (soma)",
-   "description": "Operações por segundo somando os discos. No mirror, cada disco recebe todas as escritas.",
+   "description": "Operações por segundo somando os discos. No mirror, cada escrita aparece duas vezes (vai para os dois discos).",
    "datasource": DS, "gridPos": {"x": 8, "y": dy, "w": 8, "h": 7},
    "targets": [prom(WRITE_IOPS, legend="escrita"),
                prom(f'sum({per_disk("node_disk_reads_completed_total")})', ref="B", legend="leitura")],
@@ -297,20 +296,17 @@ host += [
                     legend="{{device}}")],
    "fieldConfig": {"defaults": {"unit": "s", "min": 0, "custom": {"fillOpacity": 15, "lineWidth": 1}}, "overrides": []},
    "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}},
-  stat("Pico de ocupação (p99, 7 dias)", "Maior p99 de ocupação entre os discos na última semana, no layout atual do pool.",
-       0, dy + 7, 6, 4, [prom(f"max(quantile_over_time(0.99, {BUSY}[7d:5m]))")],
+  stat("Pico de ocupação (p99, 7 dias)", "Maior p99 de ocupação entre os discos na última semana. Abaixo de 50%, o disco não é gargalo.",
+       0, dy + 7, 8, 4, [prom(f"max(quantile_over_time(0.99, {BUSY}[7d:5m]))")],
        unit="percentunit", decimals=0, steps=th((GREEN, None), (ORANGE, 0.5), (RED, 0.8)), no_value="sem dados"),
-  stat("Pior caso num mirror (p99, 7 dias)", "Soma da ocupação dos discos: o que um disco teria se fizesse o trabalho dos dois. Abaixo de 50%, trocar o stripe por mirror não pesa.",
-       6, dy + 7, 6, 4, [prom(f"quantile_over_time(0.99, sum({BUSY})[7d:5m])")],
-       unit="percentunit", decimals=0, steps=th((GREEN, None), (ORANGE, 0.5), (RED, 0.8)), no_value="sem dados"),
-  stat("Escritas (p99, 7 dias)", "IOPS de escrita somando os discos. Um HDD de 7200 rpm aguenta uns 100 a 150 IOPS aleatórios.",
-       12, dy + 7, 6, 4, [prom(f"quantile_over_time(0.99, {WRITE_IOPS}[7d:5m])")],
+  stat("Escritas por disco (p99, 7 dias)", "IOPS de escrita do disco mais carregado. Um HDD de 7200 rpm aguenta uns 100 a 150 IOPS aleatórios.",
+       8, dy + 7, 8, 4, [prom(f'max(quantile_over_time(0.99, {per_disk("node_disk_writes_completed_total")}[7d:5m]))')],
        unit="iops", decimals=0, steps=th((GREEN, None), (ORANGE, 75), (RED, 120)), no_value="sem dados"),
-  stat("Vazão de escrita (p99, 7 dias)", "Bytes escritos por segundo somando os discos. Um HDD sustenta uns 150 MB/s sequenciais.",
-       18, dy + 7, 6, 4, [prom(f"quantile_over_time(0.99, {WRITE_BPS}[7d:5m])")],
+  stat("Vazão de escrita por disco (p99, 7 dias)", "Bytes escritos por segundo no disco mais carregado. Um HDD sustenta uns 150 MB/s sequenciais.",
+       16, dy + 7, 8, 4, [prom(f'max(quantile_over_time(0.99, {per_disk("node_disk_written_bytes_total")}[7d:5m]))')],
        unit="Bps", decimals=1, steps=th((GREEN, None), (ORANGE, 75e6), (RED, 120e6)), no_value="sem dados"),
   {"type": "table", "title": "Benchmark dos discos (fio)",
-   "description": "Resultado de ansible-playbook playbooks/disk-bench.yml, uma linha por teste e layout do pool. Rode antes e depois de trocar o stripe por mirror para comparar.",
+   "description": "Resultado de ansible-playbook playbooks/disk-bench.yml, uma linha por teste e layout do pool. O layout=stripe é de antes da conversão para mirror (26/10/2026).",
    "datasource": DS, "gridPos": {"x": 0, "y": dy + 11, "w": 24, "h": 6},
    "targets": [prom("homelab_disk_bench_iops", instant=True, fmt="table"),
                prom("homelab_disk_bench_bytes_per_second", ref="B", instant=True, fmt="table"),

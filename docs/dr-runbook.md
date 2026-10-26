@@ -5,7 +5,8 @@ reinstalled on purpose, as in the DR drill), and everything comes back from Git,
 restic snapshots in S3. Run it top to bottom and write the clock time at the end of each phase in the
 table at the bottom; the sum is the measured RTO.
 
-The drill is also the planned moment to move the pool from a stripe to a **ZFS mirror** (phase 1).
+The pool is a **ZFS mirror** since 2026-10-26 (converted in place, see ADR 0005), and phase 1 keeps it one. For a
+single failed disk, do not rebuild: follow [disk-replacement.md](disk-replacement.md).
 
 Commands run from the control node (WSL, `~/homelab-infra`) unless a phase says otherwise.
 
@@ -167,6 +168,6 @@ Copy this table into the drill record (`docs/restore-drills.md`, section "Full r
 
 ## After the drill
 
-- Update ADR 0005: the pool is now a mirror (the stripe risk is gone), and the RTO is measured.
-- Tick the two DR items in the README roadmap and publish the RTO in "Backup and disaster recovery".
+- Update ADR 0005 with the measured RTO.
+- Tick the DR drill item in the README roadmap and publish the RTO in "Backup and disaster recovery".
 - Anything you had to do by hand that is not in this runbook is a bug: put it in code or here.
