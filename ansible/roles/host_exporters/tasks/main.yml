@@ -70,13 +70,16 @@
     - prometheus-node-exporter
     - smartctl_exporter
 
-- name: Install kernel reboot metric script
+- name: Install textfile metric scripts (kernel reboot, ZFS vdev errors and scrub)
   ansible.builtin.template:
-    src: homelab-kernel-reboot.sh.j2
-    dest: /usr/local/sbin/homelab-kernel-reboot
+    src: "{{ item.src }}"
+    dest: "/usr/local/sbin/{{ item.dest }}"
     mode: "0755"
+  loop:
+    - {src: homelab-kernel-reboot.sh.j2, dest: homelab-kernel-reboot}
+    - {src: homelab-zfs.py.j2, dest: homelab-zfs}
 
-- name: Install kernel reboot metric units
+- name: Install textfile metric units
   ansible.builtin.template:
     src: "{{ item }}.j2"
     dest: "/etc/systemd/system/{{ item }}"
@@ -84,6 +87,8 @@
   loop:
     - homelab-kernel-reboot.service
     - homelab-kernel-reboot.timer
+    - homelab-zfs.service
+    - homelab-zfs.timer
   notify: Reload systemd
 
 - name: Apply pending restarts
@@ -97,6 +102,7 @@
   loop:
     - prometheus-node-exporter-apt.timer
     - homelab-kernel-reboot.timer
+    - homelab-zfs.timer
 
 - name: Write patch metrics now (the timers only run later)
   ansible.builtin.systemd:
@@ -105,9 +111,10 @@
   loop:
     - prometheus-node-exporter-apt.service
     - homelab-kernel-reboot.service
+    - homelab-zfs.service
   changed_when: false
 
-- name: Verify node_exporter metrics (ZFS, EDAC and patch textfiles)
+- name: Verify node_exporter metrics (ZFS, EDAC, patch and ZFS textfiles)
   ansible.builtin.uri:
     url: http://127.0.0.1:9100/metrics
     return_content: true
@@ -116,7 +123,8 @@
   delay: 5
   until: host_exporters_node_metrics.status == 200
   failed_when: >-
-    ['node_zfs_', 'node_edac_', 'node_reboot_required', 'homelab_kernel_reboot_pending']
+    ['node_zfs_', 'node_edac_', 'node_reboot_required', 'homelab_kernel_reboot_pending',
+     'homelab_zfs_vdev_errors', 'homelab_zfs_last_scrub_timestamp_seconds']
     | reject('in', host_exporters_node_metrics.content) | list | length > 0
 
 - name: Verify smartctl_exporter metrics

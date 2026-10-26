@@ -42,6 +42,9 @@ HOST_DISK_BUSY = 'max by (device) (rate(node_disk_io_time_seconds_total{job="pro
 DISK_BUSY_P99 = f"quantile_over_time(0.99, {HOST_DISK_BUSY}[7d:5m])"
 HOST_REBOOT = ('max(max(node_reboot_required{job="proxmox-node"})'
                ' or max(homelab_kernel_reboot_pending{job="proxmox-node"}))')
+# Textfile homelab-zfs do host (role host_exporters). Erros já viram alerta (ZfsVdevErrors/ZfsDataErrors)
+ZFS_SCRUB_AGE = "time() - max(homelab_zfs_last_scrub_timestamp_seconds)"
+ZFS_ERRORS = "sum(homelab_zfs_vdev_errors) + (sum(homelab_zfs_pool_data_errors) or vector(0))"
 
 
 def q(expr):
@@ -122,6 +125,13 @@ def build():
         n = round(val(security[0])) if security else 0
         fields.append({"name": "🩹 Patches do host", "value": (f"{n} de segurança pendente(s)" if n else "Em dia")
                        + (" · reboot pendente" if reboot and val(reboot[0]) > 0 else ""), "inline": True})
+
+    # Informativo: o ZfsScrubStale e os alertas de erro cobrem o que exige ação
+    scrub, zfs_errors = q(ZFS_SCRUB_AGE), q(ZFS_ERRORS)
+    if scrub or zfs_errors:
+        n = round(val(zfs_errors[0])) if zfs_errors else 0
+        fields.append({"name": "🧽 ZFS", "value": (f"scrub há {age(val(scrub[0]))}" if scrub else "sem scrub registrado")
+                       + (f" · {n} erro(s) nos discos" if n else " · sem erros"), "inline": True})
 
     # Informativo: carga dos discos do host na semana (sem ponto de atenção, não há alerta para isso)
     busy = sorted((r["metric"].get("device", "?"), val(r)) for r in q(DISK_BUSY_P99))

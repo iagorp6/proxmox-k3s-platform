@@ -288,3 +288,78 @@ tests:
       - eval_time: 5h
         alertname: ResticCheckFailed
         exp_alerts: []
+  - name: erro de checksum num disco do mirror dispara ZfsVdevErrors depois de 15 min; vdev limpo não
+    interval: 1m
+    input_series:
+      - series: 'homelab_zfs_vdev_errors{pool="rpool",vdev="ata-A-part3",type="cksum"}'
+        values: '0x5 3x40'
+      - series: 'homelab_zfs_vdev_errors{pool="rpool",vdev="ata-B-part3",type="cksum"}'
+        values: '0x45'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ZfsVdevErrors
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: ZfsVdevErrors
+        exp_alerts:
+          - exp_labels: {severity: warning, pool: rpool, vdev: ata-A-part3}
+            exp_annotations:
+              summary: "Erros no disco ata-A-part3 do pool rpool"
+              description: "O zpool status mostra 3 erro(s) de leitura, escrita ou checksum. No mirror o ZFS corrige pelo outro disco, mas o pool continua ONLINE e o ZfsPoolNotOnline não dispara. Erro que volta depois de zpool clear é disco ou cabo falhando."
+              action: "ssh no host: zpool status -v rpool e smartctl -a no disco. Se o SMART estiver limpo: zpool clear rpool e zpool scrub rpool; se os erros voltarem, docs/disk-replacement.md."
+  - name: erro de dados permanente dispara ZfsDataErrors
+    interval: 1m
+    input_series:
+      - series: 'homelab_zfs_pool_data_errors{pool="rpool"}'
+        values: '0x5 2x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: ZfsDataErrors
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: ZfsDataErrors
+        exp_alerts:
+          - exp_labels: {severity: critical, pool: rpool}
+            exp_annotations:
+              summary: "Dados corrompidos no pool rpool"
+              description: "2 erro(s) de dados permanentes: blocos que nem o mirror conseguiu reparar. Os arquivos afetados (pode ser o disco da VM) estão danificados."
+              action: "ssh no host: zpool status -v rpool lista os arquivos. Restaurar o jogo afetado com make restore-game GAME=<jogo> e trocar o disco com erros."
+  - name: último scrub com mais de 40 dias dispara ZfsScrubStale
+    interval: 1m
+    input_series:
+      # No promtool o relógio começa em 0: o scrub "aconteceu" 40 dias menos 100 min antes do início do teste
+      - series: 'homelab_zfs_last_scrub_timestamp_seconds{pool="rpool"}'
+        values: '-3450000x200'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: ZfsScrubStale
+        exp_alerts: []
+      - eval_time: 170m
+        alertname: ZfsScrubStale
+        exp_alerts:
+          - exp_labels: {severity: warning, pool: rpool}
+            exp_annotations:
+              summary: "Pool rpool sem scrub há mais de 40 dias"
+              description: "O cron do zfsutils-linux faz scrub no segundo domingo de cada mês. Sem scrub, um bloco ruim só aparece quando for lido, e no mirror isso pode ser tarde demais para reparar pelo outro disco."
+              action: "ssh no host: zpool scrub rpool, e conferir /etc/cron.d/zfsutils-linux ou o timer zfs-scrub-monthly@rpool."
+  - name: textfile do host parado há 3 h alerta; textfile atualizado e o do benchmark (manual) não
+    interval: 1m
+    input_series:
+      - series: 'node_textfile_mtime_seconds{job="proxmox-node",file="/var/lib/prometheus/node-exporter/homelab-zfs.prom"}'
+        values: '0x240'
+      - series: 'node_textfile_mtime_seconds{job="proxmox-node",file="/var/lib/prometheus/node-exporter/homelab-kernel.prom"}'
+        values: '0+60x240'
+      - series: 'node_textfile_mtime_seconds{job="proxmox-node",file="/var/lib/prometheus/node-exporter/homelab_disk_bench_mirror.prom"}'
+        values: '0x240'
+    alert_rule_test:
+      - eval_time: 190m
+        alertname: HostTextfileMetricsStale
+        exp_alerts: []
+      - eval_time: 200m
+        alertname: HostTextfileMetricsStale
+        exp_alerts:
+          - exp_labels: {severity: warning, job: proxmox-node, file: /var/lib/prometheus/node-exporter/homelab-zfs.prom}
+            exp_annotations:
+              summary: "Métrica /var/lib/prometheus/node-exporter/homelab-zfs.prom do host parou de atualizar"
+              description: "O timer que escreve esse textfile não roda há mais de 3 horas, então os alertas que dependem dele (ZFS, kernel pendente) ficam cegos."
+              action: "ssh no host: systemctl list-timers 'homelab-*' e journalctl -u homelab-zfs -u homelab-kernel-reboot -n 30."

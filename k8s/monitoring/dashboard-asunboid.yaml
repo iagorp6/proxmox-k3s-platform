@@ -2100,6 +2100,133 @@ data:
               "id": 34
             },
             {
+              "type": "stat",
+              "title": "Erros nos discos do ZFS",
+              "description": "Soma dos contadores READ/WRITE/CKSUM do zpool status. No mirror o ZFS corrige pelo outro disco e o pool segue ONLINE, então é aqui que um disco falhando aparece primeiro. Zera com zpool clear.",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 67,
+                "w": 12,
+                "h": 4
+              },
+              "targets": [
+                {
+                  "expr": "sum(max by (pool, vdev, type) (homelab_zfs_vdev_errors)) + (sum(homelab_zfs_pool_data_errors) or vector(0))",
+                  "refId": "A"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 1
+                      },
+                      {
+                        "color": "red",
+                        "value": 10
+                      }
+                    ]
+                  },
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Nenhum",
+                          "color": "green",
+                          "index": 0
+                        }
+                      }
+                    }
+                  ],
+                  "decimals": 0,
+                  "noValue": "sem dados"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                }
+              },
+              "id": 35
+            },
+            {
+              "type": "stat",
+              "title": "Último scrub do pool",
+              "description": "Quando o ZFS leu e conferiu todos os blocos pela última vez (cron mensal, segundo domingo). Acima de 40 dias dispara o ZfsScrubStale.",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 67,
+                "w": 12,
+                "h": 4
+              },
+              "targets": [
+                {
+                  "expr": "(time() - max(homelab_zfs_last_scrub_timestamp_seconds)) / 86400",
+                  "refId": "A"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 36
+                      },
+                      {
+                        "color": "red",
+                        "value": 40
+                      }
+                    ]
+                  },
+                  "unit": "d",
+                  "decimals": 0,
+                  "noValue": "sem dados"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                }
+              },
+              "id": 36
+            },
+            {
               "type": "table",
               "title": "Benchmark dos discos (fio)",
               "description": "Resultado de ansible-playbook playbooks/disk-bench.yml, uma linha por teste e layout do pool. O layout=stripe é de antes da conversão para mirror (26/10/2026).",
@@ -2109,7 +2236,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 67,
+                "y": 71,
                 "w": 24,
                 "h": 6
               },
@@ -2248,7 +2375,7 @@ data:
               "options": {
                 "showHeader": true
               },
-              "id": 35
+              "id": 37
             }
           ],
           "id": 22
@@ -2309,7 +2436,7 @@ data:
                   }
                 }
               ],
-              "id": 37
+              "id": 39
             },
             {
               "type": "logs",
@@ -2337,7 +2464,7 @@ data:
                 "sortOrder": "Descending",
                 "enableLogDetails": true
               },
-              "id": 38
+              "id": 40
             },
             {
               "type": "logs",
@@ -2365,10 +2492,10 @@ data:
                 "sortOrder": "Descending",
                 "enableLogDetails": true
               },
-              "id": 39
+              "id": 41
             }
           ],
-          "id": 36
+          "id": 38
         }
       ]
     }

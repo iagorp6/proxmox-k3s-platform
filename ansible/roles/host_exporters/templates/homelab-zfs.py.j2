@@ -1,0 +1,85 @@
+#!/usr/bin/python3
+# Gerenciado pelo Ansible (role host_exporters). Textfile do node_exporter com o que o coletor zfs
+# nativo não expõe (ele só dá o estado do pool): os contadores READ/WRITE/CKSUM de cada vdev, os
+# erros de dados do pool e quando foi o último scrub. Alertas: ZfsVdevErrors, ZfsDataErrors e
+# ZfsScrubStale (k8s/monitoring/alerts-homelab.yaml).
+import os
+import re
+import subprocess
+import tempfile
+import time
+
+DIR = "{{ host_exporters_textfile_dir }}"
+ENV = dict(os.environ, LC_ALL="C")
+VDEV = re.compile(r"^\t\s*(\S+)\s+([A-Z]+)\s+(\d+)\s+(\d+)\s+(\d+)\b")
+# "scan: scrub repaired 0B in 00:13:02 with 0 errors on Sun Oct 12 00:37:03 2025"
+SCRUB_DONE = re.compile(r"^\s*scan: scrub repaired \S+ in .+? with (\d+) errors on (.+)$", re.M)
+
+
+def run(*args):
+    return subprocess.run(args, capture_output=True, text=True, check=True, env=ENV, timeout=120).stdout
+
+
+def last_scrub_started(pool):
+    # Depois de um resilver o zpool status mostra só o resilver; o histórico do pool ainda tem o
+    # comando do último scrub (horário local do início, que é o que o cron mensal registra)
+    last = None
+    pattern = re.compile(r"^(\d{4}-\d\d-\d\d\.\d\d:\d\d:\d\d) zpool scrub (?:-w )?" + re.escape(pool) + "$")
+    for line in run("zpool", "history", pool).splitlines():
+        m = pattern.match(line)
+        if m:
+            last = time.mktime(time.strptime(m.group(1), "%Y-%m-%d.%H:%M:%S"))
+    return last
+
+
+def label(value):
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def pool_metrics(pool):
+    status = run("zpool", "status", "-p", pool)
+    lines = []
+    config = status.split("config:", 1)[-1].split("errors:", 1)[0]
+    for line in config.splitlines():
+        m = VDEV.match(line)
+        if not m:
+            continue
+        vdev = label(m.group(1))
+        for kind, n in zip(("read", "write", "cksum"), m.group(3, 4, 5), strict=True):
+            lines.append(f'homelab_zfs_vdev_errors{{pool="{label(pool)}",vdev="{vdev}",type="{kind}"}} {n}')
+    errors = re.search(r"^errors: (?:No known data errors|(\d+) data errors)", status, re.M)
+    if errors:
+        lines.append(f'homelab_zfs_pool_data_errors{{pool="{label(pool)}"}} {errors.group(1) or 0}')
+    done = SCRUB_DONE.search(status)
+    if done:
+        when = time.mktime(time.strptime(done.group(2).strip(), "%a %b %d %H:%M:%S %Y"))
+        lines.append(f'homelab_zfs_last_scrub_errors{{pool="{label(pool)}"}} {done.group(1)}')
+    else:
+        when = last_scrub_started(pool)
+    if when:
+        lines.append(f'homelab_zfs_last_scrub_timestamp_seconds{{pool="{label(pool)}"}} {when:.0f}')
+    return lines
+
+
+def main():
+    out = [
+        "# HELP homelab_zfs_vdev_errors Contadores READ/WRITE/CKSUM do zpool status (zeram com zpool clear).",
+        "# TYPE homelab_zfs_vdev_errors gauge",
+        "# HELP homelab_zfs_pool_data_errors Erros de dados permanentes do pool (linha errors: do zpool status).",
+        "# TYPE homelab_zfs_pool_data_errors gauge",
+        "# HELP homelab_zfs_last_scrub_errors Erros encontrados pelo último scrub concluído.",
+        "# TYPE homelab_zfs_last_scrub_errors gauge",
+        "# HELP homelab_zfs_last_scrub_timestamp_seconds Fim do último scrub (ou início, se o último scan foi um resilver).",
+        "# TYPE homelab_zfs_last_scrub_timestamp_seconds gauge",
+    ]
+    for pool in run("zpool", "list", "-H", "-o", "name").split():
+        out += pool_metrics(pool)
+    fd, tmp = tempfile.mkstemp(dir=DIR, prefix=".homelab-zfs.")
+    with os.fdopen(fd, "w") as f:
+        f.write("\n".join(out) + "\n")
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, os.path.join(DIR, "homelab-zfs.prom"))
+
+
+if __name__ == "__main__":
+    main()

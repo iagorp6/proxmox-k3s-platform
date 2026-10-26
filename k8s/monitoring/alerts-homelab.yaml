@@ -115,6 +115,43 @@ spec:
             summary: "Pool ZFS {{ $labels.zpool }} em estado {{ $labels.state }}"
             description: "O pool não está ONLINE. DEGRADED no mirror = um disco fora: tudo funciona, mas o próximo disco perdido é o pool inteiro."
             action: "ssh no host, zpool status -x, e trocar o disco seguindo docs/disk-replacement.md."
+        # Métricas homelab_zfs_* vêm do textfile homelab-zfs (role host_exporters, timer de 15 min)
+        - alert: ZfsVdevErrors
+          expr: max by (pool, vdev) (homelab_zfs_vdev_errors) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Erros no disco {{ $labels.vdev }} do pool {{ $labels.pool }}"
+            description: "O zpool status mostra {{ $value }} erro(s) de leitura, escrita ou checksum. No mirror o ZFS corrige pelo outro disco, mas o pool continua ONLINE e o ZfsPoolNotOnline não dispara. Erro que volta depois de zpool clear é disco ou cabo falhando."
+            action: "ssh no host: zpool status -v rpool e smartctl -a no disco. Se o SMART estiver limpo: zpool clear rpool e zpool scrub rpool; se os erros voltarem, docs/disk-replacement.md."
+        - alert: ZfsDataErrors
+          expr: max by (pool) (homelab_zfs_pool_data_errors) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Dados corrompidos no pool {{ $labels.pool }}"
+            description: "{{ $value }} erro(s) de dados permanentes: blocos que nem o mirror conseguiu reparar. Os arquivos afetados (pode ser o disco da VM) estão danificados."
+            action: "ssh no host: zpool status -v rpool lista os arquivos. Restaurar o jogo afetado com make restore-game GAME=<jogo> e trocar o disco com erros."
+        - alert: ZfsScrubStale
+          expr: time() - max by (pool) (homelab_zfs_last_scrub_timestamp_seconds) > 40 * 86400
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pool {{ $labels.pool }} sem scrub há mais de 40 dias"
+            description: "O cron do zfsutils-linux faz scrub no segundo domingo de cada mês. Sem scrub, um bloco ruim só aparece quando for lido, e no mirror isso pode ser tarde demais para reparar pelo outro disco."
+            action: "ssh no host: zpool scrub rpool, e conferir /etc/cron.d/zfsutils-linux ou o timer zfs-scrub-monthly@rpool."
+        - alert: HostTextfileMetricsStale
+          expr: time() - node_textfile_mtime_seconds{job="proxmox-node",file=~".*homelab-(kernel|zfs).prom"} > 3 * 3600
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Métrica {{ $labels.file }} do host parou de atualizar"
+            description: "O timer que escreve esse textfile não roda há mais de 3 horas, então os alertas que dependem dele (ZFS, kernel pendente) ficam cegos."
+            action: "ssh no host: systemctl list-timers 'homelab-*' e journalctl -u homelab-zfs -u homelab-kernel-reboot -n 30."
         - alert: EccUncorrectableErrors
           expr: increase(node_edac_uncorrectable_errors_total[1h]) > 0
           labels:
