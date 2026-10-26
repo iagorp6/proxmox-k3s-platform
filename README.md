@@ -89,7 +89,7 @@ flowchart TB
 | GitOps | Argo CD (app of apps) |
 | Workloads | Project Zomboid (Build 42), Terraria (TShock), Minecraft (Fabric modpack), Valheim |
 | Observability | kube-prometheus-stack, Loki, Grafana Alloy, custom Python exporters |
-| Alerting | Alertmanager → Discord, Healthchecks.io dead man's switch |
+| Alerting | Alertmanager → Discord (private `#ops` channel for infra, players' channel for critical), Healthchecks.io dead man's switch |
 | Secrets | Bitwarden, AWS SSM Parameter Store, External Secrets Operator |
 | Backup | restic → S3 (encrypted, deduplicated) |
 | CI | GitHub Actions: tflint, ansible-lint, kubeconform, promtool, shellcheck, ruff, Trivy; Dependabot and Renovate; weekly Terraform drift plan over OIDC |
@@ -224,6 +224,7 @@ The dashboard JSON is **generated** by `scripts/build-dashboard.py`, so it is re
 
 - **Every message carries a first-step action**, the command to run at 3 a.m.
 - **Mute windows per game:** a game declares `alerts.muteDuring: <time_interval>` in its `game.yaml`, its generated alerts carry a `mute` label, and Alertmanager silences that label during the window (the daily restart, for Project Zomboid). `render-games.py --check` fails if the window or its route does not exist.
+- **Two channels:** infra alerts and the daily health check go to a private `#ops` channel, so friends never see a disk warning between deaths and milestones. Critical alerts (host or game down, failing disk) go to both channels: the players still learn when the server is out.
 - **Inhibitions:** with the host down, disk/ZFS/ECC alerts stay silent; with a game down, its restart, memory and missing-metrics alerts stay silent.
 - **GitOps is watched too:** Argo CD and External Secrets export metrics, so an Application that stays Degraded, an auto-synced app that drifts from `main`, or an ExternalSecret that stops syncing from SSM raises a warning instead of waiting for someone to open the UI.
 - **SLO burn-rate alerts:** one SLO (the active game answers 99% of the time over 28 days, [docs/slo.md](docs/slo.md)) with multiwindow burn-rate alerts from the SRE Workbook: 6x over 6h and 30m, 1x over 3 days and 6h, and budget exhausted. Recording rules feed both the alerts and the dashboard, and promtool tests simulate outages, a normal game switch and a slow 3-day burn.
