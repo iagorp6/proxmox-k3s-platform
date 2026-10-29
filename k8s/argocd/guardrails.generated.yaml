@@ -48,6 +48,17 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: valheim
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+---
+apiVersion: v1
+kind: Namespace
+metadata:
   name: zomboid
   labels:
     pod-security.kubernetes.io/enforce: baseline
@@ -77,6 +88,8 @@ spec:
     namespace: minecraft
   - server: https://kubernetes.default.svc
     namespace: terraria
+  - server: https://kubernetes.default.svc
+    namespace: valheim
   - server: https://kubernetes.default.svc
     namespace: zomboid
   clusterResourceWhitelist:
@@ -147,6 +160,8 @@ spec:
     namespace: minecraft
   - server: https://kubernetes.default.svc
     namespace: terraria
+  - server: https://kubernetes.default.svc
+    namespace: valheim
   - server: https://kubernetes.default.svc
     namespace: zomboid
   clusterResourceWhitelist: []

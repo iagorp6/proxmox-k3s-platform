@@ -6,7 +6,7 @@ metadata:
   name: valheim
   namespace: argocd
 spec:
-  project: default
+  project: games
   source:
     repoURL: git@github.com:iagorp6/proxmox-k3s-platform.git
     targetRevision: main
