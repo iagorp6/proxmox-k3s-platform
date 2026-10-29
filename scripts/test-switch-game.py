@@ -215,5 +215,42 @@ class SwitchGameTest(unittest.TestCase):
         self.assertEqual(self.synced, [])
 
 
+class WaitApplicationTest(unittest.TestCase):
+    """Jogo recém-adicionado: o Application só aparece quando o app root sincroniza o main."""
+
+    def setUp(self):
+        self.saved = (sw.run, sw.time.sleep)
+        sw.time.sleep = lambda s: None
+        self.calls = []
+
+    def tearDown(self):
+        sw.run, sw.time.sleep = self.saved
+
+    def fake_run(self, missing_polls):
+        def run(cmd, check=True, capture=True):
+            self.calls.append(cmd)
+            gets = sum(1 for c in self.calls if c[3:5] == ["get", "application"])
+            code = 1 if cmd[3:5] == ["get", "application"] and gets <= missing_polls else 0
+            return subprocess.CompletedProcess(cmd, code, "", "")
+        return run
+
+    def test_existing_app_does_not_touch_root(self):
+        sw.run = self.fake_run(0)
+        sw.wait_application("valheim")
+        self.assertFalse(any("root" in c for c in self.calls))
+
+    def test_missing_app_refreshes_root_once_and_waits(self):
+        sw.run = self.fake_run(3)
+        with contextlib.redirect_stdout(io.StringIO()):
+            sw.wait_application("valheim")
+        self.assertEqual(sum(1 for c in self.calls if "root" in c), 1)
+        self.assertEqual(sum(1 for c in self.calls if c[3:5] == ["get", "application"]), 4)
+
+    def test_timeout(self):
+        sw.run = self.fake_run(10**6)
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+            sw.wait_application("valheim", timeout=0)
+
+
 if __name__ == "__main__":
     sys.exit(0 if unittest.main(exit=False, verbosity=1).result.wasSuccessful() else 1)

@@ -163,7 +163,24 @@ def write_patch(name, active):
     return path
 
 
+def wait_application(app, timeout=300):
+    """Espera o Application existir. Jogo recém-adicionado: o app raiz cria o Application no ciclo dele
+    (até ~3 min depois do merge), então uma troca logo após o merge pede um refresh do root e espera."""
+    deadline = time.time() + timeout
+    asked = False
+    while run(["kubectl", "-n", "argocd", "get", "application", app, "-o", "name"], check=False).returncode != 0:
+        if time.time() >= deadline:
+            sys.exit(f"ERRO: Application {app} não apareceu no Argo CD em {timeout}s (confira o app root)")
+        if not asked:
+            print(f"  {app}: Application ainda não existe; pedindo refresh do app root e esperando")
+            run(["kubectl", "-n", "argocd", "annotate", "application", "root",
+                 "argocd.argoproj.io/refresh=hard", "--overwrite"], check=False)
+            asked = True
+        time.sleep(5)
+
+
 def argo_sync(app, revision):
+    wait_application(app)
     run(["kubectl", "-n", "argocd", "annotate", "application", app,
          "argocd.argoproj.io/refresh=hard", "--overwrite"])
     time.sleep(5)
@@ -185,6 +202,7 @@ def argo_sync(app, revision):
 
 def out_of_sync(g):
     """Atualiza o app no Argo CD e diz se o cluster está diferente do Git."""
+    wait_application(g["app"])
     run(["kubectl", "-n", "argocd", "annotate", "application", g["app"],
          "argocd.argoproj.io/refresh=hard", "--overwrite"])
     time.sleep(5)
