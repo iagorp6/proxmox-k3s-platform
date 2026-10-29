@@ -2,7 +2,8 @@
 """Testes da lib comum de exporter (platform/exporter/gameexporter.py), só stdlib.
 
 Sobe um servidor Source RCON falso em localhost para conferir auth, comando e as duas formas de
-regex, e abre sockets TCP e UDP de verdade para o driver listen. Uso: python3 scripts/test-gameexporter.py
+regex, um servidor A2S falso (UDP, com challenge) para o driver a2s, e abre sockets TCP e UDP de
+verdade para o driver listen. Uso: python3 scripts/test-gameexporter.py
 """
 import importlib.util
 import pathlib
@@ -127,6 +128,65 @@ class ListenTest(unittest.TestCase):
         self.assertFalse(ge.port_open(port, "UDP"))
 
 
+class FakeA2S:
+    """Servidor A2S_INFO mínimo por UDP; com challenge, só responde ao pedido que devolve os 4 bytes."""
+
+    def __init__(self, players, challenge=b"\x0a\x0b\x0c\x0d"):
+        self.players, self.challenge = players, challenge
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind(("127.0.0.1", 0))
+        self.port = self.sock.getsockname()[1]
+        threading.Thread(target=self.serve, daemon=True).start()
+
+    def serve(self):
+        while True:
+            data, addr = self.sock.recvfrom(1400)
+            if not data.startswith(ge.A2S_INFO):
+                continue
+            if self.challenge and data[len(ge.A2S_INFO):] != self.challenge:
+                self.sock.sendto(b"\xff\xff\xff\xffA" + self.challenge, addr)
+                continue
+            body = b"\x11" + b"\x00".join([b"Homelab Valheim", b"Mundo", b"valheim", b"Valheim", b""])
+            self.sock.sendto(b"\xff\xff\xff\xffI" + body + b"\xc4\x2b" + bytes([self.players, 10]) + b"\x00d", addr)
+
+
+class A2STest(unittest.TestCase):
+    def test_info_with_challenge(self):
+        srv = FakeA2S(players=3)
+        self.assertEqual(ge.a2s_info("127.0.0.1", srv.port), ("Homelab Valheim", 3, 10))
+
+    def test_info_without_challenge(self):
+        srv = FakeA2S(players=0, challenge=b"")
+        self.assertEqual(ge.a2s_info("127.0.0.1", srv.port)[1], 0)
+
+    def test_server_down_raises(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()
+        with self.assertRaises(OSError):   # ICMP port unreachable (ConnectionRefused) ou timeout
+            ge.a2s_info("127.0.0.1", port, timeout=0.5)
+
+    def test_valheim_statefulset_driver(self):
+        """O env real do sidecar do Valheim contra o servidor falso: 2 jogadores anônimos."""
+        import yaml
+        docs = yaml.safe_load_all((ROOT / "k8s" / "games" / "valheim" / "statefulset.yaml").read_text(encoding="utf-8"))
+        sts = next(d for d in docs if d and d.get("kind") == "StatefulSet")
+        env = {e["name"]: e["value"] for c in sts["spec"]["template"]["spec"]["containers"]
+               if c["name"] == "exporter" for e in c["env"] if "value" in e}
+        self.assertEqual(env["GAME_DRIVER"], "a2s")
+        srv = FakeA2S(players=2)
+        old = ge.os.environ.get("A2S_PORT")
+        ge.os.environ["A2S_PORT"] = str(srv.port)
+        try:
+            self.assertEqual(ge.a2s_driver()(), ["", ""])
+        finally:
+            if old is None:
+                ge.os.environ.pop("A2S_PORT")
+            else:
+                ge.os.environ["A2S_PORT"] = old
+
+
 class ContractTest(unittest.TestCase):
     def setUp(self):
         ge.state.update(up=0, names=[], last_poll=0.0, probe_seconds=0.0, playtime={})
@@ -146,6 +206,15 @@ class ContractTest(unittest.TestCase):
             ge.state["playtime"] = {}
             ge.load_state()
         self.assertGreaterEqual(ge.state["playtime"]["Ana"], 10)
+
+    def test_anonymous_players_count_without_series(self):
+        ge.poll(lambda: ["", ""])
+        ge.state["last_poll"] -= 10
+        ge.poll(lambda: ["", ""])
+        text = ge.render("valheim")
+        self.assertIn('game_players_online{game="valheim"} 2', text)
+        self.assertNotIn('player=""', text)
+        self.assertEqual(ge.state["playtime"], {})
 
     def test_probe_failure_is_down_and_keeps_playtime(self):
         ge.state["playtime"] = {"Ana": 100.0}

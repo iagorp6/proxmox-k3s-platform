@@ -12,6 +12,7 @@ rules:
   resourceNames:
   - minecraft
   - terraria
+  - valheim
   - zomboid
   verbs:
   - get
@@ -114,6 +115,52 @@ kind: RoleBinding
 metadata:
   name: games-bot
   namespace: terraria
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: games-bot
+subjects:
+- kind: ServiceAccount
+  name: games-bot
+  namespace: platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: games-bot
+  namespace: valheim
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ''
+  resources:
+  - pods/exec
+  resourceNames:
+  - valheim-0
+  verbs:
+  - get
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: games-bot
+  namespace: valheim
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
