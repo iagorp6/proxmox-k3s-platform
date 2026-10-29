@@ -1,5 +1,5 @@
 # Gerado por scripts/render-games.py a partir de game.yaml: não edite à mão.
-# Jogos cobertos (status active no catálogo): minecraft, terraria, zomboid
+# Jogos cobertos (status active no catálogo): minecraft, terraria, valheim, zomboid
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -11,9 +11,9 @@ spec:
     rules:
     - alert: GameDown
       expr: |
-        kube_statefulset_replicas{namespace=~"minecraft|terraria"} > 0
+        kube_statefulset_replicas{namespace=~"minecraft|terraria|valheim"} > 0
         unless on (namespace, statefulset)
-        kube_statefulset_status_replicas_ready{namespace=~"minecraft|terraria"} > 0
+        kube_statefulset_status_replicas_ready{namespace=~"minecraft|terraria|valheim"} > 0
       for: 10m
       labels:
         severity: critical
@@ -23,9 +23,9 @@ spec:
         action: kubectl -n {{ $labels.namespace }} get pods e kubectl -n {{ $labels.namespace }} logs {{ $labels.statefulset }}-0 -c server --tail=30
     - alert: GameUnresponsive
       expr: |
-        game_up{game=~"minecraft|terraria"} == 0
+        game_up{game=~"minecraft|terraria|valheim"} == 0
         and on (game)
-        label_replace(kube_statefulset_status_replicas_ready{namespace=~"minecraft|terraria"} > 0, "game", "$1", "namespace", "(.+)")
+        label_replace(kube_statefulset_status_replicas_ready{namespace=~"minecraft|terraria|valheim"} > 0, "game", "$1", "namespace", "(.+)")
       for: 5m
       labels:
         severity: critical
@@ -35,7 +35,7 @@ spec:
         action: kubectl -n {{ $labels.game }} logs {{ $labels.game }}-0 -c server --tail=30
     - alert: GameExporterMissing
       expr: |
-        label_replace(kube_statefulset_status_replicas_ready{namespace=~"minecraft|terraria"} > 0, "game", "$1", "namespace", "(.+)")
+        label_replace(kube_statefulset_status_replicas_ready{namespace=~"minecraft|terraria|valheim"} > 0, "game", "$1", "namespace", "(.+)")
         unless on (game)
         game_up
       for: 5m
@@ -46,7 +46,7 @@ spec:
         description: O pod de {{ $labels.game }} está pronto, mas o Prometheus não coleta o exporter. Painel, alertas de jogador e fila do bot ficam cegos.
         action: kubectl -n {{ $labels.game }} logs {{ $labels.game }}-0 -c exporter --tail=30
     - alert: GameRestarted
-      expr: increase(kube_pod_container_status_restarts_total{namespace=~"minecraft|terraria",container="server"}[15m]) > 0
+      expr: increase(kube_pod_container_status_restarts_total{namespace=~"minecraft|terraria|valheim",container="server"}[15m]) > 0
       labels:
         severity: warning
       annotations:
@@ -55,8 +55,8 @@ spec:
         action: kubectl -n {{ $labels.namespace }} logs {{ $labels.pod }} -c server --previous --tail=40
     - alert: GameMemoryHigh
       expr: |
-        max by (namespace, pod) (container_memory_working_set_bytes{namespace=~"minecraft|terraria",container="server"})
-        / max by (namespace, pod) (kube_pod_container_resource_limits{namespace=~"minecraft|terraria",container="server",resource="memory"})
+        max by (namespace, pod) (container_memory_working_set_bytes{namespace=~"minecraft|terraria|valheim",container="server"})
+        / max by (namespace, pod) (kube_pod_container_resource_limits{namespace=~"minecraft|terraria|valheim",container="server",resource="memory"})
         > 0.9
       for: 10m
       labels:

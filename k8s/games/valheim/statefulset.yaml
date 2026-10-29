@@ -1,0 +1,178 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valheim
+  namespace: valheim
+  labels:
+    app.kubernetes.io/name: valheim
+    platform.homelab/game: valheim
+spec:
+  serviceName: valheim
+  replicas: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valheim
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: valheim
+        platform.homelab/game: valheim
+    spec:
+      # O supervisord dá até 90 s ao valheim_server (stopwaitsecs), que salva o mundo ao receber SIGTERM.
+      # Troca de jogo e sync dependem disso para não perder o progresso desde o último save.
+      terminationGracePeriodSeconds: 150
+      # Sem runAsNonRoot no pod: a imagem sobe como root para ajustar o usuário valheim para PUID/PGID,
+      # dar chown em /config e /opt/valheim e rodar o crond (update e restart). O valheim_server, o
+      # SteamCMD e o backup interno rodam como 1000 (user=valheim no supervisord). Pod Security baseline.
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server            # o nome "server" é usado por alertas, dashboard, backup e troca de jogo
+          image: ghcr.io/community-valheim-tools/valheim-server:1.4.1@sha256:f34d67ba8023e343b10ffda0144759a8c8d986f276510460315a01051bed8a6d
+          env:
+            - name: SERVER_NAME
+              value: "Homelab Valheim"
+            - name: WORLD_NAME
+              value: "Homelab"
+            - name: SERVER_PORT     # usa esta e a seguinte (16262, query Steam)
+              value: "16261"
+            - name: SERVER_PASS_FILE
+              value: /secrets/server-password
+            # Público: a query Steam (A2S) só responde em servidor listado, e é dela que sai a contagem de
+            # jogadores do exporter (troca de jogo e bot recusam com gente online). A senha continua exigida.
+            - name: SERVER_PUBLIC
+              value: "true"
+            - name: SERVER_ARGS     # save a cada 10 min (padrão 30): menos progresso perdido se o pod morrer
+              value: "-saveinterval 600"
+            - name: CROSSPLAY       # só Steam: crossplay troca a conexão direta pelo PlayFab
+              value: "false"
+            - name: TZ
+              value: America/Sao_Paulo
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            # Cliente do Steam atualiza sozinho e não entra em servidor de versão antiga: confere update a
+            # cada 15 min e aplica só sem jogadores (reinicia o processo, não o container)
+            - name: UPDATE_CRON
+              value: "*/15 * * * *"
+            - name: UPDATE_IF_IDLE
+              value: "true"
+            - name: RESTART_CRON    # restart diário sem jogadores, depois do backup das 5h
+              value: "20 5 * * *"
+            - name: RESTART_IF_IDLE
+              value: "true"
+            # Zips consistentes do mundo (a imagem confere o marcador de save completo), só enquanto houve
+            # jogador. Ficam em /config/backups e vão junto no restic: o restore tem o mundo vivo e os zips.
+            - name: BACKUPS_CRON
+              value: "0 */6 * * *"
+            - name: BACKUPS_IF_IDLE
+              value: "false"
+            - name: BACKUPS_MAX_COUNT
+              value: "4"
+            - name: BACKUPS_MAX_AGE
+              value: "3"
+          ports:
+            - name: game
+              containerPort: 16261
+              protocol: UDP
+            - name: query
+              containerPort: 16262
+              protocol: UDP
+          # Sem liveness: o supervisord reinicia o valheim_server se ele cair, e update/restart do cron
+          # derrubam o processo de propósito por alguns minutos. Startup e readiness são passivas: socket
+          # UDP da 16261 (0x3F85) aberto em /proc/net/udp, sem mandar pacote ao servidor.
+          startupProbe:                 # primeira subida baixa o servidor (~1 GB) e gera o mundo
+            exec:
+              command: ["sh", "-c", "grep -sqiE ':3F85 [0-9A-F]+:0000 07' /proc/net/udp /proc/net/udp6"]
+            periodSeconds: 10
+            failureThreshold: 120         # até 20 min
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "grep -sqiE ':3F85 [0-9A-F]+:0000 07' /proc/net/udp /proc/net/udp6"]
+            periodSeconds: 15
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              # Só o que o bootstrap como root usa: chown/chmod dos volumes, troca para o usuário valheim
+              # no supervisord e sinal do supervisord/crond para processos do valheim
+              add: ["CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL", "SETGID", "SETUID"]
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              cpu: "3"
+              memory: 4Gi
+          volumeMounts:
+            - name: data
+              mountPath: /config
+              subPath: config
+            - name: data
+              mountPath: /opt/valheim
+              subPath: server
+            - name: secrets
+              mountPath: /secrets
+              readOnly: true
+        - name: exporter
+          image: python:3.13-slim@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b
+          command: ["python", "/scripts/exporter.py"]
+          env:
+            - name: GAME
+              value: "valheim"
+            - name: GAME_DRIVER
+              value: "a2s"
+            - name: GAME_PORT
+              value: "16261"
+            - name: GAME_PROTOCOL
+              value: "UDP"
+            - name: A2S_PORT
+              value: "16262"
+            # Dentro do /config, que o bootstrap da imagem entrega ao 1000; na primeira subida o save do
+            # estado falha (logado) até o chown, depois segue normal. Vai junto no backup.
+            - name: STATE_FILE
+              value: "/config/exporter/state.json"
+          ports:
+            - name: metrics
+              containerPort: 9105
+              protocol: TCP
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 96Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: data
+              mountPath: /config
+              subPath: config
+      volumes:
+        - name: scripts
+          configMap:
+            name: valheim-scripts
+        - name: secrets
+          secret:
+            secretName: valheim-secrets
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 20Gi

@@ -1,0 +1,33 @@
+# Catálogo da plataforma: o render-games.py gera Service, métricas, backup e o App do Argo CD.
+# O StatefulSet e o Secret da senha continuam escritos à mão.
+name: valheim
+displayName: Valheim
+icon: 🪓            # botão do painel no Discord e resumo semanal
+status: active
+memory: 4Gi              # igual ao limite do container server (o render-games.py --check confere)
+monitoring: a2s          # query Steam na porta 16262: contagem de jogadores, sem nomes
+exporter: shared         # o render-games.py copia a lib comum para scripts/gameexporter.py
+namespace: valheim
+runAsUser: 1000          # PUID/PGID do servidor e usuário do job de backup
+# A imagem sobe o supervisord como root e só o valheim_server roda como 1000: não cabe no restricted.
+# Lido pelo gerador de guardrails (Pod Security por namespace); sem efeito até ele existir no main.
+podSecurity: baseline
+# Mesmas portas UDP do Zomboid: só um jogo roda por vez e o VIP do FortiGate já encaminha as duas.
+# O Valheim usa a porta do jogo e a seguinte para a query Steam (SERVER_PORT=16261).
+ports:
+  - { name: game, port: 16261, protocol: UDP }
+  - { name: query, port: 16262, protocol: UDP }
+backup:
+  schedule: "0 5 * * *"
+  pvc: data-valheim-0
+  # PVC montado em /data no job: config/ é o /config da imagem (mundo, listas, zips de backup da
+  # própria imagem); server/ é a instalação do SteamCMD, que volta sozinha e fica fora.
+  paths: [/data/config]
+  # O Valheim não tem console para forçar um save: o mundo em disco é o do último save (a cada 10 min,
+  # -saveinterval). Os zips em backups/ são cópias consistentes feitas pela imagem enquanto há jogadores.
+  verify: [data/config/worlds_local/*]   # restore drill: o mundo precisa voltar (scripts/restore-drill.py)
+metrics: true
+switch:
+  # Sem saveCommand: o Valheim salva ao receber SIGTERM, e a troca de jogo para o pod com tempo de sobra
+  # (terminationGracePeriodSeconds no statefulset.yaml)
+  joinHint: "No Valheim: Jogar > Entrar por IP com o endereço acima e a senha do servidor. Também aparece na aba Comunidade como Homelab Valheim."

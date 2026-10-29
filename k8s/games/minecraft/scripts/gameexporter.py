@@ -20,6 +20,9 @@ Drivers (GAME_DRIVER):
           grupo "name" (um casamento por jogador, ex.: uma linha por nome). No modo "list", resposta
           que não casa conta como servidor fora, para mudança de formato não virar "0 jogadores";
           no modo "name", qualquer resposta do RCON já é servidor no ar (zero casamentos = vazio).
+  a2s     Valve A2S_INFO por UDP na porta de query (A2S_PORT): Valheim e outros servidores Steam sem
+          RCON. Lê só a contagem; os jogadores são anônimos (o Valheim não manda nomes na query), então
+          entram em game_players_online, mas não em game_player_online nem no tempo de jogo.
 Para um protocolo próprio (REST, log...), passe main(players=função): ela devolve a lista de nomes
 conectados, ou None se o servidor não respondeu.
 """
@@ -130,7 +133,43 @@ def rcon_driver():
     return players
 
 
-DRIVERS = {"listen": listen_driver, "rcon": rcon_driver}
+# ---------- driver a2s ----------
+A2S_INFO = b"\xff\xff\xff\xffTSource Engine Query\x00"
+
+
+def a2s_info(host, port, timeout=3.0):
+    """Valve A2S_INFO por UDP: (nome, jogadores, máximo). Responde ao challenge (0x41) dos servidores novos."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.settimeout(timeout)
+        request = A2S_INFO
+        for _ in range(3):
+            sock.sendto(request, (host, port))
+            data = sock.recv(1400)
+            if data[:4] != b"\xff\xff\xff\xff":
+                raise ValueError("resposta A2S inválida ou fragmentada")
+            if data[4:5] == b"A":   # S2C_CHALLENGE: repete o pedido com os 4 bytes do challenge
+                request = A2S_INFO + data[5:9]
+                continue
+            if data[4:5] != b"I":
+                raise ValueError(f"tipo de resposta A2S inesperado: {data[4:5]!r}")
+            pos, fields = 6, []   # cabeçalho (4), tipo (1), protocolo (1)
+            for _ in range(4):    # nome, mapa, pasta, jogo
+                end = data.index(b"\x00", pos)
+                fields.append(data[pos:end].decode("utf-8", errors="replace"))
+                pos = end + 1
+            pos += 2              # app id (short)
+            return fields[0], data[pos], data[pos + 1]
+    raise ValueError("servidor repetiu o challenge A2S")
+
+
+def a2s_driver():
+    host, port = os.getenv("A2S_HOST", "127.0.0.1"), int(os.environ["A2S_PORT"])
+    timeout = float(os.getenv("A2S_TIMEOUT", "3"))
+    # Jogador anônimo = nome vazio: conta em game_players_online, sem série por jogador
+    return lambda: [""] * a2s_info(host, port, timeout)[1]
+
+
+DRIVERS = {"listen": listen_driver, "rcon": rcon_driver, "a2s": a2s_driver}
 
 
 # ---------- estado e contrato ----------
@@ -147,7 +186,7 @@ def poll(players):
                      probe_seconds=time.time() - start)
         if previous:
             elapsed = min(time.time() - previous, POLL_SECONDS * 4)
-            for n in names or []:
+            for n in filter(None, names or []):   # anônimos (nome vazio) não acumulam tempo
                 state["playtime"][n] = state["playtime"].get(n, 0.0) + elapsed
 
 
@@ -205,7 +244,7 @@ def render(game):
         f"game_exporter_probe_duration_seconds{{{g}}} {s['probe_seconds']:.4f}",
         "# HELP game_player_online Connected player (one series per player).", "# TYPE game_player_online gauge",
     ]
-    out += [f'game_player_online{{{g},player="{_esc(n)}"}} 1' for n in s["names"]]
+    out += [f'game_player_online{{{g},player="{_esc(n)}"}} 1' for n in s["names"] if n]
     out += ["# HELP game_player_playtime_seconds_total All-time playtime per player (persisted).",
             "# TYPE game_player_playtime_seconds_total counter"]
     out += [f'game_player_playtime_seconds_total{{{g},player="{_esc(p)}"}} {v:.0f}' for p, v in s["playtime"].items()]

@@ -6,7 +6,7 @@ A single-node, production-style platform on a recycled **HPE ProLiant DL20 Gen9*
 
 **Proxmox VE** is provisioned with **Terraform** and **cloud-init**, configured with **Ansible**, and runs **K3s** with **GitOps (Argo CD)**, full **observability** (Prometheus, Grafana, Loki, Alertmanager), **secrets from AWS SSM** via External Secrets, and **encrypted off-site backups on AWS S3**.
 
-The workload is a small **game-server platform** for a group of friends: **Project Zomboid (Build 42)**, **Terraria** and **modded Minecraft**, one active at a time and switched through Git. The games are the excuse; the platform around them is the point. It is operated like a real service: SLO, alerting with a first-step action in every message, an external dead man's switch, tested restores, and a CI that checks its own tools.
+The workload is a small **game-server platform** for a group of friends: **Project Zomboid (Build 42)**, **Terraria**, **modded Minecraft** and **Valheim**, one active at a time and switched through Git. The games are the excuse; the platform around them is the point. It is operated like a real service: SLO, alerting with a first-step action in every message, an external dead man's switch, tested restores, and a CI that checks its own tools.
 
 <!-- DASHBOARD_IMAGE -->
 
@@ -44,7 +44,7 @@ flowchart TB
                 subgraph vm["VM k3s-01 · Ubuntu · cloud-init"]
                     argo["Argo CD"]
                     bot["games-bot<br/>Discord switch panel"]
-                    game["Active game server<br/>Zomboid · Terraria · Minecraft<br/>+ exporter sidecar"]
+                    game["Active game server<br/>Zomboid · Terraria · Minecraft · Valheim<br/>+ exporter sidecar"]
                     jobs["CronJobs<br/>backup · restart · weekly summary · daily check"]
                     eso["External Secrets"]
                     mon["Prometheus · Alertmanager<br/>Grafana · Loki · Alloy"]
@@ -87,7 +87,7 @@ flowchart TB
 | Configuration | Ansible (roles: `k3s`, `gameserver_net`, `host_exporters`, `pve_host`, `auto_updates`) |
 | Orchestration | K3s (pinned version, secrets encrypted at rest) |
 | GitOps | Argo CD (app of apps) |
-| Workloads | Project Zomboid (Build 42), Terraria (TShock), Minecraft (Fabric modpack) |
+| Workloads | Project Zomboid (Build 42), Terraria (TShock), Minecraft (Fabric modpack), Valheim |
 | Observability | kube-prometheus-stack, Loki, Grafana Alloy, custom Python exporters |
 | Alerting | Alertmanager → Discord, Healthchecks.io dead man's switch |
 | Secrets | Bitwarden, AWS SSM Parameter Store, External Secrets Operator |
@@ -129,16 +129,17 @@ Day-to-day tasks are wrapped in a `Makefile`: run `make help` to list them (`mak
 
 ## Game platform
 
-Three games share one platform and only one runs at a time: the VM fits a single heavy game, and the group never plays two at once.
+Four games share one platform and only one runs at a time: the VM fits a single heavy game, and the group never plays two at once.
 
 | Game | Server | Player data from | Notes |
 |---|---|---|---|
 | Project Zomboid (Build 42) | SteamCMD init + custom entrypoint | RCON, server logs | Daily restart with in-game warnings |
 | Terraria | TShock, image pinned by digest | TShock REST API | Non-root, characters stored on the server |
 | Minecraft | Fabric modpack pinned by version ID | RCON | Whitelist plus in-game password authentication |
+| Valheim | community-valheim-tools image, pinned by digest | Steam query (A2S), player count only | Same UDP ports as Zomboid; updates itself when nobody is online |
 
 - **Catalog-driven.** Each game declares its name, ports, backup paths and schedule in `k8s/games/<game>/game.yaml`. `scripts/render-games.py` generates the game Service, the metrics Service and ServiceMonitor, the restic backup (ExternalSecret + CronJob) and the Argo CD Application. Only the StatefulSet and the game's own Secrets are hand-written, because that is where games really differ. The dashboard generator, the switch script, the status command and CI read the same catalog (`scripts/catalog.py`), so no script keeps its own list of games. CI fails if a generated file is stale or the catalog is inconsistent, including an active game on a port the edge firewall does not forward (`publishedPorts` in `platform/defaults.yaml`, the one step outside Git).
-- **Adding a game is a scaffold.** `make new-game GAME=valheim TITLE=Valheim IMAGE=repo:tag@sha256:... PORT=2456 PROTOCOL=UDP` creates the game directory in `draft` status: catalog entry, namespace, replica patch, a StatefulSet with the `server` container and the exporter sidecar wired in, and a three-line exporter on top of a shared library (`platform/exporter/gameexporter.py`, copied into each game by the generator because kustomize only reads files inside the game directory). The library owns the metric contract, persisted playtime and `/metrics`; a driver decides how the server is measured: `listen` reports `game_up` from the game port's socket in `/proc/net` (no connection, so no player slot taken), and `rcon` speaks Source RCON with a players command and a regex (`--driver rcon --rcon-port ... --players-command ... --players-regex ...`), which covers Minecraft, Zomboid, Palworld, ARK or CS2 without new code. The library is unit-tested against a fake RCON server and real sockets. Flip it to `active`, run the generator, and the game gets its Service, backup, Argo CD app, alerts, bot button and dashboard rows. CI scaffolds a throwaway game on every run to keep the template valid.
+- **Adding a game is a scaffold.** `make new-game GAME=valheim TITLE=Valheim IMAGE=repo:tag@sha256:... PORT=2456 PROTOCOL=UDP` creates the game directory in `draft` status: catalog entry, namespace, replica patch, a StatefulSet with the `server` container and the exporter sidecar wired in, and a three-line exporter on top of a shared library (`platform/exporter/gameexporter.py`, copied into each game by the generator because kustomize only reads files inside the game directory). The library owns the metric contract, persisted playtime and `/metrics`; a driver decides how the server is measured: `listen` reports `game_up` from the game port's socket in `/proc/net` (no connection, so no player slot taken), and `rcon` speaks Source RCON with a players command and a regex (`--driver rcon --rcon-port ... --players-command ... --players-regex ...`), which covers Minecraft, Zomboid, Palworld, ARK or CS2 without new code, and `a2s` asks the Steam query port for the player count (`--driver a2s --query-port ...`, used by Valheim, whose query carries no player names). The library is unit-tested against fake RCON and A2S servers and real sockets. Flip it to `active`, run the generator, and the game gets its Service, backup, Argo CD app, alerts, bot button and dashboard rows. CI scaffolds a throwaway game on every run to keep the template valid.
 - **Switching is a commit.** `make switch-game GAME=terraria` refuses to run while anyone is online, saves the world, flips the replica patches and `platform/active-game.yaml`, commits, syncs the outgoing game first and the incoming one second, and announces on Discord when the new server is ready. Git always says what is running. A change to the running game (a whitelist entry, a new image digest) goes through `make sync-game GAME=minecraft`, which runs the same player check and save before the Argo CD sync instead of a blind Sync in the UI.
 - **Players switch on their own.** A Discord bot keeps one panel in `#games` with the active game, players online and one button per game ([ADR 0006](docs/adr/0006-discord-self-service-switch.md)). It runs the same Git flow from inside the cluster, with a deploy key read through External Secrets, and refuses (queuing the request) while anyone is still playing. The queue and the cooldown live in a ConfigMap the bot writes itself (outside Git, so Argo CD's self-heal does not undo them), so a restart of the bot pod does not drop a waiting request:
 

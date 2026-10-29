@@ -7,10 +7,12 @@ gameexporter.py, copiada para o jogo pelo render-games.py). O driver escolhe com
   listen  game_up pelo socket da porta do jogo em /proc/net, sem abrir conexão; jogadores em 0
   rcon    Source RCON: comando que lista jogadores + regex com grupo "list" ou "name"
           (gera também o ExternalSecret da senha em /homelab/<jogo>/rcon-password)
+  a2s     Valve A2S_INFO na porta de query (UDP): contagem de jogadores anônimos (Valheim e outros
+          servidores Steam sem RCON)
 
 Uso:
   scripts/new-game.py <jogo> --title "Valheim" --image repo:tag@sha256:<64 hex> --port 2456 \
-      [--protocol UDP] [--memory 4Gi] [--icon 🪓] [--run-as 1000]
+      [--protocol UDP] [--memory 4Gi] [--icon 🪓] [--run-as 1000] [--driver a2s --query-port 2457]
   scripts/new-game.py palworld --title Palworld --image ... --port 8211 --protocol UDP \
       --driver rcon --rcon-port 25575 --players-command ShowPlayers \
       --players-regex '^(?P<name>[^,\n]+),\d+,'
@@ -39,6 +41,8 @@ def exporter_env(a):
     if a.driver == "rcon":
         env += [("RCON_PORT", str(a.rcon_port)), ("RCON_PLAYERS_COMMAND", a.players_command),
                 ("RCON_PLAYERS_REGEX", a.players_regex)]
+    if a.driver == "a2s":
+        env.append(("A2S_PORT", str(a.query_port)))
     env.append(("STATE_FILE", "/data/exporter/state.json"))
     out = "".join(f"            - name: {k}\n              value: {json.dumps(v, ensure_ascii=False)}\n" for k, v in env)
     if a.driver == "rcon":
@@ -262,7 +266,8 @@ def main():
     p.add_argument("--memory", default="4Gi")
     p.add_argument("--icon", default="🎮")
     p.add_argument("--run-as", default=1000, type=int)
-    p.add_argument("--driver", default="listen", choices=["listen", "rcon"], help="como o exporter mede o servidor")
+    p.add_argument("--driver", default="listen", choices=["listen", "rcon", "a2s"], help="como o exporter mede o servidor")
+    p.add_argument("--query-port", type=int, help="porta UDP da query Steam (driver a2s)")
     p.add_argument("--rcon-port", type=int, help="porta RCON (driver rcon)")
     p.add_argument("--players-command", help="comando RCON que lista jogadores (driver rcon)")
     p.add_argument("--players-regex", help='regex com grupo "list" (nomes por vírgula) ou "name" (um por jogador)')
@@ -277,6 +282,8 @@ def main():
                     errors.append("--players-regex precisa de um grupo nomeado 'list' ou 'name'")
             except re.error as exc:
                 errors.append(f"--players-regex inválida: {exc}")
+    if a.driver == "a2s" and not a.query_port:
+        errors.append("driver a2s precisa de --query-port (porta UDP da query Steam)")
     if not NAME.fullmatch(a.name):
         errors.append(f"nome '{a.name}' inválido: minúsculas, números e hífen (vira namespace e StatefulSet)")
     if not IMAGE_REF.fullmatch(a.image):

@@ -27,6 +27,7 @@ declare -A MAP=(
   [/homelab/zomboid/server-password]=zomboid-entrada
   [/homelab/terraria/server-password]=terraria-entrada
   [/homelab/terraria/rest-token]=terraria-rest-token
+  [/homelab/valheim/server-password]=valheim-entrada
   [/homelab/minecraft/rcon-password]=minecraft-rcon
   [/homelab/zomboid/rcon-password]=zomboid-rcon
   [/homelab/backup/restic-password]=restic-zomboid
