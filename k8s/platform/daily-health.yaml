@@ -4,7 +4,7 @@ metadata:
   name: daily-health
   namespace: platform
 spec:
-  # Checagem diária no Discord (daily_health.py): "tudo OK" ou a lista do que precisa de atenção
+  # Checagem diária no #ops do Discord (daily_health.py): "tudo OK" ou a lista do que precisa de atenção
   schedule: "0 8 * * *"
   timeZone: America/Sao_Paulo
   concurrencyPolicy: Forbid
@@ -31,7 +31,7 @@ spec:
                   valueFrom:
                     secretKeyRef:
                       name: discord-webhook
-                      key: webhook-url
+                      key: ops-webhook-url
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true

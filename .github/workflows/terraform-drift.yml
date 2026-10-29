@@ -2,8 +2,8 @@ name: Terraform drift (aws)
 
 # terraform plan do terraform-aws com credencial temporária via OIDC (github-oidc.tf), sem chave
 # guardada no GitHub. Falha quando a AWS diverge do código (mudança fora do Terraform ou apply
-# esquecido) ou chave IAM velha, e avisa no Discord (secret DISCORD_WEBHOOK_URL, o mesmo webhook do
-# Alertmanager). Roda só no main: a role não aceita token de PR.
+# esquecido) ou chave IAM velha, e avisa no Discord (secret DISCORD_WEBHOOK_URL, o webhook do #ops,
+# o mesmo dos alertas de infra do Alertmanager). Roda só no main: a role não aceita token de PR.
 # O repositório é público, então o log mostra só endereço e ação de cada recurso, nunca valores.
 on:
   schedule:
