@@ -1,11 +1,48 @@
-# App raiz: aplicado uma única vez à mão; daí em diante tudo vem de k8s/argocd/apps/
+# Bootstrap do GitOps, aplicado à mão (make guardrails, ou kubectl apply -f k8s/argocd/root.yaml).
+# Nada aqui passa pelo autosync: o root só pode criar Applications no argocd, e cada Application fica
+# presa ao AppProject dela (guardrails.generated.yaml). Um push no main não muda projeto nem namespace.
+#
+# Projeto do root: só Applications no namespace argocd, só deste repositório
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: bootstrap
+  namespace: argocd
+spec:
+  description: App raiz (k8s/argocd/apps), só cria Applications
+  sourceRepos:
+    - git@github.com:iagorp6/proxmox-k3s-platform.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: argoproj.io
+      kind: Application
+---
+# O projeto default nasce permissivo (qualquer repo, destino e recurso). Vazio, um Application com
+# "project: default" (ou sem project) não aplica nada.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  sourceRepos: []
+  sourceNamespaces: []
+  destinations: []
+  namespaceResourceBlacklist:
+    - group: "*"
+      kind: "*"
+---
+# App raiz: daí em diante tudo vem de k8s/argocd/apps/
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: root
   namespace: argocd
 spec:
-  project: default
+  project: bootstrap
   source:
     repoURL: git@github.com:iagorp6/proxmox-k3s-platform.git
     targetRevision: main

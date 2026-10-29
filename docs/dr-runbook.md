@@ -83,11 +83,13 @@ kubectl get nodes                              # Ready
 
 ## 5. GitOps bootstrap
 
-1. Argo CD (the only Helm release outside Argo CD, ADR 0007): `make deploy-argocd`.
+1. Argo CD (the only Helm release outside Argo CD, ADR 0007): `make deploy-argocd`. It also runs
+   `make guardrails`: the namespaces with their Pod Security labels, the AppProjects and the root app
+   (`k8s/argocd/guardrails.generated.yaml` and `k8s/argocd/root.yaml`), the part that autosync never
+   changes. The root app retries until the deploy key below exists.
 2. The two bootstrap secrets, the only state that does not come from Git or SSM:
    ```bash
    # External Secrets credential (read-only on /homelab/*), from the terraform-aws outputs
-   kubectl create namespace external-secrets
    kubectl -n external-secrets create secret generic aws-ssm-credentials \
      --from-literal=access-key-id="$(terraform -chdir=terraform-aws output -raw eso_access_key_id)" \
      --from-literal=secret-access-key="$(terraform -chdir=terraform-aws output -raw eso_secret_access_key)"
@@ -100,7 +102,7 @@ kubectl get nodes                              # Ready
      --from-literal=sshPrivateKey="$(bw get notes "$ARGO_KEY_ITEM")"
    kubectl -n argocd label secret repo-proxmox-k3s-platform argocd.argoproj.io/secret-type=repository
    ```
-3. Root app: `kubectl apply -f k8s/argocd/root.yaml`. Everything except the games syncs on its own
+3. Root app: already applied in step 1. Everything except the games syncs on its own
    ([ADR 0009](adr/0009-auto-sync-for-third-party-charts.md)); the games stay manual.
 4. Wait for the charts to converge: `kubectl -n argocd get applications -w` until
    `external-secrets`, `kube-prometheus-stack`, `loki` and `alloy` are `Synced`/`Healthy`. The first

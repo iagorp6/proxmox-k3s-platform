@@ -84,12 +84,6 @@ metrics: true
 #   saveCommand: echo save > /tmp/console; sleep 10   # roda no container server antes do backup e da troca
 #   joinHint: "Como entrar no servidor"
 """,
-        "namespace.yaml": f"""\
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {n}
-""",
         "replicas.yaml": f"""\
 # Gerado por scripts/switch-game.py: não edite à mão.
 apiVersion: apps/v1
@@ -105,7 +99,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: {n}
 resources:
-  - namespace.yaml
 {'  - externalsecrets.yaml' + chr(10) if rcon else ''}  - statefulset.yaml
   - platform.generated.yaml   # gerado por scripts/render-games.py
 patches:
@@ -318,7 +311,8 @@ Próximos passos para {a.title}:
   3. Exporter: driver {a.driver} já ligado (k8s/games/{a.name}/scripts/exporter.py usa a lib comum){rcon_steps}
   4. status: active no game.yaml e python3 scripts/render-games.py
   5. Porta {a.port}/{a.protocol}: fora de platform/defaults.yaml publishedPorts precisa de VIP no FortiGate (o --check cobra)
-  6. make ci, PR, e depois make switch-game GAME={a.name}""")
+  6. make ci e PR. Depois do merge: make guardrails (namespace com Pod Security e o jogo no AppProject
+     games) e make switch-game GAME={a.name}""")
     return 0
 
 

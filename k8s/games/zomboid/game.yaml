@@ -8,6 +8,9 @@ memory: 10Gi
 monitoring: rcon
 namespace: zomboid
 runAsUser: 1000
+# Pod Security baseline (os outros jogos são restricted): o init install roda como root para o chown do
+# volume. O namespace também recebe warn/audit=restricted, para aparecer o que falta.
+podSecurity: baseline
 ports:
   - { name: game, port: 16261, protocol: UDP }
   - { name: direct, port: 16262, protocol: UDP }

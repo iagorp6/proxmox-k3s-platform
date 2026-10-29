@@ -31,6 +31,9 @@ sed -i 's/port: 2456,/port: 16261,/' k8s/games/exemplo/game.yaml
 sed -i 's/port: 27015,/port: 16262,/' k8s/games/exemplo-rcon/game.yaml
 python3 scripts/render-games.py >/dev/null
 python3 scripts/render-games.py --check >/dev/null
+# O jogo novo entra no guardrails (namespace restricted, AppProject games) e o scaffold cumpre o restricted
+grep -q "name: exemplo-rcon" k8s/argocd/guardrails.generated.yaml
+python3 scripts/check-guardrails.py >/dev/null
 for game in exemplo exemplo-rcon; do
   kubectl kustomize "k8s/games/$game" | kubeconform -strict -summary -schema-location default -schema-location "$CRDS"
   python3 scripts/restore-drill.py "$game" --dry-run | kubeconform -strict -summary -schema-location default

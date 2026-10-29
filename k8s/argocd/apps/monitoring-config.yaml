@@ -4,7 +4,7 @@ metadata:
   name: monitoring-config
   namespace: argocd
 spec:
-  project: default
+  project: monitoring
   source:
     repoURL: git@github.com:iagorp6/proxmox-k3s-platform.git
     targetRevision: main

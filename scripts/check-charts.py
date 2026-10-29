@@ -7,9 +7,13 @@ que não aceita mais uma chave, só apareceria no Sync. Aqui, para cada chart:
   1. `helm template` na versão fixada, com os values do repo (falha em YAML inválido e no
      values.schema.json dos charts que têm um);
   2. o resultado passa no `kubeconform -strict` (recursos de CRD pelo catálogo fixado, o mesmo do CI;
-     as próprias CustomResourceDefinitions ficam de fora, o kubeconform não tem schema para elas).
+     as próprias CustomResourceDefinitions ficam de fora, o kubeconform não tem schema para elas);
+  3. cabe no AppProject do Application e cumpre o Pod Security do namespace (mesmas regras do
+     scripts/check-guardrails.py, que cobre as fontes Git). O chart do Argo CD fica fora deste passo:
+     ele é instalado pelo Helm, não por um Application.
 Uso: python3 scripts/check-charts.py <schema-location do catálogo de CRDs> [--print]
 """
+import importlib.util
 import pathlib
 import re
 import subprocess
@@ -23,6 +27,9 @@ ARGOCD = ROOT / "k8s" / "argocd"
 ARGO_REPO = "https://argoproj.github.io/argo-helm"
 # CRDs que o kube-prometheus-stack instala: os ServiceMonitors dos outros charts só renderizam com eles
 API_VERSIONS = ["monitoring.coreos.com/v1", "monitoring.coreos.com/v1/ServiceMonitor"]
+_spec = importlib.util.spec_from_file_location("check_guardrails", ROOT / "scripts" / "check-guardrails.py")
+guardrails = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(guardrails)
 
 
 def kube_version():
@@ -32,7 +39,7 @@ def kube_version():
 
 
 def charts():
-    """(nome, release, repo, chart, versão, namespace, values) de cada chart fixado no repositório."""
+    """(nome, release, repo, chart, versão, namespace, values, projeto) de cada chart fixado no repositório."""
     for f in sorted(APPS.glob("*.yaml")):
         app = yaml.safe_load(f.read_text(encoding="utf-8"))
         spec = app["spec"]
@@ -42,9 +49,9 @@ def charts():
             helm = src.get("helm", {})
             values = [ROOT / v.removeprefix("$values/") for v in helm.get("valueFiles", [])]
             yield (app["metadata"]["name"], helm.get("releaseName", app["metadata"]["name"]), src["repoURL"],
-                   src["chart"], src["targetRevision"], spec["destination"]["namespace"], values)
+                   src["chart"], src["targetRevision"], spec["destination"]["namespace"], values, spec.get("project"))
     version = (ARGOCD / "chart-version-argocd.txt").read_text(encoding="utf-8").strip()
-    yield ("argocd", "argocd", ARGO_REPO, "argo-cd", version, "argocd", [ARGOCD / "values-argocd.yaml"])
+    yield ("argocd", "argocd", ARGO_REPO, "argo-cd", version, "argocd", [ARGOCD / "values-argocd.yaml"], None)
 
 
 def main():
@@ -53,13 +60,15 @@ def main():
         return 2
     catalog, dry = sys.argv[1], "--print" in sys.argv
     kv = kube_version()
+    projects, levels = guardrails.guardrails()
     failed = []
-    for name, release, repo, chart, version, ns, values in charts():
+    for name, release, repo, chart, version, ns, values, project in charts():
         missing = [str(v.relative_to(ROOT)) for v in values if not v.exists()]
         if missing:
             failed.append(f"{name}: values inexistente(s): {', '.join(missing)}")
             continue
-        cmd = ["helm", "template", release, chart, "--repo", repo, "--version", version, "--namespace", ns,
+        # --include-crds: o Argo CD aplica os CRDs do chart, e o AppProject precisa permitir
+        cmd = ["helm", "template", release, chart, "--repo", repo, "--version", version, "--namespace", ns, "--include-crds",
                "--kube-version", kv, *[a for v in API_VERSIONS for a in ("--api-versions", v)],
                *[a for v in values for a in ("-f", str(v))]]
         print(f"== {name}: {chart} {version}")
@@ -77,6 +86,12 @@ def main():
         print(check.stdout.strip().splitlines()[-1] if check.stdout.strip() else "")
         if check.returncode != 0:
             failed.append(f"{name}: kubeconform reprovou o chart renderizado\n{(check.stdout + check.stderr).strip()}")
+        if project:
+            docs = guardrails.load_docs(rendered.stdout)
+            problems = (guardrails.project_violations(name, projects.get(project, {}), docs, ns)
+                        + guardrails.namespace_violations(name, docs, ns, levels))
+            if problems:
+                failed.append(f"{name}: fora do AppProject {project} ou do Pod Security\n" + "\n".join(problems))
     if failed:
         print("ERRO:\n" + "\n".join(failed))
         return 1
