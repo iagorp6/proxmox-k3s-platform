@@ -22,6 +22,9 @@ backup:
   paths: [/data/data/Saves, /data/data/db, /data/data/Server]   # PVC montado em /data no job de backup
   # restore drill: save do servidor "k3s" (PZ_SERVER_NAME), banco de jogadores e config
   verify: [data/data/Saves/Multiplayer/k3s/*, data/data/db/k3s.db, data/data/Server/k3s.ini]
+# make wipe-game: arquiva no restic (tag archive) e apaga o mundo e os personagens. Server/ fica: o mundo
+# novo nasce com o mesmo k3s.ini e o mesmo SandboxVars (mods novos acrescentam as chaves deles no 1º start)
+wipe: [/data/data/Saves/Multiplayer/k3s, /data/data/db/k3s.db]
 metrics: true
 alerts:
   muteDuring: restart-diario   # restart diário das 6h (daily-restart.yaml); janela no Alertmanager

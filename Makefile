@@ -2,7 +2,7 @@
 # Usa ">" como prefixo de receita (evita problemas de tab ao colar).
 .RECIPEPREFIX = >
 .DEFAULT_GOAL := help
-.PHONY: help require-main ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game new-game restore-drill restore-game console status sync-game host-status guardrails
+.PHONY: help require-main ci dashboard secrets plan deploy-monitoring deploy-eso deploy-argocd switch-game new-game restore-drill restore-game wipe-game console status sync-game host-status guardrails
 
 help: ## Lista os alvos disponíveis
 > @grep -E '^[a-zA-Z_%-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -54,8 +54,11 @@ new-game: ## Esqueleto de jogo novo, status draft (ex.: make new-game GAME=valhe
 restore-drill: require-main ## Restaura o último backup num PVC temporário e mede o tempo (ex.: make restore-drill GAME=terraria RECORD=1)
 > ./scripts/restore-drill.py $(GAME) $(if $(RECORD),--record)
 
-restore-game: require-main ## Restaura o último backup no volume do jogo, com o servidor parado (DR; ex.: make restore-game GAME=minecraft)
-> ./scripts/restore-drill.py $(GAME) --live
+restore-game: require-main ## Restaura o último backup no volume do jogo, com o servidor parado (DR; ex.: make restore-game GAME=minecraft; SNAPSHOT=id para um archive)
+> ./scripts/restore-drill.py $(GAME) --live $(if $(SNAPSHOT),--snapshot $(SNAPSHOT))
+
+wipe-game: require-main ## Arquiva o mundo no restic (não expira) e apaga, com o servidor parado (ex.: make wipe-game GAME=zomboid)
+> ./scripts/wipe-game.py $(GAME)
 
 # CMD vai literal para o FIFO /tmp/console do container server (Zomboid e Terraria); a resposta sai no log
 console: ## Comando no console do servidor (ex.: make console GAME=zomboid CMD='servermsg "restart em 5 min"')

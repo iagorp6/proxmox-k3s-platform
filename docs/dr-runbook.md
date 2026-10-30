@@ -144,6 +144,22 @@ GAME=minecraft   # the active game from platform/active-game.yaml
 The inactive games keep their data in S3 and are restored the same way the first time someone
 switches to them (`make switch-game` starts them on an empty volume otherwise).
 
+### Wiping a world on purpose (new season, new mod list)
+
+`make wipe-game GAME=zomboid` is the opposite of a restore, for games with `wipe:` in `game.yaml`. With
+the server stopped, one Job takes a restic snapshot of `backup.paths` tagged `archive` and
+`<game>-wipe-<date>` (no game tag, so the nightly `forget --keep-daily 7 --keep-weekly 4` never expires
+it), checks that every `wipe:` path is in that snapshot, and only then deletes those paths. Anything
+outside `wipe:` (server config, sandbox) stays. It prints the snapshot ID and the undo command:
+
+```bash
+make restore-game GAME=zomboid SNAPSHOT=<id>   # the archived world back, same flow as above
+```
+
+Start the game right after the wipe (`make switch-game GAME=zomboid`): until the new world is saved
+and backed up, the latest nightly snapshot of the game has no world in it. Archive snapshots stay in
+S3 until removed by hand (`restic forget <id>` followed by the weekly prune).
+
 ## 7. Done when
 
 - `make status` shows the active game Ready with players able to join.
