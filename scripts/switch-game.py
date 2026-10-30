@@ -3,8 +3,9 @@
 
 Fluxo: confere jogadores online no jogo atual -> salva o mundo -> grava os patches de
 réplicas + platform/active-game.yaml -> commit/push -> avisa o Discord -> sincroniza no
-Argo CD primeiro o jogo que sai (preStop salva de novo) e depois o que entra -> espera
-ficar pronto -> avisa o Discord com o endereço de conexão.
+Argo CD primeiro o jogo que sai (preStop salva de novo) -> dispara o backup do jogo que
+saiu, já parado -> sincroniza o que entra -> espera ficar pronto -> avisa o Discord com o
+endereço de conexão.
 
 Uso:
   scripts/switch-game.py <jogo>              troca de verdade
@@ -50,6 +51,8 @@ def _from_catalog(g):
         "dir": g["dir"], "ns": g["namespace"], "sts": g["name"], "app": g["name"],
         "players_metric": sw.get("playersMetric", "game_players_online"), "exporter": "exporter",
         "suspend_when_idle": sw.get("suspendWhenIdle", []),
+        # CronJob gerado pelo render-games.py; o switch dispara um Job dele quando o jogo para
+        "backup_cronjob": f"{g['name']}-backup" if g.get("backup") else None,
     }
     if sw.get("saveCommand"):
         entry["save_cmd"] = sw["saveCommand"]
@@ -223,12 +226,27 @@ def sync_game(g, sha, running):
         run(["kubectl", "-n", g["ns"], "rollout", "status", f"statefulset/{g['sts']}", "--timeout=1200s"], capture=False)
 
 
+def start_backup(g):
+    """Backup do jogo que acabou de parar: o mundo está salvo e ninguém escreve nele, então é o snapshot
+    mais consistente que existe, e a sessão não espera o backup diário das 05h para chegar ao S3.
+    Best-effort: não espera o Job terminar; uma falha dispara o KubeJobFailed do kube-prometheus-stack."""
+    if not g.get("backup_cronjob"):
+        return
+    job = f"{g['backup_cronjob']}-switch-{time.strftime('%Y%m%d%H%M%S')}"
+    r = run(["kubectl", "-n", g["ns"], "create", "job", f"--from=cronjob/{g['backup_cronjob']}", job], check=False)
+    print(f"  backup de {g['sts']} disparado: job/{job}" if r.returncode == 0
+          else f"  AVISO: não consegui disparar o backup de {g['sts']}: {(r.stderr or r.stdout).strip()}")
+
+
 def apply_switch(previous, target, sha):
     if previous in GAMES:
         print(f"Parando {previous}...")
         argo_sync(GAMES[previous]["app"], sha)
-        run(["kubectl", "-n", GAMES[previous]["ns"], "wait", "--for=delete",
-             f"pod/{GAMES[previous]['sts']}-0", "--timeout=300s"], check=False)
+        gone = run(["kubectl", "-n", GAMES[previous]["ns"], "wait", "--for=delete",
+                    f"pod/{GAMES[previous]['sts']}-0", "--timeout=300s"], check=False)
+        # Com o pod ainda de pé o backup leria um mundo em uso: fica para o CronJob diário
+        if gone.returncode == 0:
+            start_backup(GAMES[previous])
     for name in GAMES:
         if name not in (previous, target):
             argo_sync(GAMES[name]["app"], sha)

@@ -219,6 +219,52 @@ class SwitchGameTest(unittest.TestCase):
         self.assertEqual(self.synced, [])
 
 
+class ApplySwitchBackupTest(unittest.TestCase):
+    """O jogo que sai ganha um backup assim que o pod some; sem backup no catálogo ou com o pod de pé, não."""
+
+    def setUp(self):
+        self.saved = {k: getattr(sw, k) for k in ("GAMES", "run", "argo_sync")}
+        sw.GAMES = {"minecraft": dict(game("minecraft", "k8s/games/minecraft"), backup_cronjob="minecraft-backup"),
+                    "terraria": dict(game("terraria", "k8s/games/terraria"), backup_cronjob=None)}
+        sw.argo_sync = lambda app, sha: None
+        self.calls, self.pod_gone = [], True
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            setattr(sw, k, v)
+
+    def fake_run(self, cmd, check=True, capture=True):
+        self.calls.append(cmd)
+        code = 0 if "wait" not in cmd or self.pod_gone else 1
+        return subprocess.CompletedProcess(cmd, code, "", "")
+
+    def jobs(self):
+        return [c for c in self.calls if c[3:5] == ["create", "job"]]
+
+    def switch(self, prev, target):
+        sw.run = self.fake_run
+        with contextlib.redirect_stdout(io.StringIO()):
+            sw.apply_switch(prev, target, "abc123")
+
+    def test_outgoing_game_is_backed_up_after_its_pod_is_gone(self):
+        self.switch("minecraft", "terraria")
+        (job,) = self.jobs()
+        self.assertEqual(job[:6], ["kubectl", "-n", "minecraft", "create", "job", "--from=cronjob/minecraft-backup"])
+        self.assertTrue(job[6].startswith("minecraft-backup-switch-"))
+        self.assertLessEqual(len(job[6]), 63)
+        wait = next(i for i, c in enumerate(self.calls) if "wait" in c)
+        self.assertLess(wait, self.calls.index(job))
+
+    def test_pod_still_running_skips_the_backup(self):
+        self.pod_gone = False
+        self.switch("minecraft", "terraria")
+        self.assertEqual(self.jobs(), [])
+
+    def test_game_without_backup_in_the_catalog(self):
+        self.switch("terraria", "minecraft")
+        self.assertEqual(self.jobs(), [])
+
+
 class WaitApplicationTest(unittest.TestCase):
     """Jogo recém-adicionado: o Application só aparece quando o app root sincroniza o main."""
 

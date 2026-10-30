@@ -394,3 +394,56 @@ tests:
               summary: "Métrica /var/lib/prometheus/node-exporter/homelab-zfs.prom do host parou de atualizar"
               description: "O timer que escreve esse textfile não roda há mais de 3 horas, então os alertas que dependem dele (ZFS, kernel pendente) ficam cegos."
               action: "ssh no host: systemctl list-timers 'homelab-*' e journalctl -u homelab-zfs -u homelab-kernel-reboot -n 30."
+  - name: GameSyncPending só para o jogo ativo, depois de 24h OutOfSync
+    interval: 5m
+    input_series:
+      - series: 'argocd_app_info{name="valheim",project="games",sync_status="OutOfSync",health_status="Healthy"}'
+        values: '1x360'
+      - series: 'kube_statefulset_replicas{namespace="valheim",statefulset="valheim"}'
+        values: '1x360'
+      # Parado e OutOfSync: normal até o próximo switch-game
+      - series: 'argocd_app_info{name="terraria",project="games",sync_status="OutOfSync",health_status="Healthy"}'
+        values: '1x360'
+      - series: 'kube_statefulset_replicas{namespace="terraria",statefulset="terraria"}'
+        values: '0x360'
+      # App de plataforma com o mesmo nome de namespace não entra (projeto diferente)
+      - series: 'argocd_app_info{name="monitoring",project="monitoring",sync_status="OutOfSync",health_status="Healthy"}'
+        values: '1x360'
+      - series: 'kube_statefulset_replicas{namespace="monitoring",statefulset="prometheus"}'
+        values: '1x360'
+    alert_rule_test:
+      - eval_time: 12h
+        alertname: GameSyncPending
+        exp_alerts: []
+      - eval_time: 25h
+        alertname: GameSyncPending
+        exp_alerts:
+          - exp_labels: {severity: warning, name: valheim}
+            exp_annotations:
+              summary: "valheim tem mudança no main que ainda não chegou ao servidor"
+              description: "O app do jogo ativo está OutOfSync há 24 horas: algo mergeado (whitelist, imagem, config) espera o sync."
+              action: "Com ninguém jogando: make sync-game GAME=valheim"
+  - name: ContainerMemoryNearLimit fora dos jogos, depois de 30 min acima de 90%
+    interval: 5m
+    input_series:
+      - series: 'container_memory_working_set_bytes{namespace="argocd",pod="argocd-application-controller-0",container="application-controller"}'
+        values: '1020054733x12'  # 95% de 1 GiB
+      - series: 'kube_pod_container_resource_limits{namespace="argocd",pod="argocd-application-controller-0",container="application-controller",resource="memory"}'
+        values: '1073741824x12'
+      # O server dos jogos fica com o GameMemoryHigh
+      - series: 'container_memory_working_set_bytes{namespace="valheim",pod="valheim-0",container="server"}'
+        values: '4200000000x12'
+      - series: 'kube_pod_container_resource_limits{namespace="valheim",pod="valheim-0",container="server",resource="memory"}'
+        values: '4294967296x12'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ContainerMemoryNearLimit
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: ContainerMemoryNearLimit
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: argocd, pod: argocd-application-controller-0, container: application-controller}
+            exp_annotations:
+              summary: "application-controller (argocd) perto do limite de memória"
+              description: "Uso de 95% do limite há 30 minutos. Risco de OOMKilled."
+              action: "kubectl -n argocd top pod argocd-application-controller-0 --containers e subir o limite no values do chart ou no manifest (Argo CD: k8s/argocd/values-argocd.yaml + make deploy-argocd)"
