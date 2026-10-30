@@ -3,7 +3,7 @@
 #   ansible-playbook playbooks/disk-bench.yml
 # O resultado vira métrica no textfile collector do node_exporter, com o label layout=stripe|mirror.
 # Cada layout tem o seu arquivo, então a rodada de antes e a de depois da conversão ficam lado a lado
-# no dashboard (seção Hardware do host, tabela "Benchmark dos discos").
+# no Prometheus (homelab_disk_bench_*). A tabela saiu do dashboard depois da decisão do ADR 0005.
 - name: Clone no main atualizado
   ansible.builtin.import_playbook: require-main.yml
 

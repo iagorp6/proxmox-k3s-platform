@@ -87,18 +87,15 @@ for key, title in TITLES:
     active_name = f'label_replace({active_name}, "jogo", "{title}", "game", "{key}")'
 P += [
   stat("Jogo ativo", "Jogo no ar agora (troca com make switch-game GAME=<jogo>).",
-       0, y, 4, 4, [prom(active_name, legend="{{jogo}}")], text_mode="name",
+       0, y, 5, 4, [prom(active_name, legend="{{jogo}}")], text_mode="name",
        steps=th(("blue", None)), color="background", no_value="nenhum"),
   stat("Servidor", "O jogo ativo responde (RCON no Zomboid, API REST no Terraria)? Alerta no Discord se cair.",
-       4, y, 4, 4, [prom(ACTIVE_UP)], mappings=ONLINE, steps=th((RED, None), (GREEN, 1))),
+       5, y, 5, 4, [prom(ACTIVE_UP)], mappings=ONLINE, steps=th((RED, None), (GREEN, 1))),
   stat("Players online", "Jogadores conectados no jogo ativo, de no máximo 6 vagas.",
-       8, y, 4, 4, [prom(ACTIVE_PLAYERS)], unit="suffix: / 6", decimals=0,
+       10, y, 5, 4, [prom(ACTIVE_PLAYERS)], unit="suffix: / 6", decimals=0,
        steps=th(("blue", None)), color="value", graph="area"),
-  stat("Disponibilidade (7 dias)", "% do tempo em que o jogo ativo respondeu nos últimos 7 dias. Trocas de jogo e o restart diário contam como indisponibilidade. O SLO oficial (28 dias, com error budget) fica na seção SLO.",
-       12, y, 4, 4, [prom(f"avg_over_time(({ACTIVE_UP})[7d:5m])")], unit="percentunit", decimals=2,
-       steps=th((RED, None), (ORANGE, 0.95), (GREEN, 0.99))),
   stat("Backup mais antigo", "Tempo desde o último backup bem-sucedido do jogo mais atrasado (restic → AWS S3, diário). Vermelho acima de 26h.",
-       16, y, 4, 4, [prom('time() - min(kube_cronjob_status_last_successful_time{cronjob=~".+-backup"})')],
+       15, y, 5, 4, [prom('time() - min(kube_cronjob_status_last_successful_time{cronjob=~".+-backup"})')],
        unit="dtdurations", steps=th((GREEN, None), (ORANGE, 90000), (RED, 93600))),
   stat("Alertas ativos", "Problemas disparados agora (os mesmos enviados ao Discord). Entradas de jogadores não contam.",
        20, y, 4, 4, [prom(f"count(ALERTS{{alertstate=\"firing\",{ALERT_FILTER}}}) or vector(0)")],
@@ -115,94 +112,20 @@ P.append({"type": "state-timeline", "title": "Jogo ativo e disponibilidade",
                           "overrides": [
                               {"matcher": {"id": "byName", "options": "Servidor no ar"},
                                "properties": [{"id": "mappings", "value": ONLINE}]},
-                              {"matcher": {"id": "byRegexp", "options": "^(zomboid|terraria|minecraft)$"},
+                              {"matcher": {"id": "byRegexp", "options": f"^({NS})$"},
                                "properties": [{"id": "mappings", "value": vmap([("1", "ativo", "blue")])},
                                               {"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}]}]},
           "options": {"showValue": "never", "mergeValues": True, "rowHeight": 0.8,
                       "legend": {"showLegend": False}, "tooltip": {"mode": "single"}}})
 y += 5
 
-# ---------------- SLO (k8s/monitoring/alerts-slo.yaml, docs/slo.md) ----------------
-# Lê as recording rules game_slo:*, as mesmas dos alertas de burn rate: painel e alerta nunca discordam.
-P.append(row("SLO: 99% do tempo no ar em 28 dias", y)); y += 1
-P += [
-  stat("Disponibilidade (28 dias)", "SLI do SLO: fração do tempo em que o jogo ativo respondeu ao exporter. Trocas, restart diário e reboot de patch contam como fora. Meta: 99%.",
-       0, y, 6, 6, [prom("1 - game_slo:unavailable:ratio_avg28d")], unit="percentunit", decimals=2,
-       steps=th((RED, None), (ORANGE, 0.99), (GREEN, 0.995))),
-  stat("Error budget restante", "Quanto sobra dos 1% de indisponibilidade permitidos em 28 dias (6h43min). Abaixo de 0, a política de docs/slo.md congela mudanças de risco no jogo.",
-       6, y, 6, 6, [prom("1 - game_slo:unavailable:ratio_avg28d / 0.01")], unit="percentunit", decimals=0,
-       steps=th((RED, None), (ORANGE, 0), (GREEN, 0.25))),
-]
-P.append({"type": "timeseries", "title": "Burn rate do error budget",
-          "description": "Velocidade de consumo do budget: 1 = acaba em exatos 28 dias. GameSLOBurnRateHigh: acima de 6 em 6h e 30min. GameSLOBurnRateSlow: acima de 1 em 3 dias e 6h.",
-          "datasource": DS, "gridPos": {"x": 12, "y": y, "w": 12, "h": 6},
-          "targets": [prom("game_slo:burn_rate:avg30m", legend="30 min"),
-                      prom("game_slo:burn_rate:avg6h", ref="B", legend="6 h"),
-                      prom("game_slo:burn_rate:avg3d", ref="C", legend="3 dias")],
-          "fieldConfig": {"defaults": {"min": 0, "decimals": 1,
-                                       "thresholds": th((GREEN, None), (ORANGE, 1), (RED, 6)),
-                                       "custom": {"fillOpacity": 10, "lineWidth": 2, "thresholdsStyle": {"mode": "dashed"}}},
-                          "overrides": []},
-          "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}})
-y += 6
-
-# ---------------- Restore drills ----------------
-# Evidência de que o backup volta: o Job do drill some em 3 dias e o log no Loki em 7, mas as séries do
-# kube-state-metrics ficam 30 dias no Prometheus. Pega o drill mensal (<jogo>-restore-drill-<n>, do
-# CronJob) e o manual do make restore-drill (<jogo>-restore-drill); o --live (restore-live) fica de fora.
-# completion_time só existe em Job que terminou com sucesso.
-DRILL_JOBS = 'job_name=~".+-restore-drill(-[0-9]+)?"'
-DRILL_AGE = (f"min by (namespace) (time() - max by (namespace) (last_over_time(kube_job_status_completion_time{{{DRILL_JOBS}}}[30d]))"
-             ' or time() - max by (namespace) (kube_cronjob_status_last_successful_time{cronjob=~".+-restore-drill"}))')
-P.append(row("Restore drills", y)); y += 1
-P += [
-  stat("Último restore testado", "Tempo desde o último restore drill que passou em cada jogo (mensal automático ou make restore-drill). Acima de 35 dias dispara o RestoreDrillStale.",
-       0, y, 8, 6, [prom(DRILL_AGE, legend="{{namespace}}")],
-       unit="dtdurations", steps=th((GREEN, None), (ORANGE, 30 * 86400), (RED, 35 * 86400)), no_value="nenhum drill ainda"),
-  {"type": "table", "title": "Restore drills (30 dias)",
-   "description": "Cada execução do drill: restaura o último snapshot do S3 num volume temporário e confere os arquivos do catálogo. Duração = do início do Job ao mundo conferido.",
-   "datasource": DS, "gridPos": {"x": 8, "y": y, "w": 16, "h": 6},
-   "targets": [prom(f"max by (namespace, job_name) (last_over_time(kube_job_status_succeeded{{{DRILL_JOBS}}}[30d]))", instant=True, fmt="table"),
-               prom(f"max by (namespace, job_name) (last_over_time(kube_job_status_completion_time{{{DRILL_JOBS}}}[30d])"
-                    f" - last_over_time(kube_job_status_start_time{{{DRILL_JOBS}}}[30d]))", ref="B", instant=True, fmt="table"),
-               prom(f"max by (namespace, job_name) (last_over_time(kube_job_status_start_time{{{DRILL_JOBS}}}[30d])) * 1000",
-                    ref="C", instant=True, fmt="table")],
-   "fieldConfig": {"defaults": {"noValue": "Nenhum drill nos últimos 30 dias"}, "overrides": [
-       {"matcher": {"id": "byName", "options": "Resultado"},
-        "properties": [{"id": "mappings", "value": vmap([("0", "FALHOU", RED), ("1", "OK", GREEN)])},
-                       {"id": "custom.cellOptions", "value": {"type": "color-background"}}]},
-       {"matcher": {"id": "byName", "options": "Duração"}, "properties": [{"id": "unit", "value": "s"}]},
-       {"matcher": {"id": "byName", "options": "Início"}, "properties": [{"id": "unit", "value": "dateTimeAsLocal"}]}]},
-   "transformations": [
-       {"id": "merge", "options": {}},
-       {"id": "organize", "options": {
-           "excludeByName": {"Time": True},
-           "indexByName": {"namespace": 0, "Value #C": 1, "Value #A": 2, "Value #B": 3, "job_name": 4},
-           "renameByName": {"namespace": "Jogo", "job_name": "Job", "Value #A": "Resultado",
-                            "Value #B": "Duração", "Value #C": "Início"}}},
-       {"id": "sortBy", "options": {"sort": [{"field": "Início", "desc": True}]}}],
-   "options": {"showHeader": True}},
-]
-y += 6
-
 # ---------------- 2. Jogadores ----------------
 P.append(row("Jogadores", y)); y += 1
 game_col = {"matcher": {"id": "byName", "options": "Jogo"},
             "properties": [{"id": "unit", "value": "string"}, {"id": "mappings", "value": GAME_NAMES}]}
-P.append({"type": "table", "title": "Online agora",
-          "description": "Quem está conectado neste momento e quanto jogou nas últimas 24h.",
-          "datasource": DS, "gridPos": {"x": 0, "y": y, "w": 8, "h": 8},
-          "targets": [prom(f"({dur('24h')}) and on (game, player) ({PLAYER_ONLINE})", instant=True, fmt="table")],
-          "fieldConfig": {"defaults": {"unit": "dtdurations", "noValue": "Ninguém online agora"},
-                          "overrides": [game_col, {"matcher": {"id": "byName", "options": "Jogador"},
-                                                   "properties": [{"id": "unit", "value": "string"}]}]},
-          "transformations": [{"id": "organize", "options": {"excludeByName": {"Time": True},
-                               "indexByName": {"game": 0, "player": 1, "Value": 2},
-                               "renameByName": {"game": "Jogo", "player": "Jogador", "Value": "Jogou nas últimas 24h"}}}],
-          "options": {"showHeader": True}})
 P.append({"type": "timeseries", "title": "Players online ao longo do tempo",
           "description": "Jogadores conectados em cada jogo. Linha tracejada = limite de 6 vagas.",
-          "datasource": DS, "gridPos": {"x": 8, "y": y, "w": 16, "h": 8},
+          "datasource": DS, "gridPos": {"x": 0, "y": y, "w": 24, "h": 8},
           "targets": [prom(PLAYERS, legend="{{game}}")],
           "fieldConfig": {"defaults": {"min": 0, "max": 6, "decimals": 0,
                                        "thresholds": th((GREEN, None), (RED, 6)),
@@ -277,7 +200,70 @@ P.append(stat("Crashes (7 dias)", "Reinícios inesperados do processo de algum j
               decimals=0, mappings=vmap([("0", "Nenhum", GREEN)]), steps=th((GREEN, None), (ORANGE, 1), (RED, 3))))
 y += 8
 
-# ---------------- 4. Host (recolhido) ----------------
+# ---------------- 4. SLO, recolhido (k8s/monitoring/alerts-slo.yaml, docs/slo.md) ----------------
+# Lê as recording rules game_slo:*, as mesmas dos alertas de burn rate: painel e alerta nunca discordam.
+slo_y = y; y += 1
+slo = [
+  stat("Disponibilidade (28 dias)", "SLI do SLO: fração do tempo em que o jogo ativo respondeu ao exporter. Trocas, restart diário e reboot de patch contam como fora. Meta: 99%.",
+       0, y, 6, 6, [prom("1 - game_slo:unavailable:ratio_avg28d")], unit="percentunit", decimals=2,
+       steps=th((RED, None), (ORANGE, 0.99), (GREEN, 0.995))),
+  stat("Error budget restante", "Quanto sobra dos 1% de indisponibilidade permitidos em 28 dias (6h43min). Abaixo de 0, a política de docs/slo.md congela mudanças de risco no jogo.",
+       6, y, 6, 6, [prom("1 - game_slo:unavailable:ratio_avg28d / 0.01")], unit="percentunit", decimals=0,
+       steps=th((RED, None), (ORANGE, 0), (GREEN, 0.25))),
+]
+slo.append({"type": "timeseries", "title": "Burn rate do error budget",
+          "description": "Velocidade de consumo do budget: 1 = acaba em exatos 28 dias. GameSLOBurnRateHigh: acima de 6 em 6h e 30min. GameSLOBurnRateSlow: acima de 1 em 3 dias e 6h.",
+          "datasource": DS, "gridPos": {"x": 12, "y": y, "w": 12, "h": 6},
+          "targets": [prom("game_slo:burn_rate:avg30m", legend="30 min"),
+                      prom("game_slo:burn_rate:avg6h", ref="B", legend="6 h"),
+                      prom("game_slo:burn_rate:avg3d", ref="C", legend="3 dias")],
+          "fieldConfig": {"defaults": {"min": 0, "decimals": 1,
+                                       "thresholds": th((GREEN, None), (ORANGE, 1), (RED, 6)),
+                                       "custom": {"fillOpacity": 10, "lineWidth": 2, "thresholdsStyle": {"mode": "dashed"}}},
+                          "overrides": []},
+          "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}})
+P.append(row("SLO: 99% do tempo no ar em 28 dias", slo_y, collapsed=True, panels=slo)); y = slo_y + 1
+
+# ---------------- 5. Restore drills (recolhido) ----------------
+# Evidência de que o backup volta: o Job do drill some em 3 dias e o log no Loki em 7, mas as séries do
+# kube-state-metrics ficam 30 dias no Prometheus. Pega o drill mensal (<jogo>-restore-drill-<n>, do
+# CronJob) e o manual do make restore-drill (<jogo>-restore-drill); o --live (restore-live) fica de fora.
+# completion_time só existe em Job que terminou com sucesso.
+DRILL_JOBS = 'job_name=~".+-restore-drill(-[0-9]+)?"'
+DRILL_AGE = (f"min by (namespace) (time() - max by (namespace) (last_over_time(kube_job_status_completion_time{{{DRILL_JOBS}}}[30d]))"
+             ' or time() - max by (namespace) (kube_cronjob_status_last_successful_time{cronjob=~".+-restore-drill"}))')
+drill_y = y; y += 1
+drills = [
+  stat("Último restore testado", "Tempo desde o último restore drill que passou em cada jogo (mensal automático ou make restore-drill). Acima de 35 dias dispara o RestoreDrillStale.",
+       0, y, 8, 6, [prom(DRILL_AGE, legend="{{namespace}}")],
+       unit="dtdurations", steps=th((GREEN, None), (ORANGE, 30 * 86400), (RED, 35 * 86400)), no_value="nenhum drill ainda"),
+  {"type": "table", "title": "Restore drills (30 dias)",
+   "description": "Cada execução do drill: restaura o último snapshot do S3 num volume temporário e confere os arquivos do catálogo. Duração = do início do Job ao mundo conferido.",
+   "datasource": DS, "gridPos": {"x": 8, "y": y, "w": 16, "h": 6},
+   "targets": [prom(f"max by (namespace, job_name) (last_over_time(kube_job_status_succeeded{{{DRILL_JOBS}}}[30d]))", instant=True, fmt="table"),
+               prom(f"max by (namespace, job_name) (last_over_time(kube_job_status_completion_time{{{DRILL_JOBS}}}[30d])"
+                    f" - last_over_time(kube_job_status_start_time{{{DRILL_JOBS}}}[30d]))", ref="B", instant=True, fmt="table"),
+               prom(f"max by (namespace, job_name) (last_over_time(kube_job_status_start_time{{{DRILL_JOBS}}}[30d])) * 1000",
+                    ref="C", instant=True, fmt="table")],
+   "fieldConfig": {"defaults": {"noValue": "Nenhum drill nos últimos 30 dias"}, "overrides": [
+       {"matcher": {"id": "byName", "options": "Resultado"},
+        "properties": [{"id": "mappings", "value": vmap([("0", "FALHOU", RED), ("1", "OK", GREEN)])},
+                       {"id": "custom.cellOptions", "value": {"type": "color-background"}}]},
+       {"matcher": {"id": "byName", "options": "Duração"}, "properties": [{"id": "unit", "value": "s"}]},
+       {"matcher": {"id": "byName", "options": "Início"}, "properties": [{"id": "unit", "value": "dateTimeAsLocal"}]}]},
+   "transformations": [
+       {"id": "merge", "options": {}},
+       {"id": "organize", "options": {
+           "excludeByName": {"Time": True},
+           "indexByName": {"namespace": 0, "Value #C": 1, "Value #A": 2, "Value #B": 3, "job_name": 4},
+           "renameByName": {"namespace": "Jogo", "job_name": "Job", "Value #A": "Resultado",
+                            "Value #B": "Duração", "Value #C": "Início"}}},
+       {"id": "sortBy", "options": {"sort": [{"field": "Início", "desc": True}]}}],
+   "options": {"showHeader": True}},
+]
+P.append(row("Restore drills", drill_y, collapsed=True, panels=drills)); y = drill_y + 1
+
+# ---------------- 6. Host (recolhido) ----------------
 host_y = y + 1
 host = [
   stat("SMART dos discos", "Autoteste dos discos. FALHA = disco com falha prevista. O pool é um mirror: aguenta perder um disco, mas fica sem redundância até a troca.",
@@ -335,46 +321,16 @@ host += [
                     legend="{{device}}")],
    "fieldConfig": {"defaults": {"unit": "s", "min": 0, "custom": {"fillOpacity": 15, "lineWidth": 1}}, "overrides": []},
    "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}},
-  stat("Pico de ocupação (p99, 7 dias)", "Maior p99 de ocupação entre os discos na última semana. Abaixo de 50%, o disco não é gargalo.",
-       0, dy + 7, 8, 4, [prom(f"max(quantile_over_time(0.99, {BUSY}[7d:5m]))")],
-       unit="percentunit", decimals=0, steps=th((GREEN, None), (ORANGE, 0.5), (RED, 0.8)), no_value="sem dados"),
-  stat("Escritas por disco (p99, 7 dias)", "IOPS de escrita do disco mais carregado. Um HDD de 7200 rpm aguenta uns 100 a 150 IOPS aleatórios.",
-       8, dy + 7, 8, 4, [prom(f'max(quantile_over_time(0.99, {per_disk("node_disk_writes_completed_total")}[7d:5m]))')],
-       unit="iops", decimals=0, steps=th((GREEN, None), (ORANGE, 75), (RED, 120)), no_value="sem dados"),
-  stat("Vazão de escrita por disco (p99, 7 dias)", "Bytes escritos por segundo no disco mais carregado. Um HDD sustenta uns 150 MB/s sequenciais.",
-       16, dy + 7, 8, 4, [prom(f'max(quantile_over_time(0.99, {per_disk("node_disk_written_bytes_total")}[7d:5m]))')],
-       unit="Bps", decimals=1, steps=th((GREEN, None), (ORANGE, 75e6), (RED, 120e6)), no_value="sem dados"),
   stat("Erros nos discos do ZFS", "Soma dos contadores READ/WRITE/CKSUM do zpool status. No mirror o ZFS corrige pelo outro disco e o pool segue ONLINE, então é aqui que um disco falhando aparece primeiro. Zera com zpool clear.",
-       0, dy + 11, 12, 4, [prom("sum(max by (pool, vdev, type) (homelab_zfs_vdev_errors)) + (sum(homelab_zfs_pool_data_errors) or vector(0))")],
+       0, dy + 7, 12, 4, [prom("sum(max by (pool, vdev, type) (homelab_zfs_vdev_errors)) + (sum(homelab_zfs_pool_data_errors) or vector(0))")],
        decimals=0, mappings=vmap([("0", "Nenhum", GREEN)]), steps=th((GREEN, None), (ORANGE, 1), (RED, 10)), no_value="sem dados"),
   stat("Último scrub do pool", "Quando o ZFS leu e conferiu todos os blocos pela última vez (cron mensal, segundo domingo). Acima de 40 dias dispara o ZfsScrubStale.",
-       12, dy + 11, 12, 4, [prom("(time() - max(homelab_zfs_last_scrub_timestamp_seconds)) / 86400")],
+       12, dy + 7, 12, 4, [prom("(time() - max(homelab_zfs_last_scrub_timestamp_seconds)) / 86400")],
        unit="d", decimals=0, steps=th((GREEN, None), (ORANGE, 36), (RED, 40)), no_value="sem dados"),
-  {"type": "table", "title": "Benchmark dos discos (fio)",
-   "description": "Resultado de ansible-playbook playbooks/disk-bench.yml, uma linha por teste e layout do pool. O layout=stripe é de antes da conversão para mirror (26/10/2026).",
-   "datasource": DS, "gridPos": {"x": 0, "y": dy + 15, "w": 24, "h": 6},
-   "targets": [prom("homelab_disk_bench_iops", instant=True, fmt="table"),
-               prom("homelab_disk_bench_bytes_per_second", ref="B", instant=True, fmt="table"),
-               prom("homelab_disk_bench_latency_p99_seconds", ref="C", instant=True, fmt="table"),
-               prom("homelab_disk_bench_timestamp_seconds * 1000", ref="D", instant=True, fmt="table")],
-   "fieldConfig": {"defaults": {"noValue": "Ainda não rodou"}, "overrides": [
-       {"matcher": {"id": "byName", "options": "IOPS"}, "properties": [{"id": "unit", "value": "iops"}, {"id": "decimals", "value": 0}]},
-       {"matcher": {"id": "byName", "options": "Vazão"}, "properties": [{"id": "unit", "value": "Bps"}, {"id": "decimals", "value": 1}]},
-       {"matcher": {"id": "byName", "options": "Latência p99"}, "properties": [{"id": "unit", "value": "s"}]},
-       {"matcher": {"id": "byName", "options": "Medido em"}, "properties": [{"id": "unit", "value": "dateTimeAsLocal"}]}]},
-   "transformations": [
-       {"id": "merge", "options": {}},
-       {"id": "organize", "options": {
-           "excludeByName": {"Time": True, "__name__": True, "instance": True, "job": True},
-           "indexByName": {"test": 0, "layout": 1, "Value #A": 2, "Value #B": 3, "Value #C": 4, "Value #D": 5},
-           "renameByName": {"test": "Teste", "layout": "Pool", "Value #A": "IOPS", "Value #B": "Vazão",
-                            "Value #C": "Latência p99", "Value #D": "Medido em"}}},
-       {"id": "sortBy", "options": {"sort": [{"field": "Teste"}]}}],
-   "options": {"showHeader": True}},
 ]
 P.append(row("Hardware do host (HPE DL20 Gen9)", y, collapsed=True, panels=host)); y += 1
 
-# ---------------- 5. Logs e alertas (recolhido) ----------------
+# ---------------- 7. Logs e alertas (recolhido) ----------------
 ly = y + 1
 logs = [
   {"type": "table", "title": "Alertas disparados agora",
@@ -385,14 +341,9 @@ logs = [
    "transformations": [{"id": "organize", "options": {
        "excludeByName": {"Time": True, "Value": True, "__name__": True, "alertstate": True},
        "renameByName": {"alertname": "Alerta", "severity": "Severidade"}}}]},
-  {"type": "logs", "title": "Entradas e saídas de jogadores",
-   "description": "Linhas dos logs dos servidores sobre conexões.",
-   "datasource": LOKI, "gridPos": {"x": 0, "y": ly + 5, "w": 12, "h": 10},
-   "targets": [{"expr": f'{{namespace=~"{NS}", container="server"}} |~ "(?i)(connected|disconnect|logged|has joined|has left)"', "refId": "A"}],
-   "options": {"showTime": True, "wrapLogMessage": True, "sortOrder": "Descending", "enableLogDetails": True}},
   {"type": "logs", "title": "Erros e avisos dos servidores",
    "description": "Linhas com erro, exceção ou aviso. Senhas nunca chegam ao Loki (filtradas na coleta).",
-   "datasource": LOKI, "gridPos": {"x": 12, "y": ly + 5, "w": 12, "h": 10},
+   "datasource": LOKI, "gridPos": {"x": 0, "y": ly + 5, "w": 24, "h": 10},
    "targets": [{"expr": f'{{namespace=~"{NS}", container="server"}} |~ "(?i)(error|exception|warn)"', "refId": "A"}],
    "options": {"showTime": True, "wrapLogMessage": True, "sortOrder": "Descending", "enableLogDetails": True}},
 ]

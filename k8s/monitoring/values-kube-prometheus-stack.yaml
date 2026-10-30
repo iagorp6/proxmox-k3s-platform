@@ -218,11 +218,21 @@ grafana:
   persistence:
     enabled: false
   defaultDashboardsTimezone: America/Sao_Paulo
+  # O GamesPlatform é a home; os ~25 dashboards padrão do kps vão para a pasta Kubernetes
+  # (a annotation abaixo só vale para os ConfigMaps do kps; o nosso fica na raiz, em General)
+  grafana.ini:
+    dashboards:
+      default_home_dashboard_path: /tmp/dashboards/games-platform.json
   sidecar:
     dashboards:
       enabled: true
       label: grafana_dashboard
       searchNamespace: ALL
+      annotations:
+        grafana_folder: Kubernetes
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
   additionalDataSources:
     - name: Loki
       type: loki
