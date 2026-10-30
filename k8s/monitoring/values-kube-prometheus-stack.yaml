@@ -80,14 +80,15 @@ alertmanager:
               - start_time: "04:25"
                 end_time: "05:15"
             location: America/Sao_Paulo
-    # Dois canais (item J da revisão de 10-26): alertas de infra no #ops privado (webhook ops-webhook-url);
-    # o canal dos amigos (webhook-url) recebe jogadores, mortes, marcos e, além do #ops, os críticos.
+    # Dois canais: infra no #ops privado (webhook ops-webhook-url); o canal dos amigos (webhook-url) recebe
+    # entradas, mortes, marcos e só as quedas que eles sentem (jogo fora ou host fora), sem os comandos de ação.
+    # Repetição: crítico a cada 6h, warning uma vez por dia (antes 2h e 12h: um alerta travado enchia o canal).
     route:
       receiver: discord-ops
       group_by: ["alertname"]
       group_wait: 30s
       group_interval: 5m
-      repeat_interval: 12h
+      repeat_interval: 24h
       routes:
         # Dead man's switch: o Watchdog pinga o healthchecks.io; se parar, o healthchecks avisa
         - receiver: healthchecks
@@ -99,7 +100,7 @@ alertmanager:
         - receiver: "null"
           matchers:
             - alertname = "InfoInhibitor"
-        # Entrada/saída de jogadores (antes da regra de info)
+        # Entrada de jogadores (antes da regra de info). Sem mensagem de saída: a sessão fica no dashboard
         - receiver: discord-players
           matchers:
             - notify = "players"
@@ -120,25 +121,31 @@ alertmanager:
           matchers:
             - severity = "info"
         # Alertas de jogo com alerts.muteDuring no catálogo: silêncio durante o restart diário
-        # (mute_time_intervals não herda da rota pai, por isso as duas rotas irmãs)
-        - receiver: discord-critical
+        # (mute_time_intervals não herda da rota pai, por isso as rotas irmãs)
+        - receiver: discord-ops-and-friends
           matchers:
             - mute = "restart-diario"
-            - severity = "critical"
+            - alertname =~ "GameDown|GameUnresponsive"
           mute_time_intervals: ["restart-diario", "patch-semanal"]
-          repeat_interval: 2h
+          repeat_interval: 6h
         - receiver: discord-ops
           matchers:
             - mute = "restart-diario"
           mute_time_intervals: ["restart-diario", "patch-semanal"]
-          repeat_interval: 2h
-        # Crítico (servidor ou host fora, disco): #ops e canal dos amigos
-        - receiver: discord-critical
+          repeat_interval: 6h
+        # Queda que os jogadores sentem: #ops e canal dos amigos
+        - receiver: discord-ops-and-friends
+          matchers:
+            - alertname =~ "GameDown|GameUnresponsive|HostDown"
+          mute_time_intervals: ["patch-semanal"]
+          repeat_interval: 6h
+        # Resto do crítico (backup, disco, ZFS, ServiceLB...): só #ops
+        - receiver: discord-ops
           matchers:
             - severity = "critical"
           mute_time_intervals: ["patch-semanal"]
-          repeat_interval: 2h
-        # Resto (warning): só #ops, mesmo receiver da raiz, só para aplicar a janela de patch
+          repeat_interval: 6h
+        # Warning: só #ops, mesmo receiver da raiz, só para aplicar a janela de patch
         - receiver: discord-ops
           mute_time_intervals: ["patch-semanal"]
     inhibit_rules:
@@ -158,48 +165,50 @@ alertmanager:
       - source_matchers: ["alertname = GameDown"]
         target_matchers: ['alertname =~ "GameRestarted|GameMemoryHigh|GameExporterMissing"']
         equal: ["namespace"]
+      # Crash do servidor do jogo: o GameRestarted já conta, sem repetir como OOM ou CrashLoop
+      - source_matchers: ["alertname = GameRestarted"]
+        target_matchers: ['alertname =~ "ContainerOOMKilled|KubePodCrashLooping"']
+        equal: ["namespace"]
     receivers:
       - name: "null"
       - name: healthchecks
         webhook_configs:
           - url_file: /etc/alertmanager/secrets/alertmanager-discord/healthchecks-url
             send_resolved: false
-      # Mesmo formato nos dois canais (âncoras YAML: o Helm resolve antes de gerar a config)
+      # #ops: título com a severidade, descrição, comando de ação e quando começou
       - name: discord-ops
         discord_configs:
-          - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/ops-webhook-url
+          - &ops-discord
+            webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/ops-webhook-url
             send_resolved: true
-            title: &alert-title '{{ if eq .Status "firing" }}{{ if eq .CommonLabels.severity "critical" }}🔴{{ else }}🟠{{ end }} {{ or .CommonAnnotations.summary .CommonLabels.alertname }}{{ else }}✅ Resolvido: {{ or .CommonAnnotations.summary .CommonLabels.alertname }}{{ end }}'
-            message: &alert-message |-
+            title: '{{ if eq .Status "firing" }}{{ if eq .CommonLabels.severity "critical" }}🔴{{ else }}🟠{{ end }} {{ or .CommonAnnotations.summary .CommonLabels.alertname }}{{ else }}✅ Resolvido: {{ or .CommonAnnotations.summary .CommonLabels.alertname }}{{ end }}'
+            message: |-
               {{ range .Alerts }}{{ if eq .Status "firing" }}{{ .Annotations.description }}
-              {{ with .Annotations.action }}**O que fazer:** `{{ . }}`
-              {{ end }}Desde {{ .StartsAt | tz "America/Sao_Paulo" | date "02/01 15:04" }} · `{{ .Labels.alertname }}` · {{ .Labels.severity }}{{ else }}Normalizado às {{ .EndsAt | tz "America/Sao_Paulo" | date "15:04" }} · duração {{ (.EndsAt.Sub .StartsAt).Truncate 60000000000 }}{{ end }}
+              {{ with .Annotations.action }}`{{ . }}`
+              {{ end }}Desde {{ .StartsAt | tz "America/Sao_Paulo" | date "02/01 15:04" }} · {{ .Labels.alertname }}{{ else }}Resolvido às {{ .EndsAt | tz "America/Sao_Paulo" | date "15:04" }}, depois de {{ (.EndsAt.Sub .StartsAt).Truncate 60000000000 }}{{ end }}
               {{ end }}
-      - name: discord-critical
+      # Canal dos amigos: só o que muda para quem joga, sem comando nem nome de alerta
+      - name: discord-ops-and-friends
         discord_configs:
-          - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/ops-webhook-url
-            send_resolved: true
-            title: *alert-title
-            message: *alert-message
+          - *ops-discord
           - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/webhook-url
             send_resolved: true
-            title: *alert-title
-            message: *alert-message
+            title: '{{ if eq .Status "firing" }}🔴 {{ or .CommonAnnotations.summary "Servidor fora do ar" }}{{ else }}✅ Resolvido: {{ or .CommonAnnotations.summary "servidor no ar" }}{{ end }}'
+            message: '{{ if eq .Status "firing" }}O admin já foi avisado. A mensagem de volta sai aqui.{{ else }}{{ with index .Alerts 0 }}Ficou fora por {{ (.EndsAt.Sub .StartsAt).Truncate 60000000000 }}.{{ end }}{{ end }}'
       - name: discord-events
         discord_configs:
           - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/webhook-url
             send_resolved: false
             title: '{{ .CommonAnnotations.summary }}'
             message: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+      # Só a entrada; o cargo é mencionado apenas para quem abre o servidor (annotation ping da regra)
       - name: discord-players
         discord_configs:
           - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/webhook-url
-            send_resolved: true
-            content: '{{ if eq .Status "firing" }}<@&1555259172574986342>{{ end }}'
-            title: '{{ if eq .Status "firing" }}🟢 {{ .CommonLabels.player }} entrou no servidor{{ else }}🔴 {{ .CommonLabels.player }} saiu do servidor{{ end }}'
-            message: |-
-              {{ range .Alerts }}{{ if eq .Status "firing" }}Entrou às {{ .StartsAt | tz "America/Sao_Paulo" | date "15:04 (02/01)" }} · {{ .Annotations.description }}{{ else }}Saiu às {{ .EndsAt | tz "America/Sao_Paulo" | date "15:04 (02/01)" }} · sessão de {{ (.EndsAt.Sub .StartsAt).Truncate 60000000000 }}{{ end }}
-              {{ end }}
+            send_resolved: false
+            content: '{{ if eq .CommonAnnotations.ping "sim" }}<@&1555259172574986342>{{ end }}'
+            title: '🟢 {{ .CommonLabels.player }} entrou no servidor'
+            message: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
 
 grafana:
   admin:

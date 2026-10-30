@@ -312,6 +312,9 @@ spec:
             notify: players
           annotations:
             summary: "{{ $labels.player }} está online em {{ $labels.game }}"
+            # "sim" só para quem abriu o servidor (1 online): a menção do cargo no Discord sai uma vez por rodada de jogo
+            ping: >-
+              {{ with query (printf "max(game_players_online{game='%s'})" $labels.game) }}{{ if le (. | first | value) 1.0 }}sim{{ end }}{{ end }}
             description: >-
               {{ with query (printf "max(game_players_online{game='%s'})" $labels.game) }}{{ . | first | value | printf "%.0f" }}{{ end }}/6 em {{ $labels.game }}:
               {{ range $i, $s := query (printf "max by (player) (game_player_online{game='%s'})" $labels.game) }}{{ if $i }}, {{ end }}{{ $s.Labels.player }}{{ end }}

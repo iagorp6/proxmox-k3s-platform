@@ -1,9 +1,10 @@
 """Checagem diária da plataforma no Discord (stdlib only): um "está tudo OK" por dia.
 
 Lê o Prometheus: alertas warning/critical disparando, jogo no ar, idade do último backup,
-espaço em disco, restarts de container nas últimas 24 h, uptime do host e da VM, patches
-pendentes no host e a carga dos discos do host na semana. Se o Prometheus
-não responder, a falha também vai para o Discord: silêncio nunca significa "tudo OK".
+espaço em disco, restarts de container nas últimas 24 h, uptime do host e da VM e patches
+pendentes no host. Dia normal = uma mensagem curta, sem campos; o detalhe completo só aparece
+quando há ponto de atenção. Se o Prometheus não responder, a falha também vai para o Discord:
+silêncio nunca significa "tudo OK".
 Com DRY_RUN=1 só imprime o que enviaria, sem postar no Discord (para testar o CronJob).
 """
 import json
@@ -35,11 +36,6 @@ RESTARTS = "sum by (namespace, pod) (increase(kube_pod_container_status_restarts
 HOST_UPTIME = 'time() - node_boot_time_seconds{job="proxmox-node"}'
 VM_UPTIME = 'time() - max(node_boot_time_seconds{job="node-exporter"})'
 HOST_SECURITY = 'sum(apt_upgrades_pending{job="proxmox-node", origin=~".*-security.*"})'
-# Carga dos discos do host (p99 da semana). No mirror os dois recebem as mesmas escritas, então os
-# valores ficam parecidos; um disco bem mais ocupado que o outro costuma ser um disco ficando lento.
-# max by (device): um valor por disco mesmo se um label do alvo (instance) mudou dentro da semana
-HOST_DISK_BUSY = 'max by (device) (rate(node_disk_io_time_seconds_total{job="proxmox-node", device=~"sd[a-z]+"}[5m]))'
-DISK_BUSY_P99 = f"quantile_over_time(0.99, {HOST_DISK_BUSY}[7d:5m])"
 HOST_REBOOT = ('max(max(node_reboot_required{job="proxmox-node"})'
                ' or max(homelab_kernel_reboot_pending{job="proxmox-node"}))')
 # Textfile homelab-zfs do host (role host_exporters). Erros já viram alerta (ZfsVdevErrors/ZfsDataErrors)
@@ -63,7 +59,8 @@ def age(seconds):
 
 
 def build():
-    problems, fields = [], []
+    """Retorna (problemas, campos do embed detalhado, resumo de um dia normal, notas informativas)."""
+    problems, fields, summary, notes = [], [], [], []
 
     alerts = sorted({f"{r['metric'].get('alertname', '?')}"
                      + (f" ({r['metric'].get('game') or r['metric'].get('namespace')})"
@@ -81,6 +78,7 @@ def build():
     fields.append({"name": "🎮 Jogo", "value": "\n".join(
         f"{'🟢' if v >= 1 else '🔴'} {TITLES.get(g, g)}" for g, v in sorted(games.items())) or "🔴 Nenhum no ar",
         "inline": True})
+    summary += [f"🟢 {TITLES.get(g, g)} no ar" for g, v in sorted(games.items()) if v >= 1]
 
     backups = {r["metric"].get("cronjob", "?").removesuffix("-backup"): val(r) for r in q(BACKUP_AGE)}
     # Só o jogo ativo faz backup diário; os parados guardam o último snapshot (o alerta BackupStale cobre o resto)
@@ -91,6 +89,7 @@ def build():
     fields.append({"name": "💾 Último backup", "value": "\n".join(
         f"{'🟢' if backups[g] <= BACKUP_MAX_H * 3600 else '🔴'} {TITLES.get(g, g)} · há {age(backups[g])}"
         for g in active) or "Sem dado do jogo ativo", "inline": True})
+    summary += [f"💾 backup há {age(backups[g])}" for g in active]
 
     disks = {r["metric"].get("job", "?"): val(r) for r in q(DISK_FREE)}
     names = {"proxmox-node": "Host", "node-exporter": "VM"}
@@ -100,6 +99,8 @@ def build():
     fields.append({"name": "🗄️ Disco livre (/)", "value": "\n".join(
         f"{'🟢' if f >= DISK_MIN_FREE else '🟡'} {names.get(j, j)} · {f:.0%}" for j, f in sorted(disks.items()))
         or "Sem dado", "inline": True})
+    if disks:
+        summary.append("🗄️ livre: " + ", ".join(f"{names.get(j, j)} {f:.0%}" for j, f in sorted(disks.items())))
 
     vm_uptime = q(VM_UPTIME)
     # Reboot da VM nas últimas 24 h (janela semanal de patch): os restarts vêm dele, não de falha
@@ -111,6 +112,8 @@ def build():
             problems.append(f"{len(restarts)} pod(s) reiniciaram")
         fields.append({"name": "🔁 Restarts em 24 h", "value": "\n".join(
             f"{ns}/{pod} · {n}x" for ns, pod, n in restarts[:5]), "inline": False})
+    if vm_rebooted:
+        notes.append("VM reiniciou na janela de patch" + (f" ({len(restarts)} pod(s) voltaram junto)" if restarts else ""))
 
     uptime = q(HOST_UPTIME)
     if uptime:
@@ -123,8 +126,12 @@ def build():
     security, reboot = q(HOST_SECURITY), q(HOST_REBOOT)
     if security or reboot:
         n = round(val(security[0])) if security else 0
+        pending_reboot = bool(reboot) and val(reboot[0]) > 0
         fields.append({"name": "🩹 Patches do host", "value": (f"{n} de segurança pendente(s)" if n else "Em dia")
-                       + (" · reboot pendente" if reboot and val(reboot[0]) > 0 else ""), "inline": True})
+                       + (" · reboot pendente" if pending_reboot else ""), "inline": True})
+        if n or pending_reboot:
+            notes.append("Host: " + " e ".join(([f"{n} patch(es) de segurança"] if n else [])
+                                              + (["reboot"] if pending_reboot else [])) + " pendente(s)")
 
     # Informativo: o ZfsScrubStale e os alertas de erro cobrem o que exige ação
     scrub, zfs_errors = q(ZFS_SCRUB_AGE), q(ZFS_ERRORS)
@@ -132,20 +139,16 @@ def build():
         n = round(val(zfs_errors[0])) if zfs_errors else 0
         fields.append({"name": "🧽 ZFS", "value": (f"scrub há {age(val(scrub[0]))}" if scrub else "sem scrub registrado")
                        + (f" · {n} erro(s) nos discos" if n else " · sem erros"), "inline": True})
+        if n:
+            notes.append(f"ZFS: {n} erro(s) corrigido(s) nos discos")
 
-    # Informativo: carga dos discos do host na semana (sem ponto de atenção, não há alerta para isso)
-    busy = sorted((r["metric"].get("device", "?"), val(r)) for r in q(DISK_BUSY_P99))
-    if busy:
-        fields.append({"name": "💽 Discos do host (p99, 7 dias)", "value": " · ".join(f"{d} {b:.0%}" for d, b in busy),
-                       "inline": False})
-
-    return problems, fields
+    return problems, fields, summary, notes
 
 
 def payload():
     now = datetime.now(BRT)
     try:
-        problems, fields = build()
+        problems, fields, summary, notes = build()
     except Exception as e:  # noqa: BLE001 - qualquer falha vira mensagem, nunca silêncio
         title, color, fields = "❌ Checagem diária falhou", 0xED4245, [
             {"name": "Erro", "value": f"Não consegui consultar o Prometheus: {type(e).__name__}: {e}"[:1000]}]
@@ -155,7 +158,9 @@ def payload():
             title, color = f"⚠️ {len(problems)} ponto(s) de atenção", 0xFEE75C
             desc = "\n".join(f"• {p}" for p in problems)
         else:
-            title, color, desc = "✅ Tudo OK no GamesPlatform", 0x57F287, "Nenhum alerta, jogo no ar, backup em dia."
+            # Dia normal: uma linha de resumo e as notas, sem campos (o detalhe fica no Grafana)
+            title, color, fields = "✅ Tudo OK", 0x57F287, []
+            desc = "\n".join([" · ".join(summary)] + [f"ℹ️ {n}" for n in notes])
     return {
         "username": "GamesPlatform",
         "embeds": [{

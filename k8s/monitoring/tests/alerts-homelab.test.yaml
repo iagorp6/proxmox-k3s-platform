@@ -1,6 +1,37 @@
 rule_files: [alerts-homelab.yaml]
 evaluation_interval: 1m
 tests:
+  - name: GamePlayerOnline menciona o cargo só para quem abre o servidor
+    interval: 1m
+    input_series:
+      - series: 'game_player_online{game="valheim",player="iago"}'
+        values: '1x10'
+      - series: 'game_player_online{game="valheim",player="xuaina"}'
+        values: '_x4 1x6'           # entra aos 5 min, com o iago já online
+      - series: 'game_players_online{game="valheim"}'
+        values: '1x4 2x6'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: GamePlayerOnline
+        exp_alerts:
+          - exp_labels: {severity: info, notify: players, game: valheim, player: iago}
+            exp_annotations:
+              summary: "iago está online em valheim"
+              ping: "sim"
+              description: "1/6 em valheim: iago"
+      - eval_time: 6m
+        alertname: GamePlayerOnline
+        exp_alerts:
+          - exp_labels: {severity: info, notify: players, game: valheim, player: iago}
+            exp_annotations:
+              summary: "iago está online em valheim"
+              ping: ""
+              description: "2/6 em valheim: iago, xuaina"
+          - exp_labels: {severity: info, notify: players, game: valheim, player: xuaina}
+            exp_annotations:
+              summary: "xuaina está online em valheim"
+              ping: ""
+              description: "2/6 em valheim: iago, xuaina"
   - name: morte no PerkLog dispara PlayerDied com as horas sobrevividas; morte antiga nao
     interval: 1m
     input_series:

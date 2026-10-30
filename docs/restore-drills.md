@@ -7,7 +7,7 @@ latest restic snapshot from S3 into a temporary PVC, checks the catalog paths, a
 The monthly `<game>-restore-drill` CronJob runs the same restore and checks automatically; its result line
 (`RESULT {...}`) is in the Job log for 3 days: `kubectl -n <game> logs job/<job> | grep RESULT`.
 This table holds the drills recorded by hand. The last 30 days of drills (manual and monthly, with result and
-duration) stay in Prometheus: Grafana **GamesPlatform**, row **Restore drills**, and a line in the weekly Discord summary.
+duration) stay in Prometheus: Grafana **GamesPlatform**, row **Restore drills**. A drill older than 35 days fires `RestoreDrillStale` in #ops.
 
 | Date | Game | Snapshot | Snapshot age | Size | Files | restic | Total |
 |---|---|---|---|---|---|---|---|
