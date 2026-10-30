@@ -2,7 +2,7 @@
 """Testes da checagem diária (k8s/platform/daily_health.py), só stdlib.
 
 Troca a consulta ao Prometheus (q) por respostas fixas por PromQL e confere a mensagem do Discord:
-tudo OK, cada ponto de atenção, os restarts do reboot de patch e, principalmente, que uma falha
+tudo OK em uma linha, cada ponto de atenção, os restarts do reboot de patch e, principalmente, que uma falha
 do Prometheus vira mensagem de erro em vez de silêncio. Uso: python3 scripts/test-daily-health.py
 """
 import importlib.util
@@ -38,7 +38,6 @@ def healthy():
         dh.VM_UPTIME: [sample(10 * 24 * H)],
         dh.HOST_SECURITY: [sample(0)],
         dh.HOST_REBOOT: [sample(0)],
-        dh.DISK_BUSY_P99: [sample(0.12, device="sdb"), sample(0.11, device="sda")],
         dh.ZFS_SCRUB_AGE: [sample(14 * 24 * H)],
         dh.ZFS_ERRORS: [sample(0)],
     }
@@ -57,15 +56,12 @@ class DailyHealthTest(unittest.TestCase):
     def field(embed, name):
         return next(f["value"] for f in embed["fields"] if f["name"] == name)
 
-    def test_all_good_is_a_green_ok(self):
+    def test_all_good_is_one_short_line(self):
         e = self.run_with(healthy())
-        self.assertEqual(e["title"], "✅ Tudo OK no GamesPlatform")
-        self.assertEqual(self.field(e, "🎮 Jogo"), "🟢 Minecraft")
+        self.assertEqual(e["title"], "✅ Tudo OK")
         # O backup de um jogo parado (zomboid, 200 h) não conta: só o do jogo ativo faz backup diário
-        self.assertEqual(self.field(e, "💾 Último backup"), "🟢 Minecraft · há 5 h")
-        self.assertEqual(self.field(e, "⏱️ Host no ar"), "30 dias")
-        self.assertEqual(self.field(e, "🩹 Patches do host"), "Em dia")
-        self.assertEqual(self.field(e, "💽 Discos do host (p99, 7 dias)"), "sda 11% · sdb 12%")
+        self.assertEqual(e["description"], "🟢 Minecraft no ar · 💾 backup há 5 h · 🗄️ livre: VM 42%, Host 60%")
+        self.assertEqual(e["fields"], [])
 
     def test_each_problem_is_listed(self):
         a = healthy()
@@ -86,6 +82,10 @@ class DailyHealthTest(unittest.TestCase):
         ])
         self.assertIn("GameUnresponsive (minecraft)", self.field(e, "🚨 Alertas"))
         self.assertEqual(self.field(e, "🔁 Restarts em 24 h"), "minecraft/minecraft-0 · 3x")
+        # Com ponto de atenção volta o detalhe completo
+        self.assertEqual(self.field(e, "💾 Último backup"), "🔴 Minecraft · há 30 h")
+        self.assertEqual(self.field(e, "⏱️ Host no ar"), "30 dias")
+        self.assertEqual(self.field(e, "🩹 Patches do host"), "Em dia")
 
     def test_no_game_answering_is_a_problem(self):
         a = healthy()
@@ -99,36 +99,25 @@ class DailyHealthTest(unittest.TestCase):
         a[dh.VM_UPTIME] = [sample(3 * H)]
         a[dh.RESTARTS] = [sample(1, namespace="monitoring", pod="prometheus-0")]
         e = self.run_with(a)
-        self.assertEqual(e["title"], "✅ Tudo OK no GamesPlatform")
-        self.assertEqual(self.field(e, "⏱️ VM no ar"), "3 h (reiniciou por patch)")
-        self.assertEqual(self.field(e, "🔁 Restarts em 24 h"), "monitoring/prometheus-0 · 1x")
+        self.assertEqual(e["title"], "✅ Tudo OK")
+        self.assertIn("ℹ️ VM reiniciou na janela de patch (1 pod(s) voltaram junto)", e["description"])
 
     def test_pending_host_patches_are_informative(self):
         a = healthy()
         a[dh.HOST_SECURITY] = [sample(3)]
         a[dh.HOST_REBOOT] = [sample(1)]
         e = self.run_with(a)
-        self.assertEqual(e["title"], "✅ Tudo OK no GamesPlatform")
-        self.assertEqual(self.field(e, "🩹 Patches do host"), "3 de segurança pendente(s) · reboot pendente")
+        self.assertEqual(e["title"], "✅ Tudo OK")
+        self.assertEqual(e["description"].splitlines()[1], "ℹ️ Host: 3 patch(es) de segurança e reboot pendente(s)")
 
-    def test_disk_load_is_informative_and_optional(self):
-        a = healthy()
-        a[dh.DISK_BUSY_P99] = [sample(0.95, device="sda"), sample(0.90, device="sdb")]
-        e = self.run_with(a)
-        self.assertEqual(e["title"], "✅ Tudo OK no GamesPlatform")
-        a[dh.DISK_BUSY_P99] = []
-        e = self.run_with(a)
-        self.assertNotIn("💽 Discos do host (p99, 7 dias)", [f["name"] for f in e["fields"]])
-
-    def test_zfs_scrub_and_errors_are_informative_and_optional(self):
-        e = self.run_with(healthy())
-        self.assertEqual(self.field(e, "🧽 ZFS"), "scrub há 14 dias · sem erros")
+    def test_zfs_errors_are_a_note_and_scrub_is_optional(self):
         a = healthy()
         a[dh.ZFS_ERRORS] = [sample(3)]
         e = self.run_with(a)
-        self.assertEqual(e["title"], "✅ Tudo OK no GamesPlatform")
-        self.assertEqual(self.field(e, "🧽 ZFS"), "scrub há 14 dias · 3 erro(s) nos discos")
+        self.assertEqual(e["title"], "✅ Tudo OK")
+        self.assertIn("ℹ️ ZFS: 3 erro(s) corrigido(s) nos discos", e["description"])
         a[dh.ZFS_SCRUB_AGE], a[dh.ZFS_ERRORS] = [], []
+        a[dh.GAME_UP] = [sample(0, game="minecraft")]
         e = self.run_with(a)
         self.assertNotIn("🧽 ZFS", [f["name"] for f in e["fields"]])
 
