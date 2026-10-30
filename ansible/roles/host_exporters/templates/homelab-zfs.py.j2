@@ -10,6 +10,8 @@ import tempfile
 import time
 
 DIR = "{{ host_exporters_textfile_dir }}"
+# Daqui para baixo o Jinja não interpreta nada: as chaves duplas dos f-strings são das labels.
+# {% raw %}
 ENV = dict(os.environ, LC_ALL="C")
 VDEV = re.compile(r"^\t\s*(\S+)\s+([A-Z]+)\s+(\d+)\s+(\d+)\s+(\d+)\b")
 # "scan: scrub repaired 0B in 00:13:02 with 0 errors on Sun Oct 12 00:37:03 2025"
@@ -83,3 +85,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+# {% endraw %}
