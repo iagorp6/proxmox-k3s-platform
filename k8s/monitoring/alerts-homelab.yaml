@@ -246,6 +246,21 @@ spec:
             summary: "{{ $labels.container }} ({{ $labels.namespace }}) morto por falta de memória"
             description: "O container foi OOMKilled nos últimos 15 minutos."
             action: "Comparar o uso com o limite e ajustar os resources no values ou no manifest."
+        # Aviso antes do OOM fora dos jogos (o GameMemoryHigh cobre o container server de cada jogo). Em 30/10 o
+        # application-controller do Argo CD morreu com 768Mi e o único sinal foi o ContainerOOMKilled, depois do kill.
+        - alert: ContainerMemoryNearLimit
+          expr: |
+            max by (namespace, pod, container) (container_memory_working_set_bytes{container!="",container!="POD",container!="server"})
+            / on (namespace, pod, container)
+            max by (namespace, pod, container) (kube_pod_container_resource_limits{resource="memory"})
+            > 0.9
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.container }} ({{ $labels.namespace }}) perto do limite de memória"
+            description: "Uso de {{ $value | humanizePercentage }} do limite há 30 minutos. Risco de OOMKilled."
+            action: "kubectl -n {{ $labels.namespace }} top pod {{ $labels.pod }} --containers e subir o limite no values do chart ou no manifest (Argo CD: k8s/argocd/values-argocd.yaml + make deploy-argocd)"
         # Painel de troca de jogo (ADR 0006): sem o bot, ninguém além do admin troca o jogo
         - alert: GamesBotDown
           expr: |
@@ -282,6 +297,21 @@ spec:
             summary: "App {{ $labels.name }} com auto-sync não acompanha o main"
             description: "O app tem sync automático, mas está diferente do Git há 30 minutos: o último sync provavelmente falhou."
             action: "kubectl -n argocd get application {{ $labels.name }} -o jsonpath='{.status.operationState.message}'"
+        # O jogo ativo não tem autosync (um merge não pode reiniciar o servidor com gente jogando), então uma
+        # whitelist ou um digest novo ficam no Git sem chegar ao servidor até alguém rodar o sync-game. Jogos
+        # parados ficam de fora: eles só sincronizam no próximo switch-game.
+        - alert: GameSyncPending
+          expr: |
+            max by (name) (argocd_app_info{project="games",sync_status="OutOfSync"}) == 1
+            and on (name)
+            label_replace(max by (namespace) (kube_statefulset_replicas) > 0, "name", "$1", "namespace", "(.+)")
+          for: 24h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.name }} tem mudança no main que ainda não chegou ao servidor"
+            description: "O app do jogo ativo está OutOfSync há 24 horas: algo mergeado (whitelist, imagem, config) espera o sync."
+            action: "Com ninguém jogando: make sync-game GAME={{ $labels.name }}"
         - alert: ArgoCDMetricsMissing
           expr: absent(argocd_app_info)
           for: 15m
