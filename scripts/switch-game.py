@@ -158,6 +158,13 @@ def write_patch(name, active):
             "apiVersion: batch/v1\nkind: CronJob\nmetadata:\n"
             f"  name: {cj}\n{ns}spec:\n  suspend: {'false' if on else 'true'}\n"
         )
+    if not on and g["dir"].startswith("k8s/games/"):
+        # Jogo parado sai do ServiceLB: o svclb de um LoadBalancer reserva as portas no nó mesmo sem
+        # endpoint, e dois jogos na mesma porta e protocolo (Zomboid e Valheim) não sobem juntos
+        docs.append(
+            "apiVersion: v1\nkind: Service\nmetadata:\n"
+            f"  name: {g['app']}\n{ns}spec:\n  type: ClusterIP\n  externalTrafficPolicy: null\n"
+        )
     path = ROOT / g["dir"] / "replicas.yaml"
     path.write_text("---\n".join(docs), encoding="utf-8")
     return path

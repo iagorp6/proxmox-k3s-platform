@@ -5,9 +5,9 @@ configs:
   cm:
     admin.enabled: true
     timeout.reconciliation: 180s
-    # Service LoadBalancer de jogo sem IP = jogo inativo (o ServiceLB do K3s só publica o IP
-    # com destinos prontos). Outros LoadBalancers sem IP continuam "Progressing".
-    # Conflito de porta real é coberto pelo alerta ServiceLBPortConflict.
+    # Service LoadBalancer de jogo sem IP = jogo subindo ou porta presa. Jogo parado vira ClusterIP
+    # (replicas.yaml do switch-game), então não passa por aqui. Outros LoadBalancers sem IP
+    # continuam "Progressing". Conflito de porta é coberto pelo alerta ServiceLBPortConflict.
     resource.customizations.health.Service: |
       hs = {}
       if obj.spec ~= nil and obj.spec.type == "LoadBalancer" then
