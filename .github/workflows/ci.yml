@@ -69,8 +69,22 @@ jobs:
     name: Kubernetes manifests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: read
+      attestations: read   # gh attestation verify da imagem do games-bot
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: games-bot image was built by this repo's workflow (provenance attestation)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # O digest do manifest precisa ter atestação assinada pelo games-bot-image.yml deste repo, no main:
+          # um digest colado à mão ou de outra origem reprova o PR antes de chegar ao cluster pelo autosync
+          image=$(grep -oE 'ghcr\.io/[^[:space:]]+/games-bot:[^[:space:]]+@sha256:[0-9a-f]{64}' k8s/platform/games-bot.yaml)
+          [ -n "$image" ] || { echo "ERRO: imagem do games-bot sem digest em k8s/platform/games-bot.yaml"; exit 1; }
+          gh attestation verify "oci://$image" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/games-bot-image.yml" \
+            --source-ref refs/heads/main
       - name: Install kubeconform, promtool e helm (versão fixa, SHA-256 conferido)
         run: |
           bash scripts/install-ci-tools.sh "$HOME/bin" kubeconform promtool helm

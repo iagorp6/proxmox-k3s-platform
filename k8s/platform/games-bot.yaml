@@ -65,7 +65,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: bot
-          image: ghcr.io/iagorp6/games-bot:53045187b4a5@sha256:e105623bce38f2dcf2a4e4d4bc94f660864ee5bd565ee751b9f2a69cae7fb193
+          image: ghcr.io/iagorp6/games-bot:67b84566b035@sha256:54a16e192cda70335790a8f9f6296b5127692bda48ec58381c655007ad813c9c
           env:
             - name: HOME           # cache do kubectl e config do git num volume gravável
               value: /work
