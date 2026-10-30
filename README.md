@@ -185,7 +185,6 @@ Project Zomboid, the first game, is in the catalog and on the same contract as t
 | Event | Discord message |
 |---|---|
 | Join | 🟢 *iago joined* · 3/6 online: iago, joao, maria (mentions an opt-in `@Zomboid` role) |
-| Leave | 🔴 *iago left* · session of 2h26m |
 | Character death | 💀 *iago died* · survived 34 in-game hours |
 | Playtime milestone | 🏆 *joao reached 50 hours on the server* |
 | Weekly summary | 📊 Hours played, ranking with medals, peak concurrency, deaths, availability |
@@ -221,8 +220,8 @@ The dashboard JSON is **generated** by `scripts/build-dashboard.py`, so it is re
 
 | Severity | Meaning | Repeat |
 |---|---|---|
-| `critical` | Act now (server down, disk failing, no backup in 26h) | every 2h |
-| `warning` | Act today (memory pressure, unexpected restart, reallocated sectors, OOMKilled container) | every 12h |
+| `critical` | Act now (server down, disk failing, no backup in 26h) | every 6h |
+| `warning` | Act today (memory pressure, unexpected restart, reallocated sectors, OOMKilled container) | every 24h |
 | `info` | Record only, never notifies (player events have their own route) | n/a |
 
 - **Every message carries a first-step action**, the command to run at 3 a.m.
@@ -279,7 +278,7 @@ Every push runs Terraform `fmt`/`validate`/`tflint` for both stacks, `terraform 
 - **Charts are checked before merge, which is when they deploy:** the observability, External Secrets and Argo CD charts only render in the cluster, so `scripts/check-charts.py` renders each one at its pinned version with the repository's values and validates the output, catching a broken value or an incompatible chart upgrade in the pull request.
 - **Alert rules are tested like code:** `promtool` validates every rule and runs unit tests with synthetic series (`k8s/monitoring/tests/`): a stopped game must not page, a missing backup must, and each alert must fire with the expected labels and text. A lint also fails the build if a `critical` or `warning` alert has no first-step action.
 - **The code that changes production is unit-tested:** stdlib `unittest`, no extra dependencies. The Discord bot's decisions (role check, players-online lock, cooldown, one-request queue with expiry, no two switches at once, switch steps) run against a minimal fake `discord` module; `switch-game.py` runs for real in a temporary Git repository with a local origin, checking the replica patches, the commit message, that only allowed paths are ever committed and every refusal; the daily health check is fed canned Prometheus answers, including a Prometheus outage that must become a message, never silence.
-- **Weekly drift detection:** `terraform-drift.yml` assumes a read-only AWS role via OIDC and runs `terraform plan` on `terraform-aws/`. It fails, and GitHub sends an e-mail, when AWS diverges from the code (a change made outside Terraform or a forgotten `apply`). The repository is public, so the job logs only the address and action of each changed resource, never values. The same run lists the access keys of the IAM users and fails when an active key is older than 180 days or a user has more than one key.
+- **Weekly drift detection:** `terraform-drift.yml` assumes a read-only AWS role via OIDC and runs `terraform plan` on `terraform-aws/`. It fails, and posts to the private `#ops` Discord channel, when AWS diverges from the code (a change made outside Terraform or a forgotten `apply`). The repository is public, so the job logs only the address and action of each changed resource, never values. The same run lists the access keys of the IAM users and fails when an active key is older than 180 days or a user has more than one key.
 - **Same checks locally:** `scripts/ci-local.sh` runs the identical checks on a clean copy of the tracked files (so local secrets cannot leak into the scan) and refuses to run if any tool fails a version smoke test.
 
 ---

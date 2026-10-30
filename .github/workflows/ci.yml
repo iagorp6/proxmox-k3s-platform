@@ -11,7 +11,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Só em PR: no main, um merge logo depois do outro deixava o commit anterior sem resultado (ou sem imagem)
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   terraform:
