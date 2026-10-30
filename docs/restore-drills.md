@@ -11,3 +11,7 @@ duration) stay in Prometheus: Grafana **GamesPlatform**, row **Restore drills**.
 
 | Date | Game | Snapshot | Snapshot age | Size | Files | restic | Total |
 |---|---|---|---|---|---|---|---|
+| 2026-10-30 | terraria | `486dca65` | 5 h | 47.2 MiB | 14 | 4 s | 19 s |
+| 2026-10-30 | valheim | `6a8ccaca` | 5 h | 680.0 KiB | 21 | 6 s | 19 s |
+| 2026-10-30 | minecraft | `7ab490ea` | 5 h | 1.3 GiB | 1181 | 169 s | 184 s |
+| 2026-10-30 | zomboid | `d610b2d4` | 5 h | 490.5 MiB | 107995 | 41 s | 56 s |
