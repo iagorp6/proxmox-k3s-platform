@@ -4,6 +4,7 @@
 Cada teste monta um repositório git temporário com um "origin" local e uma cópia do script em
 scripts/, e confere: passa no main igual ao origin; recusa em outro branch, com arquivo versionado
 modificado e com o main atrás do origin/main; deixa passar com FORCE=1, com arquivo não versionado,
+com só o docs/restore-drills.md modificado (só avisa),
 com commit local à frente (só avisa) e sem acesso ao origin (só avisa).
 Uso: python3 scripts/test-require-main.py
 """
@@ -37,6 +38,8 @@ class RequireMainTest(unittest.TestCase):
         (self.repo / "scripts").mkdir()
         shutil.copy(SCRIPT, self.repo / "scripts" / "require-main.sh")
         (self.repo / "Makefile").write_text("all:\n", encoding="utf-8")
+        (self.repo / "docs").mkdir()
+        (self.repo / "docs" / "restore-drills.md").write_text("| drill |\n", encoding="utf-8")
         git(self.repo, "add", ".")
         git(self.repo, "commit", "-q", "-m", "init")
         git(self.repo, "remote", "add", "origin", str(self.origin))
@@ -82,6 +85,17 @@ class RequireMainTest(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("Makefile", r.stderr)
         self.assertIn("não commitadas", r.stderr)
+
+    def test_recorded_drill_only_warns(self):
+        (self.repo / "docs" / "restore-drills.md").write_text("| drill |\n| terraria |\n", encoding="utf-8")
+        r = self.run_check()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("drills registrados sem commit", r.stderr)
+        (self.repo / "Makefile").write_text("mudado:\n", encoding="utf-8")
+        r = self.run_check()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("Makefile", r.stderr)
+        self.assertNotIn("restore-drills.md", r.stderr.split("ERRO")[0])
 
     def test_untracked_file_is_allowed(self):
         (self.repo / "values-local.yaml").write_text("x: 1\n", encoding="utf-8")
