@@ -61,7 +61,7 @@ data:
           "gridPos": {
             "x": 0,
             "y": 1,
-            "w": 4,
+            "w": 5,
             "h": 4
           },
           "targets": [
@@ -108,9 +108,9 @@ data:
             "uid": "${datasource}"
           },
           "gridPos": {
-            "x": 4,
+            "x": 5,
             "y": 1,
-            "w": 4,
+            "w": 5,
             "h": 4
           },
           "targets": [
@@ -176,9 +176,9 @@ data:
             "uid": "${datasource}"
           },
           "gridPos": {
-            "x": 8,
+            "x": 10,
             "y": 1,
-            "w": 4,
+            "w": 5,
             "h": 4
           },
           "targets": [
@@ -218,63 +218,6 @@ data:
         },
         {
           "type": "stat",
-          "title": "Disponibilidade (7 dias)",
-          "description": "% do tempo em que o jogo ativo respondeu nos últimos 7 dias. Trocas de jogo e o restart diário contam como indisponibilidade. O SLO oficial (28 dias, com error budget) fica na seção SLO.",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
-          "targets": [
-            {
-              "expr": "avg_over_time((max((max by (game) (game_up)) * on (game) (label_replace(max by (namespace) (kube_statefulset_replicas{namespace=~\"minecraft|terraria|valheim|zomboid\"}) > 0, \"game\", \"$1\", \"namespace\", \"(.+)\"))) or vector(0))[7d:5m])",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "red",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 0.95
-                  },
-                  {
-                    "color": "green",
-                    "value": 0.99
-                  }
-                ]
-              },
-              "unit": "percentunit",
-              "decimals": 2
-            },
-            "overrides": []
-          },
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none",
-            "textMode": "value",
-            "justifyMode": "center",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            }
-          },
-          "id": 5
-        },
-        {
-          "type": "stat",
           "title": "Backup mais antigo",
           "description": "Tempo desde o último backup bem-sucedido do jogo mais atrasado (restic → AWS S3, diário). Vermelho acima de 26h.",
           "datasource": {
@@ -282,9 +225,9 @@ data:
             "uid": "${datasource}"
           },
           "gridPos": {
-            "x": 16,
+            "x": 15,
             "y": 1,
-            "w": 4,
+            "w": 5,
             "h": 4
           },
           "targets": [
@@ -327,7 +270,7 @@ data:
               ]
             }
           },
-          "id": 6
+          "id": 5
         },
         {
           "type": "stat",
@@ -391,7 +334,7 @@ data:
               ]
             }
           },
-          "id": 7
+          "id": 6
         },
         {
           "type": "state-timeline",
@@ -472,7 +415,7 @@ data:
               {
                 "matcher": {
                   "id": "byRegexp",
-                  "options": "^(zomboid|terraria|minecraft)$"
+                  "options": "^(minecraft|terraria|valheim|zomboid)$"
                 },
                 "properties": [
                   {
@@ -512,11 +455,11 @@ data:
               "mode": "single"
             }
           },
-          "id": 8
+          "id": 7
         },
         {
           "type": "row",
-          "title": "SLO: 99% do tempo no ar em 28 dias",
+          "title": "Jogadores",
           "collapsed": false,
           "gridPos": {
             "x": 0,
@@ -525,530 +468,7 @@ data:
             "h": 1
           },
           "panels": [],
-          "id": 9
-        },
-        {
-          "type": "stat",
-          "title": "Disponibilidade (28 dias)",
-          "description": "SLI do SLO: fração do tempo em que o jogo ativo respondeu ao exporter. Trocas, restart diário e reboot de patch contam como fora. Meta: 99%.",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 11,
-            "w": 6,
-            "h": 6
-          },
-          "targets": [
-            {
-              "expr": "1 - game_slo:unavailable:ratio_avg28d",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "red",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 0.99
-                  },
-                  {
-                    "color": "green",
-                    "value": 0.995
-                  }
-                ]
-              },
-              "unit": "percentunit",
-              "decimals": 2
-            },
-            "overrides": []
-          },
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none",
-            "textMode": "value",
-            "justifyMode": "center",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            }
-          },
-          "id": 10
-        },
-        {
-          "type": "stat",
-          "title": "Error budget restante",
-          "description": "Quanto sobra dos 1% de indisponibilidade permitidos em 28 dias (6h43min). Abaixo de 0, a política de docs/slo.md congela mudanças de risco no jogo.",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "gridPos": {
-            "x": 6,
-            "y": 11,
-            "w": 6,
-            "h": 6
-          },
-          "targets": [
-            {
-              "expr": "1 - game_slo:unavailable:ratio_avg28d / 0.01",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "red",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 0
-                  },
-                  {
-                    "color": "green",
-                    "value": 0.25
-                  }
-                ]
-              },
-              "unit": "percentunit",
-              "decimals": 0
-            },
-            "overrides": []
-          },
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none",
-            "textMode": "value",
-            "justifyMode": "center",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            }
-          },
-          "id": 11
-        },
-        {
-          "type": "timeseries",
-          "title": "Burn rate do error budget",
-          "description": "Velocidade de consumo do budget: 1 = acaba em exatos 28 dias. GameSLOBurnRateHigh: acima de 6 em 6h e 30min. GameSLOBurnRateSlow: acima de 1 em 3 dias e 6h.",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 11,
-            "w": 12,
-            "h": 6
-          },
-          "targets": [
-            {
-              "expr": "game_slo:burn_rate:avg30m",
-              "refId": "A",
-              "legendFormat": "30 min"
-            },
-            {
-              "expr": "game_slo:burn_rate:avg6h",
-              "refId": "B",
-              "legendFormat": "6 h"
-            },
-            {
-              "expr": "game_slo:burn_rate:avg3d",
-              "refId": "C",
-              "legendFormat": "3 dias"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "min": 0,
-              "decimals": 1,
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 1
-                  },
-                  {
-                    "color": "red",
-                    "value": 6
-                  }
-                ]
-              },
-              "custom": {
-                "fillOpacity": 10,
-                "lineWidth": 2,
-                "thresholdsStyle": {
-                  "mode": "dashed"
-                }
-              }
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          },
-          "id": 12
-        },
-        {
-          "type": "row",
-          "title": "Restore drills",
-          "collapsed": false,
-          "gridPos": {
-            "x": 0,
-            "y": 17,
-            "w": 24,
-            "h": 1
-          },
-          "panels": [],
-          "id": 13
-        },
-        {
-          "type": "stat",
-          "title": "Último restore testado",
-          "description": "Tempo desde o último restore drill que passou em cada jogo (mensal automático ou make restore-drill). Acima de 35 dias dispara o RestoreDrillStale.",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 18,
-            "w": 8,
-            "h": 6
-          },
-          "targets": [
-            {
-              "expr": "min by (namespace) (time() - max by (namespace) (last_over_time(kube_job_status_completion_time{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d])) or time() - max by (namespace) (kube_cronjob_status_last_successful_time{cronjob=~\".+-restore-drill\"}))",
-              "refId": "A",
-              "legendFormat": "{{namespace}}"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 2592000
-                  },
-                  {
-                    "color": "red",
-                    "value": 3024000
-                  }
-                ]
-              },
-              "unit": "dtdurations",
-              "noValue": "nenhum drill ainda"
-            },
-            "overrides": []
-          },
-          "options": {
-            "colorMode": "background",
-            "graphMode": "none",
-            "textMode": "value",
-            "justifyMode": "center",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            }
-          },
-          "id": 14
-        },
-        {
-          "type": "table",
-          "title": "Restore drills (30 dias)",
-          "description": "Cada execução do drill: restaura o último snapshot do S3 num volume temporário e confere os arquivos do catálogo. Duração = do início do Job ao mundo conferido.",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "gridPos": {
-            "x": 8,
-            "y": 18,
-            "w": 16,
-            "h": 6
-          },
-          "targets": [
-            {
-              "expr": "max by (namespace, job_name) (last_over_time(kube_job_status_succeeded{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d]))",
-              "refId": "A",
-              "instant": true,
-              "format": "table"
-            },
-            {
-              "expr": "max by (namespace, job_name) (last_over_time(kube_job_status_completion_time{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d]) - last_over_time(kube_job_status_start_time{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d]))",
-              "refId": "B",
-              "instant": true,
-              "format": "table"
-            },
-            {
-              "expr": "max by (namespace, job_name) (last_over_time(kube_job_status_start_time{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d])) * 1000",
-              "refId": "C",
-              "instant": true,
-              "format": "table"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "noValue": "Nenhum drill nos últimos 30 dias"
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Resultado"
-                },
-                "properties": [
-                  {
-                    "id": "mappings",
-                    "value": [
-                      {
-                        "type": "value",
-                        "options": {
-                          "0": {
-                            "text": "FALHOU",
-                            "color": "red",
-                            "index": 0
-                          },
-                          "1": {
-                            "text": "OK",
-                            "color": "green",
-                            "index": 1
-                          }
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "id": "custom.cellOptions",
-                    "value": {
-                      "type": "color-background"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Duração"
-                },
-                "properties": [
-                  {
-                    "id": "unit",
-                    "value": "s"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Início"
-                },
-                "properties": [
-                  {
-                    "id": "unit",
-                    "value": "dateTimeAsLocal"
-                  }
-                ]
-              }
-            ]
-          },
-          "transformations": [
-            {
-              "id": "merge",
-              "options": {}
-            },
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "Time": true
-                },
-                "indexByName": {
-                  "namespace": 0,
-                  "Value #C": 1,
-                  "Value #A": 2,
-                  "Value #B": 3,
-                  "job_name": 4
-                },
-                "renameByName": {
-                  "namespace": "Jogo",
-                  "job_name": "Job",
-                  "Value #A": "Resultado",
-                  "Value #B": "Duração",
-                  "Value #C": "Início"
-                }
-              }
-            },
-            {
-              "id": "sortBy",
-              "options": {
-                "sort": [
-                  {
-                    "field": "Início",
-                    "desc": true
-                  }
-                ]
-              }
-            }
-          ],
-          "options": {
-            "showHeader": true
-          },
-          "id": 15
-        },
-        {
-          "type": "row",
-          "title": "Jogadores",
-          "collapsed": false,
-          "gridPos": {
-            "x": 0,
-            "y": 24,
-            "w": 24,
-            "h": 1
-          },
-          "panels": [],
-          "id": 16
-        },
-        {
-          "type": "table",
-          "title": "Online agora",
-          "description": "Quem está conectado neste momento e quanto jogou nas últimas 24h.",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 25,
-            "w": 8,
-            "h": 8
-          },
-          "targets": [
-            {
-              "expr": "(sum by (game, player) (count_over_time(game_player_online[24h])) * 30) and on (game, player) (max by (game, player) (game_player_online))",
-              "refId": "A",
-              "instant": true,
-              "format": "table"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "dtdurations",
-              "noValue": "Ninguém online agora"
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Jogo"
-                },
-                "properties": [
-                  {
-                    "id": "unit",
-                    "value": "string"
-                  },
-                  {
-                    "id": "mappings",
-                    "value": [
-                      {
-                        "type": "value",
-                        "options": {
-                          "minecraft": {
-                            "text": "Minecraft",
-                            "color": "text",
-                            "index": 0
-                          },
-                          "terraria": {
-                            "text": "Terraria",
-                            "color": "text",
-                            "index": 1
-                          },
-                          "valheim": {
-                            "text": "Valheim",
-                            "color": "text",
-                            "index": 2
-                          },
-                          "zomboid": {
-                            "text": "Project Zomboid",
-                            "color": "text",
-                            "index": 3
-                          }
-                        }
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Jogador"
-                },
-                "properties": [
-                  {
-                    "id": "unit",
-                    "value": "string"
-                  }
-                ]
-              }
-            ]
-          },
-          "transformations": [
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {
-                  "Time": true
-                },
-                "indexByName": {
-                  "game": 0,
-                  "player": 1,
-                  "Value": 2
-                },
-                "renameByName": {
-                  "game": "Jogo",
-                  "player": "Jogador",
-                  "Value": "Jogou nas últimas 24h"
-                }
-              }
-            }
-          ],
-          "options": {
-            "showHeader": true
-          },
-          "id": 17
+          "id": 8
         },
         {
           "type": "timeseries",
@@ -1059,9 +479,9 @@ data:
             "uid": "${datasource}"
           },
           "gridPos": {
-            "x": 8,
-            "y": 25,
-            "w": 16,
+            "x": 0,
+            "y": 11,
+            "w": 24,
             "h": 8
           },
           "targets": [
@@ -1109,7 +529,7 @@ data:
               "mode": "multi"
             }
           },
-          "id": 18
+          "id": 9
         },
         {
           "type": "state-timeline",
@@ -1121,7 +541,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 33,
+            "y": 19,
             "w": 24,
             "h": 7
           },
@@ -1174,7 +594,7 @@ data:
               "mode": "single"
             }
           },
-          "id": 19
+          "id": 10
         },
         {
           "type": "table",
@@ -1186,7 +606,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 40,
+            "y": 26,
             "w": 24,
             "h": 9
           },
@@ -1400,7 +820,7 @@ data:
               }
             ]
           },
-          "id": 20
+          "id": 11
         },
         {
           "type": "row",
@@ -1408,12 +828,12 @@ data:
           "collapsed": false,
           "gridPos": {
             "x": 0,
-            "y": 49,
+            "y": 35,
             "w": 24,
             "h": 1
           },
           "panels": [],
-          "id": 21
+          "id": 12
         },
         {
           "type": "timeseries",
@@ -1425,7 +845,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 50,
+            "y": 36,
             "w": 10,
             "h": 8
           },
@@ -1491,7 +911,7 @@ data:
               "mode": "multi"
             }
           },
-          "id": 22
+          "id": 13
         },
         {
           "type": "timeseries",
@@ -1503,7 +923,7 @@ data:
           },
           "gridPos": {
             "x": 10,
-            "y": 50,
+            "y": 36,
             "w": 10,
             "h": 8
           },
@@ -1553,7 +973,7 @@ data:
               "mode": "multi"
             }
           },
-          "id": 23
+          "id": 14
         },
         {
           "type": "stat",
@@ -1565,7 +985,7 @@ data:
           },
           "gridPos": {
             "x": 20,
-            "y": 50,
+            "y": 36,
             "w": 4,
             "h": 8
           },
@@ -1621,7 +1041,423 @@ data:
               ]
             }
           },
-          "id": 24
+          "id": 15
+        },
+        {
+          "type": "row",
+          "title": "SLO: 99% do tempo no ar em 28 dias",
+          "collapsed": true,
+          "gridPos": {
+            "x": 0,
+            "y": 44,
+            "w": 24,
+            "h": 1
+          },
+          "panels": [
+            {
+              "type": "stat",
+              "title": "Disponibilidade (28 dias)",
+              "description": "SLI do SLO: fração do tempo em que o jogo ativo respondeu ao exporter. Trocas, restart diário e reboot de patch contam como fora. Meta: 99%.",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 45,
+                "w": 6,
+                "h": 6
+              },
+              "targets": [
+                {
+                  "expr": "1 - game_slo:unavailable:ratio_avg28d",
+                  "refId": "A"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "red",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.99
+                      },
+                      {
+                        "color": "green",
+                        "value": 0.995
+                      }
+                    ]
+                  },
+                  "unit": "percentunit",
+                  "decimals": 2
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                }
+              },
+              "id": 17
+            },
+            {
+              "type": "stat",
+              "title": "Error budget restante",
+              "description": "Quanto sobra dos 1% de indisponibilidade permitidos em 28 dias (6h43min). Abaixo de 0, a política de docs/slo.md congela mudanças de risco no jogo.",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 6,
+                "y": 45,
+                "w": 6,
+                "h": 6
+              },
+              "targets": [
+                {
+                  "expr": "1 - game_slo:unavailable:ratio_avg28d / 0.01",
+                  "refId": "A"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "red",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0
+                      },
+                      {
+                        "color": "green",
+                        "value": 0.25
+                      }
+                    ]
+                  },
+                  "unit": "percentunit",
+                  "decimals": 0
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                }
+              },
+              "id": 18
+            },
+            {
+              "type": "timeseries",
+              "title": "Burn rate do error budget",
+              "description": "Velocidade de consumo do budget: 1 = acaba em exatos 28 dias. GameSLOBurnRateHigh: acima de 6 em 6h e 30min. GameSLOBurnRateSlow: acima de 1 em 3 dias e 6h.",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 45,
+                "w": 12,
+                "h": 6
+              },
+              "targets": [
+                {
+                  "expr": "game_slo:burn_rate:avg30m",
+                  "refId": "A",
+                  "legendFormat": "30 min"
+                },
+                {
+                  "expr": "game_slo:burn_rate:avg6h",
+                  "refId": "B",
+                  "legendFormat": "6 h"
+                },
+                {
+                  "expr": "game_slo:burn_rate:avg3d",
+                  "refId": "C",
+                  "legendFormat": "3 dias"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "min": 0,
+                  "decimals": 1,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 1
+                      },
+                      {
+                        "color": "red",
+                        "value": 6
+                      }
+                    ]
+                  },
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "thresholdsStyle": {
+                      "mode": "dashed"
+                    }
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              },
+              "id": 19
+            }
+          ],
+          "id": 16
+        },
+        {
+          "type": "row",
+          "title": "Restore drills",
+          "collapsed": true,
+          "gridPos": {
+            "x": 0,
+            "y": 45,
+            "w": 24,
+            "h": 1
+          },
+          "panels": [
+            {
+              "type": "stat",
+              "title": "Último restore testado",
+              "description": "Tempo desde o último restore drill que passou em cada jogo (mensal automático ou make restore-drill). Acima de 35 dias dispara o RestoreDrillStale.",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 46,
+                "w": 8,
+                "h": 6
+              },
+              "targets": [
+                {
+                  "expr": "min by (namespace) (time() - max by (namespace) (last_over_time(kube_job_status_completion_time{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d])) or time() - max by (namespace) (kube_cronjob_status_last_successful_time{cronjob=~\".+-restore-drill\"}))",
+                  "refId": "A",
+                  "legendFormat": "{{namespace}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 2592000
+                      },
+                      {
+                        "color": "red",
+                        "value": 3024000
+                      }
+                    ]
+                  },
+                  "unit": "dtdurations",
+                  "noValue": "nenhum drill ainda"
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                }
+              },
+              "id": 21
+            },
+            {
+              "type": "table",
+              "title": "Restore drills (30 dias)",
+              "description": "Cada execução do drill: restaura o último snapshot do S3 num volume temporário e confere os arquivos do catálogo. Duração = do início do Job ao mundo conferido.",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "gridPos": {
+                "x": 8,
+                "y": 46,
+                "w": 16,
+                "h": 6
+              },
+              "targets": [
+                {
+                  "expr": "max by (namespace, job_name) (last_over_time(kube_job_status_succeeded{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d]))",
+                  "refId": "A",
+                  "instant": true,
+                  "format": "table"
+                },
+                {
+                  "expr": "max by (namespace, job_name) (last_over_time(kube_job_status_completion_time{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d]) - last_over_time(kube_job_status_start_time{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d]))",
+                  "refId": "B",
+                  "instant": true,
+                  "format": "table"
+                },
+                {
+                  "expr": "max by (namespace, job_name) (last_over_time(kube_job_status_start_time{job_name=~\".+-restore-drill(-[0-9]+)?\"}[30d])) * 1000",
+                  "refId": "C",
+                  "instant": true,
+                  "format": "table"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "Nenhum drill nos últimos 30 dias"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Resultado"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "0": {
+                                "text": "FALHOU",
+                                "color": "red",
+                                "index": 0
+                              },
+                              "1": {
+                                "text": "OK",
+                                "color": "green",
+                                "index": 1
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Duração"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "s"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Início"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsLocal"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "transformations": [
+                {
+                  "id": "merge",
+                  "options": {}
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true
+                    },
+                    "indexByName": {
+                      "namespace": 0,
+                      "Value #C": 1,
+                      "Value #A": 2,
+                      "Value #B": 3,
+                      "job_name": 4
+                    },
+                    "renameByName": {
+                      "namespace": "Jogo",
+                      "job_name": "Job",
+                      "Value #A": "Resultado",
+                      "Value #B": "Duração",
+                      "Value #C": "Início"
+                    }
+                  }
+                },
+                {
+                  "id": "sortBy",
+                  "options": {
+                    "sort": [
+                      {
+                        "field": "Início",
+                        "desc": true
+                      }
+                    ]
+                  }
+                }
+              ],
+              "options": {
+                "showHeader": true
+              },
+              "id": 22
+            }
+          ],
+          "id": 20
         },
         {
           "type": "row",
@@ -1629,7 +1465,7 @@ data:
           "collapsed": true,
           "gridPos": {
             "x": 0,
-            "y": 58,
+            "y": 46,
             "w": 24,
             "h": 1
           },
@@ -1644,7 +1480,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 59,
+                "y": 47,
                 "w": 4,
                 "h": 4
               },
@@ -1701,7 +1537,7 @@ data:
                   ]
                 }
               },
-              "id": 26
+              "id": 24
             },
             {
               "type": "stat",
@@ -1713,7 +1549,7 @@ data:
               },
               "gridPos": {
                 "x": 4,
-                "y": 59,
+                "y": 47,
                 "w": 4,
                 "h": 4
               },
@@ -1770,7 +1606,7 @@ data:
                   ]
                 }
               },
-              "id": 27
+              "id": 25
             },
             {
               "type": "stat",
@@ -1782,7 +1618,7 @@ data:
               },
               "gridPos": {
                 "x": 8,
-                "y": 59,
+                "y": 47,
                 "w": 4,
                 "h": 4
               },
@@ -1839,7 +1675,7 @@ data:
                   ]
                 }
               },
-              "id": 28
+              "id": 26
             },
             {
               "type": "stat",
@@ -1851,7 +1687,7 @@ data:
               },
               "gridPos": {
                 "x": 12,
-                "y": 59,
+                "y": 47,
                 "w": 4,
                 "h": 4
               },
@@ -1896,7 +1732,7 @@ data:
                   ]
                 }
               },
-              "id": 29
+              "id": 27
             },
             {
               "type": "stat",
@@ -1908,7 +1744,7 @@ data:
               },
               "gridPos": {
                 "x": 16,
-                "y": 59,
+                "y": 47,
                 "w": 4,
                 "h": 4
               },
@@ -1954,7 +1790,7 @@ data:
                   ]
                 }
               },
-              "id": 30
+              "id": 28
             },
             {
               "type": "stat",
@@ -1966,7 +1802,7 @@ data:
               },
               "gridPos": {
                 "x": 20,
-                "y": 59,
+                "y": 47,
                 "w": 4,
                 "h": 4
               },
@@ -2012,7 +1848,7 @@ data:
                   ]
                 }
               },
-              "id": 31
+              "id": 29
             },
             {
               "type": "timeseries",
@@ -2024,7 +1860,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 63,
+                "y": 51,
                 "w": 8,
                 "h": 7
               },
@@ -2056,7 +1892,7 @@ data:
                   "mode": "multi"
                 }
               },
-              "id": 32
+              "id": 30
             },
             {
               "type": "timeseries",
@@ -2068,7 +1904,7 @@ data:
               },
               "gridPos": {
                 "x": 8,
-                "y": 63,
+                "y": 51,
                 "w": 8,
                 "h": 7
               },
@@ -2104,7 +1940,7 @@ data:
                   "mode": "multi"
                 }
               },
-              "id": 33
+              "id": 31
             },
             {
               "type": "timeseries",
@@ -2116,7 +1952,7 @@ data:
               },
               "gridPos": {
                 "x": 16,
-                "y": 63,
+                "y": 51,
                 "w": 8,
                 "h": 7
               },
@@ -2147,181 +1983,7 @@ data:
                   "mode": "multi"
                 }
               },
-              "id": 34
-            },
-            {
-              "type": "stat",
-              "title": "Pico de ocupação (p99, 7 dias)",
-              "description": "Maior p99 de ocupação entre os discos na última semana. Abaixo de 50%, o disco não é gargalo.",
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-              },
-              "gridPos": {
-                "x": 0,
-                "y": 70,
-                "w": 8,
-                "h": 4
-              },
-              "targets": [
-                {
-                  "expr": "max(quantile_over_time(0.99, max by (device) (rate(node_disk_io_time_seconds_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]))[7d:5m]))",
-                  "refId": "A"
-                }
-              ],
-              "fieldConfig": {
-                "defaults": {
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": null
-                      },
-                      {
-                        "color": "orange",
-                        "value": 0.5
-                      },
-                      {
-                        "color": "red",
-                        "value": 0.8
-                      }
-                    ]
-                  },
-                  "unit": "percentunit",
-                  "decimals": 0,
-                  "noValue": "sem dados"
-                },
-                "overrides": []
-              },
-              "options": {
-                "colorMode": "background",
-                "graphMode": "none",
-                "textMode": "value",
-                "justifyMode": "center",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ]
-                }
-              },
-              "id": 35
-            },
-            {
-              "type": "stat",
-              "title": "Escritas por disco (p99, 7 dias)",
-              "description": "IOPS de escrita do disco mais carregado. Um HDD de 7200 rpm aguenta uns 100 a 150 IOPS aleatórios.",
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-              },
-              "gridPos": {
-                "x": 8,
-                "y": 70,
-                "w": 8,
-                "h": 4
-              },
-              "targets": [
-                {
-                  "expr": "max(quantile_over_time(0.99, max by (device) (rate(node_disk_writes_completed_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]))[7d:5m]))",
-                  "refId": "A"
-                }
-              ],
-              "fieldConfig": {
-                "defaults": {
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": null
-                      },
-                      {
-                        "color": "orange",
-                        "value": 75
-                      },
-                      {
-                        "color": "red",
-                        "value": 120
-                      }
-                    ]
-                  },
-                  "unit": "iops",
-                  "decimals": 0,
-                  "noValue": "sem dados"
-                },
-                "overrides": []
-              },
-              "options": {
-                "colorMode": "background",
-                "graphMode": "none",
-                "textMode": "value",
-                "justifyMode": "center",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ]
-                }
-              },
-              "id": 36
-            },
-            {
-              "type": "stat",
-              "title": "Vazão de escrita por disco (p99, 7 dias)",
-              "description": "Bytes escritos por segundo no disco mais carregado. Um HDD sustenta uns 150 MB/s sequenciais.",
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-              },
-              "gridPos": {
-                "x": 16,
-                "y": 70,
-                "w": 8,
-                "h": 4
-              },
-              "targets": [
-                {
-                  "expr": "max(quantile_over_time(0.99, max by (device) (rate(node_disk_written_bytes_total{job=\"proxmox-node\",device=~\"sd[a-z]+\"}[5m]))[7d:5m]))",
-                  "refId": "A"
-                }
-              ],
-              "fieldConfig": {
-                "defaults": {
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": null
-                      },
-                      {
-                        "color": "orange",
-                        "value": 75000000.0
-                      },
-                      {
-                        "color": "red",
-                        "value": 120000000.0
-                      }
-                    ]
-                  },
-                  "unit": "Bps",
-                  "decimals": 1,
-                  "noValue": "sem dados"
-                },
-                "overrides": []
-              },
-              "options": {
-                "colorMode": "background",
-                "graphMode": "none",
-                "textMode": "value",
-                "justifyMode": "center",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ]
-                }
-              },
-              "id": 37
+              "id": 32
             },
             {
               "type": "stat",
@@ -2333,7 +1995,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 74,
+                "y": 58,
                 "w": 12,
                 "h": 4
               },
@@ -2390,7 +2052,7 @@ data:
                   ]
                 }
               },
-              "id": 38
+              "id": 33
             },
             {
               "type": "stat",
@@ -2402,7 +2064,7 @@ data:
               },
               "gridPos": {
                 "x": 12,
-                "y": 74,
+                "y": 58,
                 "w": 12,
                 "h": 4
               },
@@ -2448,161 +2110,10 @@ data:
                   ]
                 }
               },
-              "id": 39
-            },
-            {
-              "type": "table",
-              "title": "Benchmark dos discos (fio)",
-              "description": "Resultado de ansible-playbook playbooks/disk-bench.yml, uma linha por teste e layout do pool. O layout=stripe é de antes da conversão para mirror (26/10/2026).",
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${datasource}"
-              },
-              "gridPos": {
-                "x": 0,
-                "y": 78,
-                "w": 24,
-                "h": 6
-              },
-              "targets": [
-                {
-                  "expr": "homelab_disk_bench_iops",
-                  "refId": "A",
-                  "instant": true,
-                  "format": "table"
-                },
-                {
-                  "expr": "homelab_disk_bench_bytes_per_second",
-                  "refId": "B",
-                  "instant": true,
-                  "format": "table"
-                },
-                {
-                  "expr": "homelab_disk_bench_latency_p99_seconds",
-                  "refId": "C",
-                  "instant": true,
-                  "format": "table"
-                },
-                {
-                  "expr": "homelab_disk_bench_timestamp_seconds * 1000",
-                  "refId": "D",
-                  "instant": true,
-                  "format": "table"
-                }
-              ],
-              "fieldConfig": {
-                "defaults": {
-                  "noValue": "Ainda não rodou"
-                },
-                "overrides": [
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "IOPS"
-                    },
-                    "properties": [
-                      {
-                        "id": "unit",
-                        "value": "iops"
-                      },
-                      {
-                        "id": "decimals",
-                        "value": 0
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "Vazão"
-                    },
-                    "properties": [
-                      {
-                        "id": "unit",
-                        "value": "Bps"
-                      },
-                      {
-                        "id": "decimals",
-                        "value": 1
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "Latência p99"
-                    },
-                    "properties": [
-                      {
-                        "id": "unit",
-                        "value": "s"
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "Medido em"
-                    },
-                    "properties": [
-                      {
-                        "id": "unit",
-                        "value": "dateTimeAsLocal"
-                      }
-                    ]
-                  }
-                ]
-              },
-              "transformations": [
-                {
-                  "id": "merge",
-                  "options": {}
-                },
-                {
-                  "id": "organize",
-                  "options": {
-                    "excludeByName": {
-                      "Time": true,
-                      "__name__": true,
-                      "instance": true,
-                      "job": true
-                    },
-                    "indexByName": {
-                      "test": 0,
-                      "layout": 1,
-                      "Value #A": 2,
-                      "Value #B": 3,
-                      "Value #C": 4,
-                      "Value #D": 5
-                    },
-                    "renameByName": {
-                      "test": "Teste",
-                      "layout": "Pool",
-                      "Value #A": "IOPS",
-                      "Value #B": "Vazão",
-                      "Value #C": "Latência p99",
-                      "Value #D": "Medido em"
-                    }
-                  }
-                },
-                {
-                  "id": "sortBy",
-                  "options": {
-                    "sort": [
-                      {
-                        "field": "Teste"
-                      }
-                    ]
-                  }
-                }
-              ],
-              "options": {
-                "showHeader": true
-              },
-              "id": 40
+              "id": 34
             }
           ],
-          "id": 25
+          "id": 23
         },
         {
           "type": "row",
@@ -2610,7 +2121,7 @@ data:
           "collapsed": true,
           "gridPos": {
             "x": 0,
-            "y": 59,
+            "y": 47,
             "w": 24,
             "h": 1
           },
@@ -2625,7 +2136,7 @@ data:
               },
               "gridPos": {
                 "x": 0,
-                "y": 60,
+                "y": 48,
                 "w": 24,
                 "h": 5
               },
@@ -2660,35 +2171,7 @@ data:
                   }
                 }
               ],
-              "id": 42
-            },
-            {
-              "type": "logs",
-              "title": "Entradas e saídas de jogadores",
-              "description": "Linhas dos logs dos servidores sobre conexões.",
-              "datasource": {
-                "type": "loki",
-                "uid": "loki"
-              },
-              "gridPos": {
-                "x": 0,
-                "y": 65,
-                "w": 12,
-                "h": 10
-              },
-              "targets": [
-                {
-                  "expr": "{namespace=~\"minecraft|terraria|valheim|zomboid\", container=\"server\"} |~ \"(?i)(connected|disconnect|logged|has joined|has left)\"",
-                  "refId": "A"
-                }
-              ],
-              "options": {
-                "showTime": true,
-                "wrapLogMessage": true,
-                "sortOrder": "Descending",
-                "enableLogDetails": true
-              },
-              "id": 43
+              "id": 36
             },
             {
               "type": "logs",
@@ -2699,9 +2182,9 @@ data:
                 "uid": "loki"
               },
               "gridPos": {
-                "x": 12,
-                "y": 65,
-                "w": 12,
+                "x": 0,
+                "y": 53,
+                "w": 24,
                 "h": 10
               },
               "targets": [
@@ -2716,10 +2199,10 @@ data:
                 "sortOrder": "Descending",
                 "enableLogDetails": true
               },
-              "id": 44
+              "id": 37
             }
           ],
-          "id": 41
+          "id": 35
         }
       ]
     }

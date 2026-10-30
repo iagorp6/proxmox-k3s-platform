@@ -201,14 +201,17 @@ Joins (the role is pinged only for whoever opens the server) and the weekly summ
 
 ## Observability
 
-The **GamesPlatform** dashboard covers every game on the platform and reads top to bottom, from "is it up?" to "why?":
+The **GamesPlatform** dashboard covers every game on the platform and is Grafana's home page. The first screen answers "is it up, and who is playing?"; everything else sits in collapsed rows:
 
-- **Now:** server status, players online, 7-day availability, uptime, last backup, active alerts, and an availability strip showing every outage in the period.
-- **SLO:** 28-day availability against the 99% objective, error budget left and burn rate over 30 minutes, 6 hours and 3 days ([docs/slo.md](docs/slo.md)).
-- **Players:** who is online now, players over time, a per-player session timeline, and a table with playtime (24h, 7d, 30d, all time), deaths and last seen.
+- **Now:** active game, server status, players online, oldest backup, active alerts, and an availability strip showing every outage in the period.
+- **Players:** players over time, a per-player session timeline, and a table with playtime (24h, 7d, 30d, all time), deaths and last seen.
 - **Game server resources:** memory against the container limit, CPU against the VM's vCPUs, unexpected restarts.
-- **Host hardware** (collapsed): SMART, ZFS pool, ECC errors, disk temperature, free space, host RAM, plus disk load (busy time, IOPS, write latency, 7-day p99 of the busiest disk) and the results of `playbooks/disk-bench.yml` (fio, one row per test and pool layout: the old stripe and the current mirror).
-- **Logs and alerts** (collapsed): connection logs, warnings and errors, firing alerts.
+- **SLO** (collapsed): 28-day availability against the 99% objective, error budget left and burn rate over 30 minutes, 6 hours and 3 days ([docs/slo.md](docs/slo.md)).
+- **Restore drills** (collapsed): age of the last passing drill per game and every run in the last 30 days.
+- **Host hardware** (collapsed): SMART, ZFS pool, ECC errors, disk temperature, free space, host RAM, disk load (busy time, IOPS, write latency), ZFS errors and last scrub.
+- **Logs and alerts** (collapsed): firing alerts, server warnings and errors.
+
+The ~25 dashboards that ship with kube-prometheus-stack live in a separate **Kubernetes** folder, out of the way.
 
 The dashboard JSON is **generated** by `scripts/build-dashboard.py`, so it is reviewable in a pull request; CI fails if the committed YAML drifts from the generator.
 
