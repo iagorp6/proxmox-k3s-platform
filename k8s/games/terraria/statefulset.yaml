@@ -95,7 +95,7 @@ spec:
                 -worldname "${WORLD_NAME}" -difficulty "${WORLD_DIFFICULTY}" \
                 -maxplayers 6 -port 7777 -lang 8 <&3
           env:
-            - name: WORLD_NAME
+            - name: WORLD_NAME          # nome do arquivo do mundo: trocar cria um mundo novo (o antigo fica em /worlds)
               value: AsunBoid
             - name: WORLD_SIZE          # 1 pequeno, 2 médio, 3 grande
               value: "3"

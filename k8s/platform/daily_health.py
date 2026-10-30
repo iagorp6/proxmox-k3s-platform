@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 PROM = os.getenv("PROMETHEUS_URL", "http://kps-kube-prometheus-stack-prometheus.monitoring.svc:9090")
 WEBHOOK = os.environ["DISCORD_WEBHOOK_URL"]
 BRT = timezone(timedelta(hours=-3))
-UA = {"User-Agent": "AsunBoid-DailyHealth/1.0"}
+UA = {"User-Agent": "GamesPlatform-DailyHealth/1.0"}
 GAMES_FILE = os.getenv("GAMES_FILE", "/app/games.json")
 try:
     with open(GAMES_FILE, encoding="utf-8") as f:
@@ -155,9 +155,9 @@ def payload():
             title, color = f"⚠️ {len(problems)} ponto(s) de atenção", 0xFEE75C
             desc = "\n".join(f"• {p}" for p in problems)
         else:
-            title, color, desc = "✅ Tudo OK no AsunBoid", 0x57F287, "Nenhum alerta, jogo no ar, backup em dia."
+            title, color, desc = "✅ Tudo OK no GamesPlatform", 0x57F287, "Nenhum alerta, jogo no ar, backup em dia."
     return {
-        "username": "AsunBoid",
+        "username": "GamesPlatform",
         "embeds": [{
             "title": title,
             "description": desc,

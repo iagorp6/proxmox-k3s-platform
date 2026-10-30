@@ -1,5 +1,5 @@
 <#
-  Instalador do cliente COBBLEVERSE (servidor AsunBoid)
+  Instalador do cliente COBBLEVERSE (servidor GamesPlatform)
 
   O que faz:
     1. Baixa do Modrinth o modpack COBBLEVERSE na MESMA versao do servidor.
@@ -36,7 +36,7 @@ $PinnedVersion = '4SKGla61'
 $Project   = 'cobbleverse'
 $McVersion = '1.21.1'
 $Loader    = 'fabric'
-$UserAgent = 'asunboid-cobbleverse-installer/1.0'
+$UserAgent = 'gamesplatform-cobbleverse-installer/1.0'
 $KeepIfExists = @('options.txt', 'servers.dat')   # nao sobrescreve ajustes do jogador
 
 $ErrorActionPreference = 'Stop'
@@ -88,7 +88,7 @@ function Save-File([string[]]$Urls, [string]$Dest, [string]$Sha512, [string]$Tmp
 }
 
 try {
-    Write-Host 'Instalador COBBLEVERSE - AsunBoid' -ForegroundColor Green
+    Write-Host 'Instalador COBBLEVERSE - GamesPlatform' -ForegroundColor Green
 
     # ---------------- versao do modpack ----------------
     Write-Step 'Consultando versoes no Modrinth'

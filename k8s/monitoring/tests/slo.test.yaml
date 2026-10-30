@@ -90,7 +90,7 @@ tests:
             exp_annotations:
               summary: "Disponibilidade do jogo abaixo da meta nos últimos 3 dias"
               description: "Mais de 1% dos últimos 3 dias sem o jogo ativo respondendo. Não é urgente, mas o budget de 28 dias vai acabar se o ritmo continuar: quedas curtas e repetidas, troca de jogo demorando ou restart lento."
-              action: "No Grafana, painel SLO do dashboard AsunBoid: ver na linha do tempo quando o jogo caiu e cruzar com as trocas (git log --oneline -- platform/active-game.yaml)"
+              action: "No Grafana, painel SLO do dashboard GamesPlatform: ver na linha do tempo quando o jogo caiu e cruzar com as trocas (git log --oneline -- platform/active-game.yaml)"
       - eval_time: 72h
         alertname: GameSLOBurnRateHigh
         exp_alerts: []

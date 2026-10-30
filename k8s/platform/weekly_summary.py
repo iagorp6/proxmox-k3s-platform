@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 PROM = os.getenv("PROMETHEUS_URL", "http://kps-kube-prometheus-stack-prometheus.monitoring.svc:9090")
 WEBHOOK = os.environ["DISCORD_WEBHOOK_URL"]
 BRT = timezone(timedelta(hours=-3))
-UA = {"User-Agent": "AsunBoid-WeeklySummary/2.0"}
+UA = {"User-Agent": "GamesPlatform-WeeklySummary/2.0"}
 # Nomes dos jogos: games.json gerado do catálogo por scripts/render-games.py (ConfigMap weekly-summary)
 GAMES_FILE = os.getenv("GAMES_FILE", "/app/games.json")
 try:
@@ -91,9 +91,9 @@ def build():
     end = datetime.now(BRT)
     start = end - timedelta(days=7)
     return {
-        "username": "AsunBoid",
+        "username": "GamesPlatform",
         "embeds": [{
-            "title": "📊 Resumo da semana no AsunBoid",
+            "title": "📊 Resumo da semana no GamesPlatform",
             "description": f"{start:%d/%m} a {end:%d/%m}",
             "color": 0x5865F2,
             "fields": fields,

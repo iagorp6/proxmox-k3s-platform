@@ -100,7 +100,7 @@ jobs:
           kubeconform -strict -summary \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/f1e7f6bc0537bf0622ffe6e47dbaa85914fabbec/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
-            k8s/monitoring/alerts-homelab.yaml k8s/monitoring/alerts-slo.yaml k8s/monitoring/alerts-games.generated.yaml k8s/monitoring/dashboard-asunboid.yaml \
+            k8s/monitoring/alerts-homelab.yaml k8s/monitoring/alerts-slo.yaml k8s/monitoring/alerts-games.generated.yaml k8s/monitoring/dashboard-games-platform.yaml \
             k8s/monitoring/externalsecrets.yaml k8s/argocd/root.yaml k8s/argocd/guardrails.generated.yaml k8s/argocd/apps/*.yaml \
             k8s/external-secrets/cluster-secret-store.yaml
       - name: Applications fit their AppProject and pods meet the namespace Pod Security
@@ -112,13 +112,13 @@ jobs:
       - name: Dashboard YAML in sync with generator
         run: |
           python3 scripts/build-dashboard.py
-          git diff --exit-code k8s/monitoring/dashboard-asunboid.yaml
+          git diff --exit-code k8s/monitoring/dashboard-games-platform.yaml
       - name: Validate Grafana dashboard JSON
         run: |
           python3 - <<'PY'
           import json, re
-          s = open("k8s/monitoring/dashboard-asunboid.yaml").read()
-          body = s.split("  asunboid.json: |\n", 1)[1]
+          s = open("k8s/monitoring/dashboard-games-platform.yaml").read()
+          body = s.split("  games-platform.json: |\n", 1)[1]
           dash = json.loads("\n".join(l[4:] if l.startswith("    ") else l for l in body.splitlines()))
           print(f"OK: '{dash['title']}' com {len(dash['panels'])} painéis")
           PY

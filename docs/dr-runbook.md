@@ -147,7 +147,7 @@ switches to them (`make switch-game` starts them on an empty volume otherwise).
 ## 7. Done when
 
 - `make status` shows the active game Ready with players able to join.
-- Grafana dashboard **AsunBoid** shows the host (SMART, ZFS mirror) and the game; no alert firing
+- Grafana dashboard **GamesPlatform** shows the host (SMART, ZFS mirror) and the game; no alert firing
   except the expected ones during the rebuild.
 - The Healthchecks.io watchdog is green again.
 - The Discord panel in `#games` answers.

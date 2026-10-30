@@ -86,6 +86,6 @@ If the server ever fails to boot from the new disk alone, check the UEFI boot or
 
 - `zpool status -x` says `all pools are healthy`.
 - A scrub is clean: `zpool scrub -w rpool && zpool status rpool`.
-- Grafana **AsunBoid**, host row: pool ONLINE, SMART OK for both disks, and both disks with similar busy time.
+- Grafana **GamesPlatform**, host row: pool ONLINE, SMART OK for both disks, and both disks with similar busy time.
 - `ZfsPoolNotOnline`, `ZfsVdevErrors` and the SMART alerts are resolved in Discord (run `zpool clear rpool` if the
   old disk left error counters behind).

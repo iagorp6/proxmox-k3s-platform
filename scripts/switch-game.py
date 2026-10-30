@@ -93,13 +93,13 @@ def notify(title, description, color, mention=False):
             print("  AVISO: webhook do Discord indisponível; aviso não enviado")
             return
         url = base64.b64decode(r.stdout.strip()).decode()
-    payload = {"username": "AsunBoid", "embeds": [{"title": title, "description": description, "color": color}]}
+    payload = {"username": "GamesPlatform", "embeds": [{"title": title, "description": description, "color": color}]}
     role = env_local().get("DISCORD_ROLE_ID")
     if mention and role:
         payload["content"] = f"<@&{role}>"
         payload["allowed_mentions"] = {"roles": [role]}
     req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), method="POST",
-                                 headers={"Content-Type": "application/json", "User-Agent": "AsunBoid-SwitchGame/1.0"})
+                                 headers={"Content-Type": "application/json", "User-Agent": "GamesPlatform-SwitchGame/1.0"})
     try:
         urllib.request.urlopen(req, timeout=10)
         print("  aviso enviado ao Discord")

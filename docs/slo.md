@@ -8,7 +8,7 @@ One service level objective, for the thing players actually notice: **can they j
 | **Objective** | 99% over a rolling 28-day window |
 | **Error budget** | 1% of 28 days = **6h43min** of unavailability |
 | **Rules** | [`k8s/monitoring/alerts-slo.yaml`](../k8s/monitoring/alerts-slo.yaml), tested in [`tests/slo.test.yaml`](../k8s/monitoring/tests/slo.test.yaml) |
-| **Dashboard** | AsunBoid, section *SLO*: availability, budget left, burn rate |
+| **Dashboard** | GamesPlatform, section *SLO*: availability, budget left, burn rate |
 
 ## What counts as down
 

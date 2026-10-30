@@ -6,7 +6,7 @@
 ## Summary
 
 Grafana's container memory limit had been set too low from the start. A heavier version of the
-AsunBoid dashboard pushed it over the limit on every load, and Kubernetes killed and restarted it 15
+GamesPlatform dashboard pushed it over the limit on every load, and Kubernetes killed and restarted it 15
 times in one day. Every restart was quick enough that nobody noticed, and no alert covered OOM kills or
 restarts of monitoring components.
 
@@ -23,7 +23,7 @@ recorded; it was some time before the fix.
 
 | Time | Event |
 |---|---|
-| 2026-10-01 13:31 | `48230c1`: AsunBoid dashboard v2 (plus Loki and Alloy) deployed |
+| 2026-10-01 13:31 | `48230c1`: GamesPlatform dashboard v2 (plus Loki and Alloy) deployed |
 | next ~24h | Grafana restarts 15 times, reason `OOMKilled` |
 | 2026-10-02, before 13:34 | Restart count noticed in `kubectl get pods -n monitoring` |
 | 2026-10-02 13:34 | `d8ad4a4`: Grafana memory limit raised to 768Mi |

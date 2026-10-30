@@ -95,7 +95,7 @@ spec:
             - name: MAX_PLAYERS
               value: "6"
             - name: MOTD
-              value: "AsunBoid · COBBLEVERSE"
+              value: "GamesPlatform · COBBLEVERSE"
             - name: VIEW_DISTANCE
               value: "8"
             - name: SIMULATION_DISTANCE
