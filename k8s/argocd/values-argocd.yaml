@@ -43,12 +43,14 @@ controller:
     enabled: true
     serviceMonitor:
       enabled: true
+  # 768Mi deu OOMKilled em 30/10, numa manhã de cinco merges seguidos (cada sync recarrega o cache de
+  # todos os recursos do cluster). O cache cresce com o número de apps e de jogos, não com o uso.
   resources:
     requests:
       cpu: 100m
-      memory: 256Mi
+      memory: 384Mi
     limits:
-      memory: 768Mi
+      memory: 1Gi
 
 server:
   resources:
