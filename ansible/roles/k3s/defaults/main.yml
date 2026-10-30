@@ -1,6 +1,6 @@
 # Versão do K3s. Vazio = resolve a última estável no GitHub e mostra no output.
 # Depois da primeira instalação, fixe aqui a versão exibida (builds reproduzíveis).
-k3s_version: "v1.37.0+k3s1"
+k3s_version: "v1.37.1+k3s1"
 
 # auto | true | false
 # auto: testa o registry do Docker Hub a partir do node e decide sozinho
