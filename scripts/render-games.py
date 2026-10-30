@@ -419,7 +419,13 @@ def render_bot_rbac(games):
                 {"apiGroups": ["apps"], "resources": ["statefulsets"], "verbs": ["get", "list", "watch"]},
                 # save do mundo e contagem de jogadores: exec só no pod do jogo
                 {"apiGroups": [""], "resources": ["pods/exec"], "resourceNames": [pod], "verbs": ["get", "create"]},
-            ],
+            ] + ([
+                # backup do jogo que saiu (kubectl create job --from=cronjob/<jogo>-backup). create em jobs não
+                # filtra por nome: o bot pode criar outro Job neste namespace, dentro do Pod Security dele
+                {"apiGroups": ["batch"], "resources": ["cronjobs"], "resourceNames": [f'{g["name"]}-backup'],
+                 "verbs": ["get"]},
+                {"apiGroups": ["batch"], "resources": ["jobs"], "verbs": ["create"]},
+            ] if g.get("backup") else []),
         }, {
             "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
             "metadata": {"name": "games-bot", "namespace": ns},
