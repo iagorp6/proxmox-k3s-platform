@@ -35,7 +35,7 @@ ssc_path.write_text(json.dumps(ssc, indent=2), encoding="utf-8")
 print("sscconfig.json atualizado (SSC habilitado)")
 
 # Mensagem de boas-vindas (MOTD), gerenciada pela plataforma: sobrescrita a cada inicialização.
-MOTD = """[c/FFD700:=== Bem-vindo ao AsunBoid ===]
+MOTD = """[c/FFD700:=== Bem-vindo ao GamesPlatform ===]
 [c/FF6347:Seu personagem fica PARADO no spawn ate voce entrar na sua conta.]
 [c/00FF7F:Primeira vez aqui?] Digite [c/FFFFFF:/register SUASENHA] no chat (Enter abre o chat).
 [c/00FF7F:Ja tem conta?] Digite [c/FFFFFF:/login SUASENHA] (nas proximas vezes o login e automatico).

@@ -13,7 +13,7 @@ import re
 MESSAGES = {
     # --- o que o jogador vê ao entrar (repetido a cada 10 s até autenticar) ---
     "registerRequired": (
-        "§6§lBem-vindo ao AsunBoid!§r §eSeu personagem fica travado até você criar uma senha.\n"
+        "§6§lBem-vindo ao GamesPlatform!§r §eSeu personagem fica travado até você criar uma senha.\n"
         "§fAperte §aT§f, digite §a/register SUASENHA SUASENHA§f e aperte §aEnter§f.\n"
         "§7(a mesma senha duas vezes; guarde ela, você vai usar no /login)"
     ),

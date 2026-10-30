@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gera k8s/monitoring/dashboard-asunboid.yaml (dashboard da plataforma de jogos como código).
+"""Gera k8s/monitoring/dashboard-games-platform.yaml (dashboard da plataforma de jogos como código).
 
 Multi-jogo: o topo mostra o jogo ativo (réplicas > 0) e o status dele; as seções de jogadores
 juntam todos os jogos com uma coluna "Jogo". Todo jogo segue o contrato game_* (label game),
@@ -408,7 +408,7 @@ def assign(ps):
 assign(P)
 
 dash = {
-  "title": "AsunBoid - Plataforma de Jogos", "uid": "asunboid",
+  "title": "GamesPlatform - Plataforma de Jogos", "uid": "games-platform",
   "description": "Plataforma de jogos em K3s sobre Proxmox (um jogo ativo por vez). Dashboard como código (GitOps via Argo CD).",
   "tags": ["homelab", "games", "k3s"], "timezone": "America/Sao_Paulo",
   "refresh": "1m", "time": {"from": "now-24h", "to": "now"}, "schemaVersion": 39,
@@ -419,9 +419,9 @@ dash = {
 }
 
 js = json.dumps(dash, indent=2, ensure_ascii=False)
-out = ("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: dashboard-asunboid\n  namespace: monitoring\n"
-       "  labels:\n    grafana_dashboard: \"1\"\ndata:\n  asunboid.json: |\n"
+out = ("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: dashboard-games-platform\n  namespace: monitoring\n"
+       "  labels:\n    grafana_dashboard: \"1\"\ndata:\n  games-platform.json: |\n"
        + "\n".join("    " + l for l in js.splitlines()) + "\n")
-dest = pathlib.Path(__file__).resolve().parent.parent / "k8s" / "monitoring" / "dashboard-asunboid.yaml"
+dest = pathlib.Path(__file__).resolve().parent.parent / "k8s" / "monitoring" / "dashboard-games-platform.yaml"
 dest.write_text(out, encoding="utf-8")
 print(f"OK: {dest} ({i - 1} painéis)")

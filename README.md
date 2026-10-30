@@ -201,7 +201,7 @@ Joins, leaves and the weekly summary work for every game; deaths and playtime mi
 
 ## Observability
 
-The **AsunBoid** dashboard covers every game on the platform and reads top to bottom, from "is it up?" to "why?":
+The **GamesPlatform** dashboard covers every game on the platform and reads top to bottom, from "is it up?" to "why?":
 
 - **Now:** server status, players online, 7-day availability, uptime, last backup, active alerts, and an availability strip showing every outage in the period.
 - **SLO:** 28-day availability against the 99% objective, error budget left and burn rate over 30 minutes, 6 hours and 3 days ([docs/slo.md](docs/slo.md)).

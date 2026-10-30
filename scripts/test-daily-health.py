@@ -59,7 +59,7 @@ class DailyHealthTest(unittest.TestCase):
 
     def test_all_good_is_a_green_ok(self):
         e = self.run_with(healthy())
-        self.assertEqual(e["title"], "✅ Tudo OK no AsunBoid")
+        self.assertEqual(e["title"], "✅ Tudo OK no GamesPlatform")
         self.assertEqual(self.field(e, "🎮 Jogo"), "🟢 Minecraft")
         # O backup de um jogo parado (zomboid, 200 h) não conta: só o do jogo ativo faz backup diário
         self.assertEqual(self.field(e, "💾 Último backup"), "🟢 Minecraft · há 5 h")
@@ -99,7 +99,7 @@ class DailyHealthTest(unittest.TestCase):
         a[dh.VM_UPTIME] = [sample(3 * H)]
         a[dh.RESTARTS] = [sample(1, namespace="monitoring", pod="prometheus-0")]
         e = self.run_with(a)
-        self.assertEqual(e["title"], "✅ Tudo OK no AsunBoid")
+        self.assertEqual(e["title"], "✅ Tudo OK no GamesPlatform")
         self.assertEqual(self.field(e, "⏱️ VM no ar"), "3 h (reiniciou por patch)")
         self.assertEqual(self.field(e, "🔁 Restarts em 24 h"), "monitoring/prometheus-0 · 1x")
 
@@ -108,14 +108,14 @@ class DailyHealthTest(unittest.TestCase):
         a[dh.HOST_SECURITY] = [sample(3)]
         a[dh.HOST_REBOOT] = [sample(1)]
         e = self.run_with(a)
-        self.assertEqual(e["title"], "✅ Tudo OK no AsunBoid")
+        self.assertEqual(e["title"], "✅ Tudo OK no GamesPlatform")
         self.assertEqual(self.field(e, "🩹 Patches do host"), "3 de segurança pendente(s) · reboot pendente")
 
     def test_disk_load_is_informative_and_optional(self):
         a = healthy()
         a[dh.DISK_BUSY_P99] = [sample(0.95, device="sda"), sample(0.90, device="sdb")]
         e = self.run_with(a)
-        self.assertEqual(e["title"], "✅ Tudo OK no AsunBoid")
+        self.assertEqual(e["title"], "✅ Tudo OK no GamesPlatform")
         a[dh.DISK_BUSY_P99] = []
         e = self.run_with(a)
         self.assertNotIn("💽 Discos do host (p99, 7 dias)", [f["name"] for f in e["fields"]])
@@ -126,7 +126,7 @@ class DailyHealthTest(unittest.TestCase):
         a = healthy()
         a[dh.ZFS_ERRORS] = [sample(3)]
         e = self.run_with(a)
-        self.assertEqual(e["title"], "✅ Tudo OK no AsunBoid")
+        self.assertEqual(e["title"], "✅ Tudo OK no GamesPlatform")
         self.assertEqual(self.field(e, "🧽 ZFS"), "scrub há 14 dias · 3 erro(s) nos discos")
         a[dh.ZFS_SCRUB_AGE], a[dh.ZFS_ERRORS] = [], []
         e = self.run_with(a)
