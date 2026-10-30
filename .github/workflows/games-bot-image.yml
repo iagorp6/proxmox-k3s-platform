@@ -1,7 +1,9 @@
 name: games-bot image
 
 # Constrói a imagem do bot de troca de jogo (ADR 0006), escaneia com Trivy e, no main, publica no
-# GHCR com a tag do commit. O manifest do cluster referencia a imagem pelo digest (resumo do job).
+# GHCR com a tag do commit e uma atestação de proveniência (SLSA, assinada pelo GitHub) presa ao
+# digest. O manifest do cluster referencia a imagem pelo digest (resumo do job), e o CI confere que
+# esse digest foi construído por este workflow (gh attestation verify).
 on:
   push:
     branches: [main]
@@ -26,6 +28,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write      # assinatura da atestação (Sigstore, OIDC do run)
+      attestations: write
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/games-bot
     steps:
@@ -39,6 +43,7 @@ jobs:
       - name: Image scan (falha em CRITICAL com correção disponível)
         run: trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress games-bot:ci
       - name: Publish to GHCR
+        id: publish
         if: github.event_name != 'pull_request'
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -49,5 +54,15 @@ jobs:
           docker tag games-bot:ci "$IMAGE:$TAG"
           docker push "$IMAGE:$TAG"
           DIGEST="$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$TAG")"
+          echo "digest=${DIGEST#*@}" >> "$GITHUB_OUTPUT"
+          # Também no log: o resumo do job não aparece na API de logs
+          echo "Use no manifest: $IMAGE:$TAG@${DIGEST#*@}"
           echo "Imagem publicada: \`$IMAGE:$TAG\`" >> "$GITHUB_STEP_SUMMARY"
           echo "Use no manifest: \`$IMAGE:$TAG@${DIGEST#*@}\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: Provenance attestation
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
