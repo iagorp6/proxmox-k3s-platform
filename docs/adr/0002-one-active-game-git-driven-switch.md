@@ -26,7 +26,9 @@ Applications keep manual sync, so unrelated commits never restart a session.
 - Git always describes what is running; every switch has an author and a timestamp.
 - Alerts use the desired state (`kube_statefulset_replicas`), so stopped games never page.
 - Because only one game runs at a time, games can reuse the ports already forwarded by the
-  firewall. The Services of stopped games have no ready endpoints, so a custom Argo CD health
-  check treats them as healthy and a `ServiceLBPortConflict` alert covers the unexpected case.
+  firewall. K3s ServiceLB reserves a LoadBalancer's ports on the node even with no ready
+  endpoints, so the switch also patches the Service of every stopped game to `ClusterIP`
+  (Valheim could not bind the UDP ports held by the stopped Zomboid, 2026-10-29). A
+  `ServiceLBPortConflict` alert covers any conflict that is left.
 - Switching needs someone with repository and cluster access. Player self-service is added on top
   of this flow by [ADR 0006](0006-discord-self-service-switch.md), without changing the decision.

@@ -114,6 +114,10 @@ class SwitchGameTest(unittest.TestCase):
         # namespace só quando o StatefulSet do jogo declara um; CronJobs do jogo parado ficam suspensos
         self.assertIn("  name: minecraft\n  namespace: minecraft\nspec:\n  replicas: 0\n", mc)
         self.assertIn("kind: CronJob\nmetadata:\n  name: minecraft-backup\n  namespace: minecraft\nspec:\n  suspend: true\n", mc)
+        # Jogo parado sai do ServiceLB (o svclb reserva a porta no nó mesmo sem endpoint); o ativo fica LoadBalancer
+        self.assertIn("kind: Service\nmetadata:\n  name: minecraft\n  namespace: minecraft\nspec:\n  type: ClusterIP\n"
+                      "  externalTrafficPolicy: null\n", mc)
+        self.assertNotIn("kind: Service", self.read("k8s/games/terraria/replicas.yaml"))
         self.assertEqual(self.read("platform/active-game.yaml"), "# jogo ativo\nactive: terraria\n")
 
     def test_dry_run_does_not_commit(self):
