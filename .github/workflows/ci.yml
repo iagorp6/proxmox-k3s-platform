@@ -92,6 +92,11 @@ jobs:
             echo "== $game"
             python3 scripts/restore-drill.py "$game" --dry-run | kubeconform -strict -summary -schema-location default
             python3 scripts/restore-drill.py "$game" --live --dry-run | kubeconform -strict -summary -schema-location default
+            python3 scripts/restore-drill.py "$game" --live --snapshot 0123abcd --dry-run | kubeconform -strict -summary -schema-location default
+          done
+          for game in $(python3 scripts/catalog.py wipes); do
+            echo "== wipe $game"
+            python3 scripts/wipe-game.py "$game" --dry-run | kubeconform -strict -summary -schema-location default
           done
       - name: Scaffold of a new game (scripts/new-game.py) renders and validates
         run: bash scripts/test-new-game.sh 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/f1e7f6bc0537bf0622ffe6e47dbaa85914fabbec/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'

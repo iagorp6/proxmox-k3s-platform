@@ -76,6 +76,10 @@ k8s_check() {
   for game in $(python3 scripts/catalog.py backups); do   # manifests do restore drill de cada jogo com backup
     python3 scripts/restore-drill.py "$game" --dry-run | kubeconform -strict -summary -schema-location default || return 1
     python3 scripts/restore-drill.py "$game" --live --dry-run | kubeconform -strict -summary -schema-location default || return 1
+    python3 scripts/restore-drill.py "$game" --live --snapshot 0123abcd --dry-run | kubeconform -strict -summary -schema-location default || return 1
+  done
+  for game in $(python3 scripts/catalog.py wipes); do   # Job do wipe-game
+    python3 scripts/wipe-game.py "$game" --dry-run | kubeconform -strict -summary -schema-location default || return 1
   done
   bash scripts/test-new-game.sh "$CRD_CATALOG" || return 1
   python3 scripts/test-alerts.py || return 1

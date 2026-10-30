@@ -22,6 +22,7 @@ Uso:
   scripts/restore-drill.py <jogo> --dry-run    só imprime os manifests (o CI valida com kubeconform)
   scripts/restore-drill.py <jogo> --record     acrescenta o resultado em docs/restore-drills.md
   scripts/restore-drill.py <jogo> --live       restaura no PVC do jogo (servidor parado; pede confirmação)
+  scripts/restore-drill.py <jogo> --snapshot ID   usa esse snapshot em vez do último (ex.: um archive do wipe-game)
 """
 import argparse
 import datetime
@@ -43,13 +44,16 @@ RECORD_FILE = ROOT / "docs" / "restore-drills.md"
 TARGET = "/restore"
 
 
-def drill_script(g, live=False):
+def drill_script(g, live=False, snapshot=None):
     """Script do Job: restaura, confere e imprime uma linha RESULT em JSON para o drill ler dos logs.
 
     Drill: snapshot inteiro em TARGET (os paths ficam em TARGET/data/...). Live: o PVC do jogo está em
     /data, como no CronJob de backup, e o restore usa a subpasta latest:/data do snapshot, então cada
-    path volta exatamente onde estava."""
+    path volta exatamente onde estava. Com snapshot, usa esse ID (archive do wipe-game, que não tem a tag
+    do jogo) em vez do último da tag."""
     name, b = g["name"], g["backup"]
+    pick = snapshot or "latest"
+    select = "" if snapshot else f" --tag {name} --host {name}"
     root, measure = ("", "/data") if live else (TARGET, TARGET)
     checks = "".join(
         f'[ -n "$(ls -A {root}{shlex.quote(p)} 2>/dev/null)" ] || {{ echo "FALHA: {p} vazio ou ausente"; exit 1; }}\n'
@@ -64,12 +68,12 @@ def drill_script(g, live=False):
             f'[ -e {shlex.quote(p)} ] && mv {shlex.quote(p)} {shlex.quote(p)}.pre-restore-$stamp && echo "guardado: {p}.pre-restore-$stamp"\n'
             for p in b["paths"])
         restore = (f"stamp=$(date +%Y%m%d-%H%M%S)\n{aside}"
-                   f"restic restore latest:/data --tag {name} --host {name} --target /data\n")
+                   f"restic restore {pick}:/data{select} --target /data\n")
     else:
-        restore = f"restic restore latest --tag {name} --host {name} --target {TARGET}\n"
+        restore = f"restic restore {pick}{select} --target {TARGET}\n"
     return (
         "set -eu\n"
-        f"restic snapshots --tag {name} --host {name} --latest 1 --json > /tmp/snap.json\n"
+        f"restic snapshots {snapshot or select.strip() + ' --latest 1'} --json > /tmp/snap.json\n"
         "start=$(date +%s)\n"
         f"{restore}"
         "end=$(date +%s)\n"
@@ -101,7 +105,7 @@ def live_pvc(g):
             "spec": tpl["spec"]}
 
 
-def manifests(g, live=False):
+def manifests(g, live=False, snapshot=None):
     name, ns, uid = g["name"], g["namespace"], g.get("runAsUser", 1000)
     drill = f"{name}-restore-live" if live else f"{name}-restore-drill"
     labels = {"app.kubernetes.io/name": drill, "platform.homelab/game": name}
@@ -122,7 +126,7 @@ def manifests(g, live=False):
                                     "seccompProfile": {"type": "RuntimeDefault"}},
                 "containers": [{
                     "name": "restic", "image": DEFAULTS["resticImage"],
-                    "command": ["/bin/sh", "-c"], "args": [drill_script(g, live)],
+                    "command": ["/bin/sh", "-c"], "args": [drill_script(g, live, snapshot)],
                     "envFrom": [{"secretRef": {"name": f"{name}-backup"}}],
                     "env": [{"name": "RESTIC_CACHE_DIR", "value": "/cache"}, {"name": "TMPDIR", "value": "/tmp"}],
                     "securityContext": {"allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True,
@@ -217,12 +221,15 @@ def main():
     ap.add_argument("--record", action="store_true", help="acrescenta o resultado em docs/restore-drills.md")
     ap.add_argument("--live", action="store_true", help="restaura no PVC do jogo (servidor parado)")
     ap.add_argument("--yes", action="store_true", help="com --live, não pede confirmação")
+    ap.add_argument("--snapshot", help="ID do snapshot (padrão: o último da tag do jogo)")
     ap.add_argument("--timeout", type=int, default=900, help="limite em segundos para o Job (padrão 900)")
     args = ap.parse_args()
     if args.live and args.record:
         sys.exit("ERRO: --record é só para o drill (PVC temporário); no --live anote o tempo no runbook")
+    if args.snapshot and not re.fullmatch(r"[0-9a-f]{8,64}", args.snapshot):
+        sys.exit("ERRO: --snapshot espera o ID hexadecimal do restic (8 a 64 caracteres)")
     g = games[args.game]
-    pvc, job = manifests(g, args.live)
+    pvc, job = manifests(g, args.live, args.snapshot)
     if args.dry_run:
         print(yaml.safe_dump_all([pvc, job], sort_keys=False, allow_unicode=True, width=1000), end="")
         return 0
@@ -233,7 +240,7 @@ def main():
                  f"  kubectl -n {ns} delete job {drill}" + ("" if args.live else f" && kubectl -n {ns} delete pvc {drill}"))
     if args.live:
         sts = preflight_live(g)
-        print(f"ATENÇÃO: restaura o último snapshot no PVC {g['backup']['pvc']} de {g['displayName']}.")
+        print(f"ATENÇÃO: restaura {'o snapshot ' + args.snapshot if args.snapshot else 'o último snapshot'} no PVC {g['backup']['pvc']} de {g['displayName']}.")
         print(f"  O conteúdo atual de {', '.join(g['backup']['paths'])} é renomeado para <path>.pre-restore-<data>.")
         if not args.yes:
             try:

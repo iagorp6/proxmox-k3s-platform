@@ -10,6 +10,7 @@ Uso como comando:
   scripts/catalog.py dirs        diretórios kustomize dos jogos, um por linha
   scripts/catalog.py workloads   "<namespace> <statefulset>" por linha
   scripts/catalog.py backups     jogos com backup (restore drill), um por linha
+  scripts/catalog.py wipes       jogos com wipe (wipe-game), um por linha
   scripts/catalog.py idle-cronjobs  "<namespace> <cronjob>" suspensos com o jogo parado (switch.suspendWhenIdle)
   scripts/catalog.py check       valida o catálogo e o platform/active-game.yaml
 Jogos com status "draft" (recém-criados pelo scripts/new-game.py) ficam fora de tudo até virarem "active".
@@ -68,6 +69,11 @@ def problems():
             errors.append(f"{where}: status '{g['status']}' inválido (use {', '.join(STATUSES)})")
         if g["status"] == "active" and not g["dir"].startswith("k8s/games/"):
             errors.append(f"{where}: jogo com status active precisa ficar em k8s/games/")
+        # wipe-game só apaga o que o archive cobre
+        backup_paths = [p.rstrip("/") for p in (g.get("backup") or {}).get("paths", [])]
+        for p in g.get("wipe") or []:
+            if not any(p == b or p.startswith(b + "/") for b in backup_paths):
+                errors.append(f"{where}: wipe {p} fora de backup.paths (o wipe-game arquiva só o que o backup cobre)")
     active = active_game()
     names = [g["name"] for g in games()]
     if active not in (None, "none") and active not in names:
@@ -86,6 +92,8 @@ def main():
                         for cj in (g.get("switch") or {}).get("suspendWhenIdle", [])))
     elif cmd == "backups":
         print("\n".join(g["name"] for g in games() if g.get("backup")))
+    elif cmd == "wipes":
+        print("\n".join(g["name"] for g in games() if g.get("backup") and g.get("wipe")))
     elif cmd == "check":
         errors = problems()
         if errors:
