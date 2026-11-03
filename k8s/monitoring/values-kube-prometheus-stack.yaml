@@ -100,7 +100,7 @@ alertmanager:
         - receiver: "null"
           matchers:
             - alertname = "InfoInhibitor"
-        # Entrada de jogadores (antes da regra de info). Sem mensagem de saída: a sessão fica no dashboard
+        # Player join and leave (before the info route); the leave message carries the session length
         - receiver: discord-players
           matchers:
             - notify = "players"
@@ -201,14 +201,17 @@ alertmanager:
             send_resolved: false
             title: '{{ .CommonAnnotations.summary }}'
             message: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
-      # Só a entrada; o cargo é mencionado apenas para quem abre o servidor (annotation ping da regra)
+      # Join and leave with the session length; the role is mentioned only when the first player joins
+      # (the rule's ping annotation)
       - name: discord-players
         discord_configs:
           - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/webhook-url
-            send_resolved: false
-            content: '{{ if eq .CommonAnnotations.ping "sim" }}<@&1555259172574986342>{{ end }}'
-            title: '🟢 {{ .CommonLabels.player }} entrou no servidor'
-            message: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+            send_resolved: true
+            content: '{{ if and (eq .Status "firing") (eq .CommonAnnotations.ping "sim") }}<@&1555259172574986342>{{ end }}'
+            title: '{{ if eq .Status "firing" }}🟢 {{ .CommonLabels.player }} entrou no servidor{{ else }}🔴 {{ .CommonLabels.player }} saiu do servidor{{ end }}'
+            message: |-
+              {{ range .Alerts }}{{ if eq .Status "firing" }}Entrou às {{ .StartsAt | tz "America/Sao_Paulo" | date "15:04" }} · {{ .Annotations.description }}{{ else }}Saiu às {{ .EndsAt | tz "America/Sao_Paulo" | date "15:04" }} · sessão de {{ (.EndsAt.Sub .StartsAt).Truncate 60000000000 }}{{ end }}
+              {{ end }}
 
 grafana:
   admin:
