@@ -72,6 +72,8 @@ spec:
               args:
                 - |
                   set -e
+                  # Removes only stale locks (no refresh for 30 min), such as one left by a killed process
+                  restic unlock
                   restic snapshots --compact
                   restic prune --retry-lock 30m
                   restic check --read-data-subset=5% --retry-lock 30m

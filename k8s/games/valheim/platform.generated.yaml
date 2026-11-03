@@ -174,6 +174,7 @@ spec:
             args:
             - |
               set -e
+              restic unlock
               restic backup /data/config --tag valheim --host valheim --retry-lock 10m
               restic forget --tag valheim --host valheim --keep-daily 7 --keep-weekly 4 --retry-lock 10m
               restic snapshots --tag valheim --latest 1

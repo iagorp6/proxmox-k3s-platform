@@ -224,8 +224,12 @@ def render_game(g):
         excludes = "".join(f" --exclude {e}" for e in b.get("exclude", []))
         # Só forget: o prune (lock exclusivo, lê e reescreve packs no S3) roda uma vez por semana no
         # restic-check (k8s/platform/restic-check.yaml), não três vezes por dia no repositório compartilhado
+        # unlock first: it only removes stale locks (no refresh for 30 min, so a running job's lock is
+        # safe), and a lock left by a killed process would otherwise block every forget until someone
+        # runs it by hand
         script = (
             "set -e\n"
+            "restic unlock\n"
             f"restic backup {' '.join(b['paths'])}{excludes} --tag {name} --host {name} --retry-lock 10m\n"
             f"restic forget --tag {name} --host {name} --keep-daily {keep['daily']} --keep-weekly {keep['weekly']} --retry-lock 10m\n"
             f"restic snapshots --tag {name} --latest 1\n"
