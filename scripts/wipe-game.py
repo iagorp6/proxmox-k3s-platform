@@ -40,9 +40,11 @@ def wipe_paths(g):
 def wipe_script(g, label):
     name, paths = g["name"], wipe_paths(g)
     q = shlex.quote
-    # restic ls --json: uma linha por nó com "path" absoluto; o grep confere o caminho exato
+    # restic ls --json prints one line per node with its absolute "path"; grep checks the exact path. The
+    # listing goes to a file first: piping it into grep -q killed restic with SIGPIPE on the first match,
+    # and the killed process left its lock behind (2026-10-30: every forget and restic-check failed for days).
     checks = "".join(
-        f'if [ -e {q(p)} ]; then restic ls --json "$id" | grep -qF {q(chr(34) + "path" + chr(34) + ":" + chr(34) + p + chr(34))} '
+        f'if [ -e {q(p)} ]; then grep -qF {q(chr(34) + "path" + chr(34) + ":" + chr(34) + p + chr(34))} /tmp/ls.json '
         f'|| {{ echo "FALHA: {p} não está no snapshot $id; nada foi apagado"; exit 1; }}; fi\n'
         for p in paths)
     removes = "".join(
@@ -56,6 +58,7 @@ def wipe_script(g, label):
         "id=$(tail -n 1 /tmp/backup.json | sed -n 's/.*\"snapshot_id\":\"\\([0-9a-f]*\\)\".*/\\1/p')\n"
         '[ -n "$id" ] || { echo "FALHA: backup sem snapshot_id; nada foi apagado"; tail -n 5 /tmp/backup.json; exit 1; }\n'
         'echo "archive: $id"\n'
+        'restic ls --json "$id" > /tmp/ls.json\n'
         f"{checks}"
         f"{removes}"
         'echo "RESULT {\\"snapshot\\": \\"$id\\"}"\n'
