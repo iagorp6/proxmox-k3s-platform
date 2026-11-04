@@ -10,6 +10,9 @@ that no alert caught, whatever its duration.
 
 | Date | Incident | Impact | Duration |
 |---|---|---|---|
+| 2026-10-31 | [Every backup job failing on a stale restic lock](2026-10-31-restic-stale-lock.md) | No backup expiry or weekly check; snapshots still written | ~3 days |
+| 2026-10-30 | [Argo CD application controller OOMKilled after a burst of merges](2026-10-30-argocd-controller-oomkill.md) | Reconciliation paused; no early memory warning outside games | one morning |
+| 2026-10-26 | [Drift check red for four days because an apply was never run](2026-10-26-terraform-drift-red.md) | Drift detection blind; no AWS or player impact | ~4 days |
 | 2026-10-14 | [Discord bot stuck in `InvalidImageName`](2026-10-14-games-bot-invalid-image.md) | Self-service game switch unavailable | ~1h |
 | 2026-10-02 | [Zomboid blocked on an admin password prompt](zomboid-admin-prompt.md) | Zomboid down, pod showed `Running` | ~1h |
 | 2026-10-01 | [Grafana OOMKilled 15 times in a day](grafana-oomkill.md) | Dashboards intermittently unavailable, no alert | ~1 day |

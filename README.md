@@ -18,7 +18,7 @@ The workload is a small **game-server platform** for a group of friends: **Proje
 - **GitOps.** Argo CD (app of apps) reconciles the cluster from `main`: merge is deploy for configuration and third-party charts (validated in CI first), while game servers sync only through the game switch, which checks for players and saves the world ([ADR 0009](docs/adr/0009-auto-sync-for-third-party-charts.md)).
 - **A platform, not a one-off.** Each game is a catalog entry; a generator renders its Service, metrics, backup and Argo CD Application, and switching the active game is a commit made by one command.
 - **Custom exporters** (stdlib Python) behind one metric contract: server health, players online and all-time playtime over RCON or REST, plus character deaths parsed from server logs.
-- **Player-facing notifications** on Discord: who joined (and who else is online), character deaths, playtime milestones and a weekly summary.
+- **Player-facing notifications** on Discord: who joined (and who else is online), who left and how long they played, character deaths, playtime milestones and a weekly summary.
 - **Alerting designed to be trusted:** severities mapped to response time, a first-step action in every message, a mute window for the daily restart, inhibition of cascading alerts, and an external dead man's switch.
 - **Secrets never in Git:** Bitwarden (humans) → AWS SSM (machines) → External Secrets (cluster), with self-healing Secrets.
 - **Backups you can restore:** daily encrypted restic snapshots to S3, restored and checked automatically every month.
@@ -185,6 +185,7 @@ Project Zomboid, the first game, is in the catalog and on the same contract as t
 | Event | Discord message |
 |---|---|
 | Join | 🟢 *iago joined* · 3/6 online: iago, joao, maria (mentions an opt-in `@Zomboid` role) |
+| Leave | 🔴 *iago left* · left at 23:10 · 2h14m session |
 | Character death | 💀 *iago died* · survived 34 in-game hours |
 | Playtime milestone | 🏆 *joao reached 50 hours on the server* |
 | Weekly summary | 📊 Hours played, ranking with medals, peak concurrency, deaths, availability |
@@ -192,7 +193,7 @@ Project Zomboid, the first game, is in the catalog and on the same contract as t
 
 <!-- DISCORD_IMAGE -->
 
-Joins (the role is pinged only for whoever opens the server) and the weekly summary work for every game; deaths and playtime milestones are Project Zomboid only for now.
+Joins (the role is pinged only for whoever opens the server), leaves and the weekly summary work for every game; deaths and playtime milestones are Project Zomboid only for now.
 
 **How it works:** the exporter sidecar polls the server over RCON every 15 seconds, keeps all-time playtime per player on the game volume (seeded from Prometheus history on first start), and tails the server's PerkLog for deaths. Prometheus rules turn those metrics into events; Alertmanager routes them to Discord with their own templates, separate from operational alerts. A CronJob builds the weekly summary from PromQL queries. No extra services were added for any of this.
 

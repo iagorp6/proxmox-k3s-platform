@@ -1,6 +1,6 @@
 # Imagem do games-bot (ADR 0006): Python + discord.py, git/ssh para commitar a troca e kubectl para o
 # scripts/switch-game.py. Construída e escaneada pelo workflow games-bot-image, publicada no GHCR.
-FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f
+FROM python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git openssh-client ca-certificates curl \
