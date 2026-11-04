@@ -58,3 +58,32 @@ kubectl get clustersecretstore aws-ssm
 ```
 
 Then run the drift workflow by hand (Actions > Terraform drift (aws) > Run workflow) to confirm the new key ages are clean.
+
+## Without local Terraform
+
+Changes to `terraform-aws/` are never applied by CI: the GitHub OIDC role is read-only on purpose. If the
+local Terraform cannot run (on the work PC, WSL has crashed while extracting the AWS provider, most likely
+the endpoint protection), there are two ways out.
+
+**Removing resources the code no longer has** (a PR deleted them, the drift plan shows only `delete`
+lines): delete them with the AWS CLI, using the names from the drift log or the removed code. This is what
+closed the [drift incident of 2026-10-26](postmortems/2026-10-26-terraform-drift-red.md):
+
+```bash
+aws --profile homelab --region sa-east-1 cloudwatch delete-alarms --alarm-names homelab-backup-bucket-size
+```
+
+```bash
+aws --profile homelab --region sa-east-1 sns delete-topic --topic-arn "$(aws --profile homelab --region sa-east-1 sns list-topics --query "Topics[?ends_with(TopicArn, ':homelab-alerts')].TopicArn | [0]" --output text)"
+```
+
+The next `terraform plan` refreshes, sees the resources gone and reports no changes; the state drops
+them on the next apply.
+
+**Anything that creates or changes resources** (including the key rotations above): run Terraform from
+AWS CloudShell in `sa-east-1`, with the version CI pins (`terraform_version` in
+`.github/workflows/terraform-drift.yml`), on a fresh clone of `main`. The backend is the same S3 state with
+its lock, so a plan there sees exactly what a local plan would.
+
+Either way, **a `terraform-aws` change is done only when the drift workflow is green**: run it by hand
+(Actions > Terraform drift (aws) > Run workflow) right after, instead of waiting for Monday.

@@ -141,6 +141,11 @@ GAME=minecraft   # the active game from platform/active-game.yaml
 4. Join the game and check the world is the one from the snapshot. Delete the `*.pre-restore-*`
    folders once you are sure.
 
+   **Valheim** has no console command to force a save, so the snapshot holds the world from its last
+   autosave. If that world comes back corrupted, the image's own consistent copies came back with it:
+   stop the server, extract the newest `config/backups/*.zip` into `config/worlds_local/` (check the
+   paths inside with `unzip -l` first), and start again.
+
 The inactive games keep their data in S3 and are restored the same way the first time someone
 switches to them (`make switch-game` starts them on an empty volume otherwise).
 
