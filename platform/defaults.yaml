@@ -9,4 +9,4 @@ publishedPorts: [16261, 16262]
 # Hook de save antes do backup: o initContainer baixa o kubectl e confere o SHA-256 fixado aqui.
 # Atualize os dois juntos: curl -sL https://dl.k8s.io/release/<versão>/bin/linux/amd64/kubectl.sha256
 curlImage: curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
-kubectl: { version: v1.37.0, sha256: "6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f" }
+kubectl: { version: v1.37.2, sha256: "c04487523e7aa7d1493f7808174c899db93d7a9cf57531420cd76b9bd415f8f4" }
