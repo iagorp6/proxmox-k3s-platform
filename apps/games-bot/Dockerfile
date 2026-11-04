@@ -8,7 +8,7 @@ RUN apt-get update \
 
 # kubectl: mesma versão e SHA-256 do platform/defaults.yaml (o render-games.py --check confere)
 RUN curl -fsSLo /usr/local/bin/kubectl https://dl.k8s.io/release/v1.37.2/bin/linux/amd64/kubectl \
- && echo "6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  /usr/local/bin/kubectl" | sha256sum -c - \
+ && echo "c04487523e7aa7d1493f7808174c899db93d7a9cf57531420cd76b9bd415f8f4  /usr/local/bin/kubectl" | sha256sum -c - \
  && chmod 0755 /usr/local/bin/kubectl
 
 # O pip sai da imagem depois de instalar: o bot não precisa dele em runtime, e o SBOM que o pip traz
