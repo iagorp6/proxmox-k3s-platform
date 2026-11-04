@@ -23,7 +23,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: install
-          image: steamcmd/steamcmd:latest@sha256:15adc23dcf32ef500d94f3bfa10e272b4a459feb321b287856447c6bb7cd785a
+          image: steamcmd/steamcmd:latest@sha256:7b58b698c048a283ebe03faa4fe9a1d0c6249e96c0f3fa457b48fc1ce01a3c1a
           command: ["/bin/bash", "/scripts/install.sh"]
           securityContext:
             allowPrivilegeEscalation: false
@@ -48,7 +48,7 @@ spec:
               mountPath: /scripts
       containers:
         - name: server
-          image: steamcmd/steamcmd:latest@sha256:15adc23dcf32ef500d94f3bfa10e272b4a459feb321b287856447c6bb7cd785a
+          image: steamcmd/steamcmd:latest@sha256:7b58b698c048a283ebe03faa4fe9a1d0c6249e96c0f3fa457b48fc1ce01a3c1a
           command: ["/bin/bash", "/scripts/start.sh"]
           securityContext:
             runAsNonRoot: true
@@ -105,7 +105,7 @@ spec:
             - name: scripts
               mountPath: /scripts
         - name: exporter
-          image: python:3.13-slim@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb
+          image: python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
           command: ["python", "/exporter/exporter.py"]
           securityContext:
             runAsNonRoot: true
