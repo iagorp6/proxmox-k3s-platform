@@ -96,7 +96,7 @@ spec:
                 -maxplayers 6 -port 7777 -lang 8 <&3
           env:
             - name: WORLD_NAME          # nome do arquivo do mundo: trocar cria um mundo novo (o antigo fica em /worlds)
-              value: AsunBoid
+              value: GamesPlatform     # 2026-11-09: AsunBoid.wld segfaulted (exit 139) on load; it stays in /worlds and in S3
             - name: WORLD_SIZE          # 1 pequeno, 2 médio, 3 grande
               value: "3"
             - name: WORLD_DIFFICULTY    # 0 Classic, 1 Expert, 2 Master, 3 Journey
