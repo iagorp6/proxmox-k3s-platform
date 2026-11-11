@@ -32,7 +32,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 NAME = re.compile(r"[a-z][a-z0-9-]{1,30}")
 IMAGE_REF = re.compile(r"[a-z0-9][a-z0-9._/-]*(?::[0-9]+)?(?:/[a-z0-9._-]+)*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}")
 QUANTITY = re.compile(r"[0-9]+(Mi|Gi)")
-PYTHON_IMAGE = "python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1"
+PYTHON_IMAGE = "python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90"
 
 
 def exporter_env(a):

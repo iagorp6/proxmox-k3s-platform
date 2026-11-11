@@ -29,7 +29,7 @@ spec:
       initContainers:
         - name: users
           # online-mode=false: gera whitelist.json e ops.json com UUIDs offline
-          image: python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
+          image: python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
           command: ["python", "/scripts/users.py"]
           env:
             - name: PLAYERS
@@ -55,7 +55,7 @@ spec:
               readOnly: true
         - name: auth-messages
           # mensagens do EasyAuth em português (config/EasyAuth/translation.conf)
-          image: python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
+          image: python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
           command: ["python", "/scripts/easyauth.py"]
           securityContext:
             allowPrivilegeEscalation: false
@@ -76,7 +76,7 @@ spec:
               readOnly: true
       containers:
         - name: server
-          image: itzg/minecraft-server:java21@sha256:49544c0a15ede66914451b3c6cb880cb0bd2470b2bfa6f39794f14da02cca79a
+          image: itzg/minecraft-server:java21@sha256:88ea35f13e9d87085ddc9938d31a278652f5af5c61b00b03551a3d66369ef3d0
           env:
             - name: EULA
               value: "TRUE"
@@ -149,7 +149,7 @@ spec:
             - name: data
               mountPath: /data
         - name: exporter
-          image: python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
+          image: python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
           command: ["python", "/scripts/exporter.py"]
           env:
             - name: GAME
