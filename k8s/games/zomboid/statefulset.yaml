@@ -23,7 +23,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: install
-          image: steamcmd/steamcmd:latest@sha256:b84c563949d6a64789865336c57026e6357072b1580aa62cce1f4ded48486f83
+          image: steamcmd/steamcmd:latest@sha256:facc4db6ac55e12f968553b76a17688ed8eb2f5a705763cfe68d8a4e0d0a43d2
           command: ["/bin/bash", "/scripts/install.sh"]
           securityContext:
             allowPrivilegeEscalation: false
@@ -48,7 +48,7 @@ spec:
               mountPath: /scripts
       containers:
         - name: server
-          image: steamcmd/steamcmd:latest@sha256:b84c563949d6a64789865336c57026e6357072b1580aa62cce1f4ded48486f83
+          image: steamcmd/steamcmd:latest@sha256:facc4db6ac55e12f968553b76a17688ed8eb2f5a705763cfe68d8a4e0d0a43d2
           command: ["/bin/bash", "/scripts/start.sh"]
           securityContext:
             runAsNonRoot: true
